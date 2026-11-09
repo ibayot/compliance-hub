@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useState } from 'react';
 import {
@@ -295,8 +296,7 @@ export default function DocumentsPage() {
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 4 }}>
-        {/* Header */}
-        <Box
+<Box
           sx={{
             display: 'flex',
             flexDirection: { xs: 'column', sm: 'row' },
@@ -333,22 +333,7 @@ export default function DocumentsPage() {
             </Button>
           </Box>
         </Box>
-
-        {isFocal && (
-          <Paper elevation={1} sx={{ mb: 3 }}>
-            <Tabs
-              value={documentsTab}
-              onChange={(_, value) => setDocumentsTab(value)}
-              aria-label="Documents tabs"
-            >
-              <Tab label="Active Documents" value="active" />
-              <Tab label="Archived Documents" value="archived" />
-            </Tabs>
-          </Paper>
-        )}
-
-        {/* Filters */}
-        {showFilters && !isArchivedTab && (
+<WorkspaceLayout kind="standard" context={<>{showFilters && !isArchivedTab && (
           <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
               Filters
@@ -432,10 +417,23 @@ export default function DocumentsPage() {
               </Button>
             </Box>
           </Paper>
+        )}</>}>
+{/* Header */}
+{isFocal && (
+          <Paper elevation={1} sx={{ mb: 3 }}>
+            <Tabs
+              value={documentsTab}
+              onChange={(_, value) => setDocumentsTab(value)}
+              aria-label="Documents tabs"
+            >
+              <Tab label="Active Documents" value="active" />
+              <Tab label="Archived Documents" value="archived" />
+            </Tabs>
+          </Paper>
         )}
-
-        {/* Document List */}
-        <DocumentList
+{/* Filters */}
+{/* Document List */}
+<DocumentList
           documents={data?.data || []}
           total={data?.total || 0}
           page={filters.page || 1}
@@ -454,7 +452,9 @@ export default function DocumentsPage() {
           hideUploaderColumn={isFocal}
           archivedMode={isArchivedTab}
         />
-      </Box>
+</WorkspaceLayout>
+
+</Box>
 
       <Dialog
         open={returnDialogOpen}

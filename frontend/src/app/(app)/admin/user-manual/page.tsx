@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useMemo, useState } from 'react';
 import {
@@ -408,16 +409,15 @@ export default function UserManualPage() {
 
   return (
     <Box>
-      <Box mb={4}>
+<WorkspaceLayout kind="dashboard" context={<><Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
           User Manual
         </Typography>
         <Typography variant="body1" color="text.secondary">
           Welcome to the application user manual. The topics below are curated specifically for your role and capabilities.
         </Typography>
-      </Box>
-
-      <Grid container spacing={3}>
+      </Box></>}>
+<Grid container spacing={3}>
         {visibleItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.title}>
             <Card
@@ -449,8 +449,8 @@ export default function UserManualPage() {
           </Grid>
         ))}
       </Grid>
-
-      <Dialog
+</WorkspaceLayout>
+<Dialog
         open={Boolean(selectedManual)}
         onClose={() => setSelectedManual(null)}
         maxWidth="md"
@@ -522,6 +522,6 @@ export default function UserManualPage() {
           </>
         )}
       </Dialog>
-    </Box>
+</Box>
   );
 }

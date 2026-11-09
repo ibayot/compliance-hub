@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -438,35 +440,35 @@ export default function UnitsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Units Management
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Manage organizational units and their reportorial document types
-          </Typography>
-        </Box>
-        {canManageUnits && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
-          Add Unit
-        </Button>}
-      </Box>
-
-      {loading ? (
+<WorkspaceLayout kind="standard" context={<Paper variant="outlined" sx={{ p: 2 }}>
+        <TextField
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          label="Search units"
+          placeholder="Search by unit name or description"
+          fullWidth
+          size="small"
+        />
+      </Paper>}>
+<Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} mb={2}>
+  <Box sx={{ minWidth: 0 }}>
+    <Typography variant="h4" component="h1" gutterBottom>
+      Units Management
+    </Typography>
+    <Typography variant="body1" color="text.secondary">
+      Manage organizational units and their reportorial document types
+    </Typography>
+  </Box>
+  {canManageUnits && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
+    Add Unit
+  </Button>}
+</Stack>
+{loading ? (
         <Box display="flex" justifyContent="center" py={6}>
           <CircularProgress />
         </Box>
       ) : (
         <Box>
-          <TextField
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            label="Search units"
-            placeholder="Search by unit name or description"
-            fullWidth
-            size="small"
-            sx={{ mb: 2 }}
-          />
           {units.map((unit) => (
             <Accordion
               key={unit.id}
@@ -537,8 +539,8 @@ export default function UnitsPage() {
           />
         </Box>
       )}
-
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+</WorkspaceLayout>
+<Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editingUnit ? 'Edit Unit' : 'Add Unit'}</DialogTitle>
         <DialogContent>
           <TextField
@@ -577,8 +579,7 @@ export default function UnitsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={!!deleteConfirmUnit} onClose={() => { setDeleteConfirmUnit(null); setDeleteUnitConfirmed(false); }} maxWidth="xs" fullWidth>
+<Dialog open={!!deleteConfirmUnit} onClose={() => { setDeleteConfirmUnit(null); setDeleteUnitConfirmed(false); }} maxWidth="xs" fullWidth>
         <DialogTitle>Confirm Unit Deletion</DialogTitle>
         <DialogContent>
           <Typography>
@@ -605,6 +606,6 @@ export default function UnitsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

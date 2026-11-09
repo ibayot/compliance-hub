@@ -1,4 +1,6 @@
 'use client';
+import WorkspaceTabs from '@/components/layout/WorkspaceTabs';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSse } from '@/lib/utils/useSse';
@@ -710,15 +712,15 @@ export default function TicketSettingsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} mb={0.5}>
+<Typography variant="h4" fontWeight={700} mb={0.5}>
         Ticket Settings
       </Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>
+<Typography variant="body2" color="text.secondary" mb={3}>
         Manage ticket categories, issues, routing rules, escalation focals, and user feedback.
       </Typography>
-
-      <Card>
-        <Tabs
+<WorkspaceLayout kind="standard">
+<Card>
+        <WorkspaceTabs
           value={tab}
           onChange={(_, v) => setTab(v)}
           variant="scrollable"
@@ -731,7 +733,7 @@ export default function TicketSettingsPage() {
           <Tab label={`Keyword Rules (${rules.length})`} />
           <Tab label={`Escalation Focals (${focals.length})`} />
           <Tab label={`User Feedback (${feedbacks.length})`} />
-        </Tabs>
+        </WorkspaceTabs>
 
         {/* ── Categories Tab ── */}
         {tab === 0 && (
@@ -1430,9 +1432,15 @@ export default function TicketSettingsPage() {
         )}
 
       </Card>
-
-      {/* Issue Dialog */}
-      <Dialog
+{/* Issue Dialog */}
+{/* Escalation Focal Dialog */}
+{/* Keyword Rule Dialog */}
+{/* Remove Category Dialog */}
+{/* Remove Issue Dialog */}
+{/* Remove Rule Dialog */}
+{/* Remove Focal Dialog */}
+</WorkspaceLayout>
+<Dialog
         open={issueDialogOpen}
         onClose={() => setIssueDialogOpen(false)}
         maxWidth="xs"
@@ -1564,9 +1572,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Escalation Focal Dialog */}
-      <Dialog
+<Dialog
         open={focalDialogOpen}
         onClose={() => setFocalDialogOpen(false)}
         maxWidth="xs"
@@ -1615,7 +1621,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={catDialogOpen} onClose={() => setCatDialogOpen(false)} maxWidth="xs" fullWidth>
+<Dialog open={catDialogOpen} onClose={() => setCatDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{editCat ? 'Edit Category' : 'Add Category'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -1685,9 +1691,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Keyword Rule Dialog */}
-      <Dialog
+<Dialog
         open={ruleDialogOpen}
         onClose={() => setRuleDialogOpen(false)}
         maxWidth="xs"
@@ -1787,9 +1791,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Remove Category Dialog */}
-      <Dialog open={!!deleteCatId} onClose={() => setDeleteCatId(null)} maxWidth="xs" fullWidth>
+<Dialog open={!!deleteCatId} onClose={() => setDeleteCatId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Remove Category</DialogTitle>
         <DialogContent>
           Are you sure you want to remove this category?
@@ -1801,9 +1803,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Remove Issue Dialog */}
-      <Dialog open={!!deleteIssueId} onClose={() => setDeleteIssueId(null)} maxWidth="xs" fullWidth>
+<Dialog open={!!deleteIssueId} onClose={() => setDeleteIssueId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Remove Issue</DialogTitle>
         <DialogContent>
           Are you sure you want to remove this issue type?
@@ -1815,9 +1815,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Remove Rule Dialog */}
-      <Dialog open={!!deleteRuleId} onClose={() => setDeleteRuleId(null)} maxWidth="xs" fullWidth>
+<Dialog open={!!deleteRuleId} onClose={() => setDeleteRuleId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Remove Keyword Rule</DialogTitle>
         <DialogContent>
           Are you sure you want to delete this keyword rule?
@@ -1829,9 +1827,7 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Remove Focal Dialog */}
-      <Dialog open={!!deleteFocalId} onClose={() => setDeleteFocalId(null)} maxWidth="xs" fullWidth>
+<Dialog open={!!deleteFocalId} onClose={() => setDeleteFocalId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Remove Escalation Focal</DialogTitle>
         <DialogContent>
           Are you sure you want to remove this escalation focal configuration?
@@ -1843,6 +1839,6 @@ export default function TicketSettingsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

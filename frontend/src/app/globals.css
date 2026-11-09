@@ -10,7 +10,267 @@ html {
 
 body {
   max-width: 100%;
+  min-width: 320px;
 }
+
+.app-main {
+  min-width: 0;
+}
+
+.app-page-content {
+  min-width: 0;
+}
+
+.app-page-content[data-app-color-theme='clean-blue'] {
+  --app-chart-1: #2563eb;
+  --app-chart-2: #5b6fbe;
+  --app-chart-3: #0f766e;
+  --app-chart-4: #d97706;
+  --app-chart-5: #7c3aed;
+  --app-chart-6: #db2777;
+  --app-chart-7: #0891b2;
+  --app-chart-8: #64748b;
+  --app-chart-grid: #d9e1ec;
+  --app-chart-text: #596a7e;
+}
+
+.app-page-content[data-app-color-theme='slate-teal'] {
+  --app-chart-1: #167a78;
+  --app-chart-2: #536b79;
+  --app-chart-3: #2563eb;
+  --app-chart-4: #b45309;
+  --app-chart-5: #7c3aed;
+  --app-chart-6: #be185d;
+  --app-chart-7: #0e7490;
+  --app-chart-8: #64748b;
+  --app-chart-grid: #d4e1df;
+  --app-chart-text: #536b70;
+}
+
+.app-page-content[data-app-color-theme='warm-neutral'] {
+  --app-chart-1: #8a6238;
+  --app-chart-2: #6f6877;
+  --app-chart-3: #2f6f6d;
+  --app-chart-4: #bc5b2b;
+  --app-chart-5: #5b5ea6;
+  --app-chart-6: #ad4c72;
+  --app-chart-7: #2d7e8a;
+  --app-chart-8: #6c7a89;
+  --app-chart-grid: #e5ddd1;
+  --app-chart-text: #746b5f;
+}
+
+.app-page-content[data-app-color-mode='dark'] {
+  --app-chart-grid: #3a4658;
+  --app-chart-text: #b1becc;
+}
+
+.app-page-content .recharts-cartesian-grid line,
+.app-page-content .recharts-cartesian-axis line,
+.app-page-content .recharts-cartesian-axis-tick line {
+  stroke: var(--app-chart-grid, #d9e1ec);
+}
+
+.app-page-content .recharts-cartesian-axis-tick-value,
+.app-page-content .recharts-label {
+  fill: var(--app-chart-text, #596a7e);
+}
+
+.app-page-content .recharts-legend-item-text {
+  color: var(--app-chart-text, #596a7e) !important;
+}
+
+.app-page-content .recharts-cartesian-grid line {
+  stroke-dasharray: var(--app-chart-grid-dash, 2 4) !important;
+  opacity: var(--app-chart-grid-opacity, 0.8);
+}
+
+.app-page-content .recharts-default-tooltip {
+  background-color: var(--app-layout-paper, #ffffff) !important;
+  border: 1px solid var(--app-layout-divider, rgba(30, 50, 77, 0.12)) !important;
+  border-radius: var(--app-layout-radius, 8px) !important;
+  box-shadow: var(--app-layout-shadow, 0 4px 16px rgba(15, 23, 42, 0.10)) !important;
+  color: var(--app-layout-text, #17263b) !important;
+}
+
+.app-page-content .recharts-tooltip-label {
+  color: var(--app-layout-text, #17263b) !important;
+}
+
+.app-page-content .recharts-tooltip-item {
+  color: var(--app-layout-muted, #596a7e) !important;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiGrid-container {
+  align-items: stretch;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiTableContainer-root {
+  box-shadow: none;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] {
+  --app-layout-radius: 6px;
+  --app-layout-shadow: none;
+  --app-chart-grid-dash: 1 0;
+  --app-chart-grid-opacity: 0.58;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiCard-root {
+  box-shadow: none;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiCardHeader-root {
+  background: color-mix(in srgb, var(--app-layout-primary) 4%, var(--app-layout-paper));
+  border-bottom: 1px solid var(--app-layout-divider);
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiTableContainer-root {
+  border-radius: 6px;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiTableCell-head {
+  background: color-mix(in srgb, var(--app-layout-primary) 10%, var(--app-layout-paper));
+  border-bottom: 2px solid color-mix(in srgb, var(--app-layout-primary) 45%, var(--app-layout-divider));
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiList-root {
+  padding-block: 3px;
+}
+
+.app-page-content[data-app-layout-preset='operations-grid'] .MuiListItemButton-root {
+  min-height: 36px;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .app-split-pane {
+  align-items: stretch;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] {
+  --app-layout-radius: 12px;
+  --app-layout-shadow: 0 5px 18px rgba(15, 23, 42, 0.12);
+  --app-chart-grid-dash: 4 4;
+  --app-chart-grid-opacity: 0.9;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .app-split-pane > .MuiGrid-item {
+  display: flex;
+  min-width: 0;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .app-split-pane > .MuiGrid-item > .MuiCard-root,
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .app-split-pane > .MuiGrid-item > .MuiPaper-root {
+  height: 100%;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiCard-root,
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiPaper-root {
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.07);
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiCardHeader-root {
+  border-left: 3px solid var(--app-layout-primary);
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiTableContainer-root {
+  box-shadow: 0 2px 9px rgba(15, 23, 42, 0.055);
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiTableCell-head {
+  background: color-mix(in srgb, var(--app-layout-primary) 7%, var(--app-layout-paper));
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiListItemButton-root {
+  border-left: 3px solid transparent;
+  border-radius: 4px 10px 10px 4px;
+}
+
+.app-page-content[data-app-layout-preset='split-pane-workbench'] .MuiListItemButton-root.Mui-selected {
+  border-left-color: var(--app-layout-primary);
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root {
+  overflow: hidden;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] {
+  --app-layout-radius: 16px;
+  --app-layout-shadow: 0 5px 18px rgba(15, 23, 42, 0.10);
+  --app-chart-grid-dash: 2 5;
+  --app-chart-grid-opacity: 0.72;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root {
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.075);
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCardHeader-root {
+  background: color-mix(in srgb, var(--app-layout-primary) 6%, var(--app-layout-paper));
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableContainer-root {
+  border-radius: 14px;
+  padding: 3px 8px;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTable-root {
+  border-collapse: separate;
+  border-spacing: 0 4px;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableBody-root .MuiTableRow-root {
+  background: color-mix(in srgb, var(--app-layout-primary) 3%, var(--app-layout-paper));
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableBody-root .MuiTableCell-root {
+  border-bottom: 0;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableBody-root .MuiTableCell-root:first-of-type {
+  border-radius: 8px 0 0 8px;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableBody-root .MuiTableCell-root:last-of-type {
+  border-radius: 0 8px 8px 0;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiList-root {
+  padding: 8px 12px;
+}
+
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiListItemButton-root {
+  margin-block: 3px;
+  border-radius: 12px;
+}
+
+.ticket-conversation-grid {
+  margin-bottom: 24px;
+}
+
+.ticket-conversation-grid > .MuiGrid-item {
+  display: flex;
+  min-width: 0;
+}
+
+.ticket-conversation-panel {
+  min-width: 0;
+}
+
+.app-page-content[data-app-page-family='records'] .MuiTableContainer-root,
+.app-page-content[data-app-page-family='reports'] .MuiTableContainer-root {
+  overflow-x: auto;
+}
+
+.app-page-content[data-app-page-family='settings'] .MuiCardHeader-root {
+  align-items: flex-start;
+}
+
+@media (max-width: 899px) {
+  .ticket-conversation-grid > .MuiGrid-item {
+    width: 100%;
+  }
+}
+
 
 a {
   color: inherit;

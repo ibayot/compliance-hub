@@ -1,3 +1,4 @@
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Autocomplete, Box, Button, Chip, CircularProgress, Pagination, Paper, Stack, TextField, Typography } from '@mui/material';
 import { DirectoryUnit, StaffDirectoryResult, staffDirectoryApi } from '@/lib/api/staff-directory';
@@ -54,27 +55,30 @@ export default function StaffDirectoryPage() {
 
   if (!allowed) return null;
   return <Box>
-    <Typography variant="h4" component="h1" gutterBottom>Staff Directory</Typography>
-    <Typography color="text.secondary" sx={{ mb: 2 }}>
+<Typography variant="h4" component="h1" gutterBottom>Staff Directory</Typography>
+<Typography color="text.secondary" sx={{ mb: 2 }}>
       Find staff by their current unit in Compliance Hub. Saved unit selections take precedence over personnel-directory updates.
       Directory-only staff have not yet been registered. This is a read-only lookup, not account management.
     </Typography>
-    <Paper sx={{ p: 2, mb: 2 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+<WorkspaceLayout kind="standard" context={<><Paper sx={{ p: 2, mb: 2 }}>
+      <Stack spacing={1.5} alignItems="stretch">
         <Autocomplete options={units} value={units.find(option => option.id === unit?.id) || unit} onChange={(_, value) => { setUnit(value); setPage(1); }}
           getOptionLabel={option => `${option.name} (${option.staffCount})`}
           isOptionEqualToValue={(option, value) => option.id === value.id}
-          sx={{ width: { xs: '100%', md: 360 }, minWidth: 0 }}
-          renderInput={params => <TextField {...params} label="Unit" placeholder="All active units" size="small" />} />
-        <TextField label="Search staff" placeholder="Name or position" value={search} size="small"
-          inputProps={{ maxLength: 100 }} onChange={event => setSearch(event.target.value)} sx={{ flex: 1, minWidth: 0 }} />
-        <Button onClick={() => { setSearch(''); setQuery(''); setUnit(null); setPage(1); }}>Reset</Button>
+          sx={{ width: '100%', minWidth: 0 }}
+          renderInput={params => <TextField {...params} label="Unit" placeholder="All active units" size="small" InputLabelProps={{ ...params.InputLabelProps, shrink: true }} />} />
+        {unit && <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+          Selected unit: {unit.name}
+        </Typography>}
+        <TextField fullWidth label="Search staff" placeholder="Name or position" value={search} size="small"
+          InputLabelProps={{ shrink: true }} inputProps={{ maxLength: 100 }} onChange={event => setSearch(event.target.value)} sx={{ minWidth: 0 }} />
+        <Button fullWidth variant="outlined" onClick={() => { setSearch(''); setQuery(''); setUnit(null); setPage(1); }}>Reset filters</Button>
       </Stack>
-    </Paper>
-    {failed && <Alert severity="warning" action={<Button color="inherit" onClick={() => void load()}>Retry</Button>}>
+    </Paper></>}>
+{failed && <Alert severity="warning" action={<Button color="inherit" onClick={() => void load()}>Retry</Button>}>
       Staff could not be loaded. Please retry; no account or unit data has been changed.
     </Alert>}
-    {loading ? <Box role="status" aria-label="Loading staff directory" sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box> : result && <>
+{loading ? <Box role="status" aria-label="Loading staff directory" sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box> : result && <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {result.total} staff {unit ? `in ${unit.name}` : 'across units'}{query ? ' matching your search' : ''}
       </Typography>
@@ -92,5 +96,7 @@ export default function StaffDirectoryPage() {
       {result.total > result.limit && <Pagination page={page} count={Math.ceil(result.total / result.limit)} onChange={(_, value) => setPage(value)}
         sx={{ mt: 2, display: 'flex', justifyContent: 'center' }} siblingCount={0} />}
     </>}
-  </Box>;
+</WorkspaceLayout>
+
+</Box>;
 }

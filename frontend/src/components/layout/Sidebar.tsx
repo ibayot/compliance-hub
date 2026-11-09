@@ -36,6 +36,8 @@ import {
   LibraryBooks as KBIcon,
   History as HistoryIcon,
   CalendarMonth as DutiesIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -219,6 +221,52 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     { label: 'Settings', icon: SettingsIcon, path: '/admin/settings' },
   ];
 
+  const allNavItems = [...mainNavItems, ...adminNavItems];
+  const navigationSections = [
+    { id: 'overview', label: 'Overview', items: allNavItems.filter((item) => item.label === 'Dashboard') },
+    {
+      id: 'service-desk',
+      label: 'Service Desk',
+      items: allNavItems.filter((item) => ['Tickets', 'My Tickets', 'Knowledge Base', 'Ticket Reports', 'Ticket Settings'].includes(item.label)),
+    },
+    {
+      id: 'operations',
+      label: 'Operations',
+      items: allNavItems.filter((item) => ['Duties', 'Attendance', 'Staff Directory'].includes(item.label)),
+    },
+    {
+      id: 'governance',
+      label: 'Governance & Records',
+      items: allNavItems.filter((item) => ['Documents', 'Repository', 'Issuances', 'Metrics', 'KPI', 'Reviews', 'Reports', 'MoV Builder'].includes(item.label)),
+    },
+    {
+      id: 'administration',
+      label: 'Administration',
+      items: allNavItems.filter((item) => ['Units', 'Audit Logs'].includes(item.label)),
+    },
+    { id: 'help-settings', label: 'Help & Settings', items: settingsNavItems },
+  ];
+  const activeSection = navigationSections.find((section) =>
+    section.items.some((item) =>
+      item.path === '/dashboard'
+        ? location.pathname === item.path
+        : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
+    ),
+  );
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    overview: true,
+    'service-desk': true,
+    operations: true,
+    governance: true,
+    administration: true,
+    'help-settings': true,
+  });
+
+  useEffect(() => {
+    if (!activeSection) return;
+    setExpandedSections((current) => ({ ...current, [activeSection.id]: true }));
+  }, [activeSection?.id, location.pathname]);
+
   const hasAccess = (
     capabilityKeys?: (keyof RoleCapabilityRecord)[],
     service?: NavItem['service'],
@@ -258,25 +306,29 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         onClick={() => handleNavigate(item.path)}
         selected={isActive}
         sx={{
-          borderRadius: 2,
+          borderRadius: '12px',
           justifyContent: isCollapsed ? 'center' : 'flex-start',
-          px: isCollapsed ? 1 : 2,
+          px: isCollapsed ? '8px' : '12px',
+          minHeight: 42,
+          borderLeft: isActive ? '3px solid' : '3px solid transparent',
+          borderColor: isActive ? 'primary.main' : 'transparent',
           '&.Mui-selected': {
-            bgcolor: 'primary.main',
-            color: 'primary.contrastText',
+            bgcolor: 'action.selected',
+            color: 'primary.main',
             '&:hover': {
-              bgcolor: 'primary.dark',
+              bgcolor: 'action.hover',
             },
             '& .MuiListItemIcon-root': {
-              color: 'primary.contrastText',
+              color: 'primary.main',
             },
           },
         }}
+        aria-current={isActive ? 'page' : undefined}
       >
-        <ListItemIcon sx={{ minWidth: isCollapsed ? 'auto' : 40 }}>
+        <ListItemIcon sx={{ minWidth: isCollapsed ? 'auto' : 36, color: isActive ? 'primary.main' : 'text.secondary' }}>
           <Icon />
         </ListItemIcon>
-        {!isCollapsed && <ListItemText primary={item.label} />}
+        {!isCollapsed && <ListItemText primary={item.label} primaryTypographyProps={{ variant: 'body2', fontSize: '0.875rem', fontFamily: 'inherit', fontWeight: isActive ? 700 : 500 }} />}
       </ListItemButton>
     );
 
@@ -307,12 +359,23 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     }
   }
 
+  const visibleNavigationSections = navigationSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly)),
+    }))
+    .filter((section) => section.items.length > 0);
+
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{
+      display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0,
+      fontFamily: 'Inter, "Segoe UI", Roboto, sans-serif',
+      '& .MuiTypography-root': { fontFamily: 'Inter, "Segoe UI", Roboto, sans-serif' },
+    }}>
       <Toolbar
         sx={{
-          px: isCollapsed ? 1 : 2,
-          py: 2,
+          px: isCollapsed ? '8px' : '16px',
+          py: '16px',
           justifyContent: isCollapsed ? 'center' : 'flex-start',
         }}
       >
@@ -324,7 +387,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             height: 32, 
             width: 'auto', 
             objectFit: 'contain', 
-            mr: isCollapsed ? 0 : 1.5 
+            mr: isCollapsed ? 0 : '12px'
           }} 
         />
         {!isCollapsed && (
@@ -340,63 +403,54 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <Divider />
 
-      <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-        {mainNavItems
-          .filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly))
-          .map((item) => (
-            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
-              {renderNavItem(item)}
-            </ListItem>
-          ))}
-      </List>
-
-      {adminNavItems.some((item) =>
-        hasAccess(item.capabilityKeys, item.service, item.staffOnly),
-      ) && (
-        <>
-          <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
-          {!isCollapsed && (
-            <Typography
-              variant="overline"
-              sx={{ px: 3, py: 1, color: 'text.secondary', fontWeight: 600 }}
-            >
-              Administration
-            </Typography>
-          )}
-          <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-            {adminNavItems
-              .filter((item) =>
-                hasAccess(item.capabilityKeys, item.service, item.staffOnly),
-              )
-              .map((item) => (
-                <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
-                  {renderNavItem(item)}
-                </ListItem>
-              ))}
-          </List>
-        </>
-      )}
-
-      <Box sx={{ flexGrow: 1 }} />
-
-      <Divider sx={{ mx: isCollapsed ? 1 : 2, my: 1 }} />
-
-      <List sx={{ px: isCollapsed ? 1 : 2, py: 1 }}>
-        {settingsNavItems
-          .filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly))
-          .map((item) => (
-            <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
-              {renderNavItem(item)}
-            </ListItem>
-          ))}
-      </List>
+      <Box component="nav" aria-label="Main navigation" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', py: '8px' }}>
+        {visibleNavigationSections.map((section) => {
+          const expanded = isCollapsed || expandedSections[section.id];
+          return (
+            <Box key={section.id} sx={{ mb: '6px' }}>
+              {isCollapsed ? (
+                <Divider sx={{ mx: '12px', my: '8px' }} />
+              ) : (
+                <ListItemButton
+                  component="button"
+                  onClick={() => setExpandedSections((current) => ({ ...current, [section.id]: !current[section.id] }))}
+                  aria-expanded={!!expandedSections[section.id]}
+                  aria-controls={expandedSections[section.id] ? `navigation-section-${section.id}` : undefined}
+                  sx={{
+                    minHeight: 34,
+                    px: '18px',
+                    borderRadius: '8px',
+                    color: 'text.secondary',
+                    justifyContent: 'space-between',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  <Typography variant="overline" component="span" sx={{ fontSize: '10px', letterSpacing: '0.11em', fontWeight: 800, fontFamily: 'inherit' }}>
+                    {section.label}
+                  </Typography>
+                  {expandedSections[section.id] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                </ListItemButton>
+              )}
+              {expanded && (
+                <List id={`navigation-section-${section.id}`} sx={{ px: isCollapsed ? '8px' : '12px', py: '2px' }}>
+                  {section.items.map((item) => (
+                    <ListItem key={item.path} disablePadding sx={{ mb: '2px' }}>
+                      {renderNavItem(item)}
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
 
       {!isCollapsed && (
-        <Box sx={{ px: 3, py: 2, bgcolor: 'background.default' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        <Box sx={{ px: '24px', py: '16px', bgcolor: 'background.default' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', fontFamily: 'inherit' }}>
             {formatPersonName(user, '—')}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', fontFamily: 'inherit' }}>
             {user?.role.replace('_', ' ').toUpperCase()}
           </Typography>
         </Box>

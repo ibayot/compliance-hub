@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useRouter } from 'next/navigation';
 import { Box, Container } from '@mui/material';
@@ -16,9 +17,13 @@ export default function UploadPage() {
 
   return (
     <Container maxWidth="md">
-      <Box sx={{ py: 4 }}>
+
+<WorkspaceLayout kind="standard">
+<Box sx={{ py: 4 }}>
         <DocumentUpload onSuccess={handleUploadSuccess} />
       </Box>
-    </Container>
+</WorkspaceLayout>
+
+</Container>
   );
 }

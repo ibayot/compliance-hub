@@ -41,6 +41,18 @@ export enum AuthProvider {
   GOOGLE = 'google',
 }
 
+export type UserUiPreferences = {
+  layoutPreset: 'operations-grid' | 'split-pane-workbench' | 'sectioned-workspace';
+  colorTheme: 'clean-blue' | 'slate-teal' | 'warm-neutral';
+  mode: 'light' | 'dark';
+};
+
+export const DEFAULT_USER_UI_PREFERENCES: UserUiPreferences = {
+  layoutPreset: 'operations-grid',
+  colorTheme: 'clean-blue',
+  mode: 'light',
+};
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -113,6 +125,11 @@ export class User {
 
   @Column({ name: 'designation', nullable: true, length: 100 })
   designation: string;
+
+  // This Users-service preference must not be selected by Ticketing's eager
+  // User relations, whose local users mirror does not own this column.
+  @Column({ name: 'ui_preferences', type: 'simple-json', nullable: true, select: false })
+  uiPreferences: UserUiPreferences | null;
 
 
   @Column({ name: 'auth_provider', type: 'enum', enum: AuthProvider, default: AuthProvider.LOCAL })

@@ -9,7 +9,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, EntityManager } from 'typeorm';
 import { staffNameKey } from '../../shared/staff-directory/staff-directory.store';
 import * as bcrypt from 'bcrypt';
-import { User, UserRole, AuthProvider } from './entities/user.entity';
+import {
+  DEFAULT_USER_UI_PREFERENCES,
+  User,
+  UserRole,
+  AuthProvider,
+  UserUiPreferences,
+} from './entities/user.entity';
 import {
   CreateRoleDefinitionDto,
   UpdateRoleDefinitionDto,
@@ -748,6 +754,34 @@ const previousValue = value;
     }
 
     return user;
+  }
+
+  async getUiPreferences(id: number): Promise<UserUiPreferences | null> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      select: ['id', 'uiPreferences'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return user.uiPreferences ?? null;
+  }
+
+  async updateUiPreferences(
+    id: number,
+    updates: Partial<UserUiPreferences>,
+  ): Promise<UserUiPreferences> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      select: ['id', 'uiPreferences'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    user.uiPreferences = {
+      ...DEFAULT_USER_UI_PREFERENCES,
+      ...(user.uiPreferences ?? {}),
+      ...updates,
+    };
+    await this.usersRepository.save(user);
+    return user.uiPreferences;
   }
 
   /** Returns user by id without throwing — returns null if not found. Used by JwtStrategy. */

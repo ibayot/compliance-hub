@@ -21,7 +21,6 @@ import {
   Menu as MenuIcon,
   MenuOpen as MenuOpenIcon,
   ArrowBack as BackIcon,
-  AccountCircle,
   Logout as LogoutIcon,
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
@@ -30,17 +29,21 @@ import {
   NewReleases as NewReleasesIcon,
   Devices as DevicesIcon,
 } from '@mui/icons-material';
+import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
+import { usersApi } from '@/lib/api/users';
+import { normalizeAppAppearance } from '@/lib/appearance';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/references';
 import { Capacitor } from '@capacitor/core';
+import { useSnackbar } from 'notistack';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -66,7 +69,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const { user, myCap, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const { mode, toggleMode, layoutMode, toggleLayoutMode } = useThemeMode();
+  const { mode, setAppearance, layoutMode, toggleLayoutMode } = useThemeMode();
+  const { enqueueSnackbar } = useSnackbar();
+  const [savingAppearance, setSavingAppearance] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [canChooseLayout, setCanChooseLayout] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -475,6 +480,34 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const generateBreadcrumbs = () => {
     const paths: string[] = pathname?.split('/').filter(Boolean) || [];
     const breadcrumbs: { label: string; path: string }[] = [];
+    const routeLabels: Record<string, string> = {
+      dashboard: 'Dashboard',
+      operations: 'Operations',
+      governance: 'Governance',
+      admin: 'Administration',
+      tickets: 'Tickets',
+      'my-tickets': 'My Tickets',
+      'knowledge-base': 'Knowledge Base',
+      duties: 'Duties',
+      attendance: 'Attendance',
+      'staff-directory': 'Staff Directory',
+      reports: 'Reports',
+      settings: 'Settings',
+      documents: 'Documents',
+      archived: 'Archived',
+      repository: 'Repository',
+      issuances: 'Issuances',
+      incidents: 'Incidents',
+      metrics: 'Metrics',
+      kpi: 'KPI',
+      reviews: 'Reviews',
+      mov: 'MoV Builder',
+      units: 'Units',
+      'audit-logs': 'Audit Logs',
+      'user-manual': 'User Manual',
+      changelog: 'Changelog',
+      upload: 'Upload Document',
+    };
 
     let currentPath = '';
     paths.forEach((segment: string, index: number) => {
@@ -487,7 +520,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       if (segment === 'dashboard' && paths.length > 1) return;
 
       // Format label
-      let label = segment
+      let label = routeLabels[segment] || segment
         .split('-')
         .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
@@ -537,6 +570,24 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     router.push('/admin/settings');
   };
 
+  const handleThemeToggle = async () => {
+    if (savingAppearance || !user) return;
+    setSavingAppearance(true);
+    try {
+      const preferences = await usersApi.updateUiPreferences({
+        mode: mode === 'dark' ? 'light' : 'dark',
+      });
+      setAppearance(normalizeAppAppearance(preferences));
+      handleProfileMenuClose();
+    } catch {
+      enqueueSnackbar('Unable to save your appearance preference. Please try again.', {
+        variant: 'error',
+      });
+    } finally {
+      setSavingAppearance(false);
+    }
+  };
+
   return (
     <MuiAppBar
       position="fixed"
@@ -545,7 +596,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
         bgcolor: 'background.paper',
         color: 'text.primary',
-        boxShadow: 1,
         transition: (theme) =>
           theme.transitions.create(['left', 'width'], {
             easing: theme.transitions.easing.sharp,
@@ -592,13 +642,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
         {/* Breadcrumbs */}
         <Box sx={{ flexGrow: 1 }}>
-          <Breadcrumbs aria-label="breadcrumb">
+          <Breadcrumbs aria-label="Breadcrumb" maxItems={3} itemsBeforeCollapse={1} itemsAfterCollapse={2}>
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;
 
               if (isLast) {
                 return (
-                  <Typography key={crumb.path} color="text.primary" fontWeight={600}>
+                  <Typography key={crumb.path} color="text.primary" fontWeight={600} aria-current="page">
                     {crumb.label}
                   </Typography>
                 );
@@ -787,7 +837,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </Typography>
             </Box>
             <Divider />
-            <MenuItem onClick={toggleMode}>
+            <MenuItem onClick={() => void handleThemeToggle()} disabled={savingAppearance}>
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </MenuItem>
@@ -815,8 +865,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </MenuItem>
             )}
             <MenuItem onClick={handleSettings}>
-              <AccountCircle sx={{ mr: 1 }} />
-              Settings
+              <PaletteIcon sx={{ mr: 1 }} />
+              Appearance & Settings
             </MenuItem>
             <MenuItem
               onClick={() => {

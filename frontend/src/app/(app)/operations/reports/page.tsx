@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 import TicketReportBuilder from '@/components/ticket-reports/TicketReportBuilder';
 
@@ -729,7 +730,7 @@ export default function TicketReportsPage() {
 
   return (
     <Box>
-      <Box
+<Box
         display="flex"
         justifyContent="space-between"
         alignItems="center"
@@ -749,8 +750,7 @@ export default function TicketReportsPage() {
           Print / Export PDF
         </Button>}
       </Box>
-      {printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError('')}>{printError}</Alert>}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+<Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab value={0} label="Overview & Ratings" />
           {canManageReports && <Tab value={1} label="Issues" />}
@@ -759,10 +759,7 @@ export default function TicketReportsPage() {
           <Tab value={4} label="Report Builder" />
         </Tabs>
       </Box>
-
-      {tab === 4 && <TicketReportBuilder />}
-      {/* ── Filters ── */}
-      {tab !== 4 && <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
+<WorkspaceLayout kind="report" context={<>{tab !== 4 && <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
         <CardContent>
           <Typography variant="subtitle2" fontWeight={600} gutterBottom>
             Filters
@@ -884,8 +881,12 @@ export default function TicketReportsPage() {
             </Box>
           </Box>
         </CardContent>
-      </Card>}
-      {tab === 0 && (
+      </Card>}</>}>
+{printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError('')}>{printError}</Alert>}
+{tab === 4 && <TicketReportBuilder />}
+{/* ── Filters ── */}
+
+{tab === 0 && (
         <Box>
           <Box
             display="flex"
@@ -1289,7 +1290,7 @@ export default function TicketReportsPage() {
                                   <Bar
                                     dataKey="avg"
                                     name="Avg Rating"
-                                    fill="#2196F3"
+                                    fill="var(--app-chart-1)"
                                     radius={[4, 4, 0, 0]}
                                   />
                                 </BarChart>
@@ -1746,9 +1747,7 @@ export default function TicketReportsPage() {
           </Box>
         </Box>
       )}
-
-
-      {tab === 3 && result && (
+{tab === 3 && result && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="h6" fontWeight={700} gutterBottom>
             Performance Metrics
@@ -1965,11 +1964,10 @@ export default function TicketReportsPage() {
           </Grid>
         </Box>
       )}
-
-      {/* ── Tab 1: Issues ── */}
-      {canManageReports && tab === 1 && loading && <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>}
-      {canManageReports && tab === 1 && error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {canManageReports && tab === 1 && !loading && !error && result && (
+{/* ── Tab 1: Issues ── */}
+{canManageReports && tab === 1 && loading && <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>}
+{canManageReports && tab === 1 && error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+{canManageReports && tab === 1 && !loading && !error && result && (
         <Box sx={{ mt: 2 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
@@ -2012,7 +2010,7 @@ export default function TicketReportsPage() {
                           <Bar
                             dataKey="count"
                             name="Tickets"
-                            fill="#8884d8"
+                            fill="var(--app-chart-2)"
                             radius={[4, 4, 0, 0]}
                             onClick={(data) => {
                               setSelectedCategoryName(
@@ -2024,7 +2022,7 @@ export default function TicketReportsPage() {
                             {categoryData.map((entry: any, index: number) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={categoryColors[entry.categoryName]?.strong ?? '#8884d8'}
+                                fill={categoryColors[entry.categoryName]?.strong ?? 'var(--app-chart-2)'}
                                 opacity={selectedCategoryName && selectedCategoryName !== entry.categoryName ? 0.45 : 1}
                               />
                             ))}
@@ -2072,7 +2070,7 @@ export default function TicketReportsPage() {
                             <YAxis allowDecimals={false} tickCount={5} />
                             <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                             <Legend verticalAlign="top" />
-                            <Bar dataKey="open" name="Open/Assigned" stackId="a" fill="#1976d2" />
+                            <Bar dataKey="open" name="Open/Assigned" stackId="a" fill="var(--app-chart-1)" />
                             <Bar dataKey="in_progress" name="In Progress" stackId="a" fill="#ed6c02" />
                             <Bar dataKey="resolved" name="Resolved" stackId="a" fill="#4caf50" />
                             <Bar dataKey="closed" name="Closed" stackId="a" fill="#757575" />
@@ -2105,7 +2103,7 @@ export default function TicketReportsPage() {
                         <Tooltip formatter={(value: number) => [value, 'Tickets']} labelFormatter={(label) => String(label)} />
                         <Bar dataKey="count" name="Tickets" radius={[0, 4, 4, 0]}>
                           {allIssuesAggregated.slice(0, 12).map((row) => (
-                            <Cell key={JSON.stringify([row.categoryName, row.issueName])} fill={categoryColors[row.categoryName]?.strong ?? '#1976d2'} />
+                            <Cell key={JSON.stringify([row.categoryName, row.issueName])} fill={categoryColors[row.categoryName]?.strong ?? 'var(--app-chart-1)'} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -2153,9 +2151,8 @@ export default function TicketReportsPage() {
           )}
         </Box>
       )}
-
-      {/* ── Tab 2: SLA Insights ── */}
-      {canManageReports && tab === 2 && (
+{/* ── Tab 2: SLA Insights ── */}
+{canManageReports && tab === 2 && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" fontWeight={600} mb={2}>
             SLA Recalibration Insights
@@ -2193,8 +2190,8 @@ export default function TicketReportsPage() {
                     <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
                     <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
                     <Legend verticalAlign="top" />
-                    <Bar dataKey="configuredSlaHours" name="Configured SLA (hrs)" fill="#8884d8" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="avgResolutionHours" name="Avg Active Resolution (hrs)" fill="#82ca9d" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="configuredSlaHours" name="Configured SLA (hrs)" fill="var(--app-chart-2)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="avgResolutionHours" name="Avg Active Resolution (hrs)" fill="var(--app-chart-3)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -2281,6 +2278,8 @@ export default function TicketReportsPage() {
           </Card>
         </Box>
       )}
-    </Box>
+</WorkspaceLayout>
+
+</Box>
   );
 }

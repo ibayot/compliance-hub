@@ -23,3 +23,5 @@ Use page anatomy to organize a workflow; compose it with the selected element, i
 ## Loading guidance
 
 Read only the selected patterns and their necessary dependencies. Check [application activation](../../application/PROFILE.md) before applying technology/platform-specific implementations. Return to the [design-system catalog](../INDEX.md) when the task changes.
+
+- [Workspace composition and presets](workspace-layout-pattern.md) — explicit context/content regions and responsive preset differences.

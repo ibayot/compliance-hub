@@ -326,6 +326,7 @@ export interface Ticket {
     lastName?: string;
     suffix?: string;
     phoneNumber?: string | null;
+    staffId?: string | null;
   };
   createdById?: number | null;
   createdBy?: {

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -295,19 +296,22 @@ export default function KnowledgeBasePage() {
 
   return (
     <Box>
-      <Box mb={3}>
+<Stack direction={{ xs: 'column', sm: 'row' }} flexWrap="wrap" alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" gap={2} mb={3}>
+  <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
         <Typography variant="h4" fontWeight={700}>
           Knowledge Base
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Find self-service articles, helpful guides, and technical insights.
         </Typography>
-      </Box>
-
-      {/* Search & Actions */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="stretch">
+  </Box>
+  {canManage && <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, whiteSpace: 'nowrap' }}>
+    Add Article
+  </Button>}
+</Stack>
+<WorkspaceLayout kind="standard" context={<><Card sx={{ mb: 3 }}>
+        <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+          <Stack spacing={1.5} alignItems="stretch">
             <TextField
               fullWidth
               label="Search Knowledge Base Articles"
@@ -319,17 +323,12 @@ export default function KnowledgeBasePage() {
                 startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />,
               }}
             />
-            {canManage && (
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} sx={{ minWidth: 140 }}>
-                Add Article
-              </Button>
-            )}
           </Stack>
         </CardContent>
-      </Card>
-
-      {/* Articles List */}
-      <Card>
+      </Card></>}>
+{/* Search & Actions */}
+{/* Articles List */}
+<Card>
         <CardContent>
           {loading ? (
             <Box textAlign="center" py={4}>
@@ -419,9 +418,9 @@ export default function KnowledgeBasePage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Shared Add/Edit Article Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
+{/* Shared Add/Edit Article Dialog */}
+</WorkspaceLayout>
+<Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{selectedArticle ? 'Edit Knowledge Base Article' : 'Add Knowledge Base Article'}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
@@ -460,6 +459,6 @@ export default function KnowledgeBasePage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

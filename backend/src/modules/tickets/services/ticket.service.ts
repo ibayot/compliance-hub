@@ -502,7 +502,9 @@ export const resolveTicketReportTechnicianId = (
 export const assertValidDuplicateSource = (
   ticket: Pick<Ticket, 'status'> & Partial<Pick<Ticket, 'resolvedAt' | 'resolutionTimeOverride'>>,
   isOverdue: boolean,
+  allowResolvedCorrection = false,
 ): void => {
+  if (allowResolvedCorrection && ticket.status === TicketStatus.RESOLVED) return;
   if (
     ![TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(ticket.status) ||
     ticket.resolvedAt || ticket.resolutionTimeOverride
@@ -3000,6 +3002,17 @@ export class TicketService implements OnModuleInit {
       if (new Date(source.updatedAt).getTime() !== new Date(expectedUpdatedAt).getTime()) {
         throw new ConflictException('The ticket changed. Refresh it before marking it as Duplicate.');
       }
+      const canCorrectResolvedDuplicate =
+        source.status === TicketStatus.RESOLVED &&
+        this.roleCapSvc.isTicketRequesterCorrection(actorRole as string);
+      const canMarkActiveDuplicate =
+        this.roleCapSvc.isTicketSettingsFocal(actorRole as string) &&
+        [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(source.status);
+      if (!canCorrectResolvedDuplicate && !canMarkActiveDuplicate) {
+        throw new ForbiddenException(
+          'Ticket Admin capability is required for active tickets; Ticket Record Correction capability is required for resolved tickets.',
+        );
+      }
       await this.assertTicketReadAccess(source, actorId, actorRole);
       await this.assertTicketReadAccess(original, actorId, actorRole);
       assertValidDuplicateOriginal(source, original);
@@ -3030,7 +3043,7 @@ export class TicketService implements OnModuleInit {
       }
       const config = await manager.getRepository(TicketingConfig).findOne({ where: { id: 1 } });
       const state = await this.projectTicketSlaState(source, config, new Date());
-      assertValidDuplicateSource(source, state.isOverdue);
+      assertValidDuplicateSource(source, state.isOverdue, canCorrectResolvedDuplicate);
       const updatedAt = new Date();
       // Scalar update avoids saving a filtered/partially loaded comments relation.
       await repository.update(source.id, {
@@ -3046,7 +3059,14 @@ export class TicketService implements OnModuleInit {
           justification: reason, automatic: false,
         }),
       }));
-      return Object.assign(ticket, { updatedAt, resolvedAt: null, effectiveResolvedAt: null, isOverdue: false, isNearingSLA: false });
+      return Object.assign(ticket, {
+        updatedAt,
+        resolvedAt: source.resolvedAt,
+        resolutionTimeOverride: source.resolutionTimeOverride,
+        effectiveResolvedAt: getEffectiveResolvedAt(source),
+        isOverdue: false,
+        isNearingSLA: false,
+      });
     });
   }
 
@@ -3064,8 +3084,21 @@ export class TicketService implements OnModuleInit {
     const ticket = await this.getTicketById(id, actorRole, actorId);
     if (ticket.status === TicketStatus.CANCELLED) throw new ForbiddenException('Cancelled tickets cannot be updated.');
     if (dto.status === TicketStatus.CANCELLED) throw new BadRequestException('Use Cancel Ticket and supply a cancellation reason.');
+    if (dto.status === TicketStatus.DUPLICATE) {
+      const extraFields = Object.keys(dto).filter(
+        (key) => !['status', 'duplicateOfId', 'statusJustification'].includes(key) &&
+          dto[key as keyof UpdateTicketDto] !== undefined,
+      );
+      if (extraFields.length > 0) {
+        throw new BadRequestException('Mark Duplicate cannot be combined with other ticket changes.');
+      }
+    }
     const expectedUpdatedAt = ticket.updatedAt;
     const originalStatusForLogging = ticket.status as TicketStatus;
+    const canCorrectResolvedDuplicate =
+      dto.status === TicketStatus.DUPLICATE &&
+      ticket.status === TicketStatus.RESOLVED &&
+      this.roleCapSvc.isTicketRequesterCorrection(actorRole as string);
     const frozenReturnStatus =
       ticket.status === TicketStatus.FREEZE
         ? await this.resolveFrozenReturnStatus(ticket)
@@ -3080,7 +3113,8 @@ export class TicketService implements OnModuleInit {
       latestEscalation?.status === EscalationStatus.ACCEPTED ? latestEscalation : null;
 
     // Reopening a ticket is not part of the supported workflow. Paused/frozen
-    // tickets resume through their configured finite limits, while resolved or
+    // tickets resume through their configured finite limits. Resolved tickets
+    // remain terminal except for correction-capability duplicate classification;
     // closed tickets remain terminal.
     const returningFrozenTicketToOriginalStatus =
       ticket.status === TicketStatus.FREEZE && dto.status === frozenReturnStatus;
@@ -3183,7 +3217,7 @@ export class TicketService implements OnModuleInit {
       ? isAcceptedEscalationOperator
       : isTicketStatusAdmin || isEligibleAssignedOperator;
     const hasTicketModuleAccess = this.roleCapSvc.isTicketModuleAccess(actorRole as string);
-    if (!hasTicketModuleAccess && !isTicketStatusAdmin && !isAcceptedEscalationOperator) {
+    if (!hasTicketModuleAccess && !isTicketStatusAdmin && !isAcceptedEscalationOperator && !canCorrectResolvedDuplicate) {
       if (!isEligibleAssignedOperator) {
         throw new ForbiddenException(
           'Only the assigned RICTMS staff member can update this ticket.',
@@ -3342,8 +3376,10 @@ export class TicketService implements OnModuleInit {
     }
 
     if (dto.status) {
-      if (dto.status === TicketStatus.DUPLICATE && !canMarkDuplicate) {
-        throw new ForbiddenException('Only a Ticket Admin can mark a ticket as Duplicate.');
+      if (dto.status === TicketStatus.DUPLICATE && !canMarkDuplicate && !canCorrectResolvedDuplicate) {
+        throw new ForbiddenException(
+          'Ticket Admin capability is required for active tickets; Ticket Record Correction capability is required for resolved tickets.',
+        );
       }
       if (
         dto.status === TicketStatus.DUPLICATE && latestEscalation &&
@@ -3365,7 +3401,7 @@ export class TicketService implements OnModuleInit {
         }
       } else {
         // Enforce that only admins or the assigned technician can update status
-        if (!isTicketStatusAdmin && !isEligibleAssignedOperator) {
+        if (!isTicketStatusAdmin && !isEligibleAssignedOperator && !canCorrectResolvedDuplicate) {
           throw new ForbiddenException(
             'You can only update the status of tickets explicitly assigned to you.',
           );
@@ -3400,7 +3436,10 @@ export class TicketService implements OnModuleInit {
               ]
             : [TicketStatus.RESOLVED, TicketStatus.PAUSE],
         [TicketStatus.PAUSE]: [TicketStatus.IN_PROGRESS, TicketStatus.RESOLVED],
-        [TicketStatus.RESOLVED]: [TicketStatus.CLOSED],
+        [TicketStatus.RESOLVED]: [
+          TicketStatus.CLOSED,
+          ...(canCorrectResolvedDuplicate ? [TicketStatus.DUPLICATE] : []),
+        ],
         [TicketStatus.FREEZE]: isTicketStatusAdmin
           ? [
               TicketStatus.OPEN,
@@ -3439,14 +3478,11 @@ export class TicketService implements OnModuleInit {
       }
 
       if (dto.status === TicketStatus.DUPLICATE) {
-        const extraFields = Object.keys(dto).filter(
-          (key) => !['status', 'duplicateOfId', 'statusJustification'].includes(key) &&
-            dto[key as keyof UpdateTicketDto] !== undefined,
+        assertValidDuplicateSource(
+          ticket,
+          Boolean((ticket as any).isOverdue),
+          canCorrectResolvedDuplicate,
         );
-        if (extraFields.length > 0) {
-          throw new BadRequestException('Mark Duplicate cannot be combined with other ticket changes.');
-        }
-        assertValidDuplicateSource(ticket, Boolean((ticket as any).isOverdue));
         if (!dto.statusJustification?.trim() || dto.statusJustification.trim().length > 2000) {
           throw new BadRequestException('A reason of 1 to 2000 characters is required when marking a ticket as Duplicate.');
         }
@@ -3878,7 +3914,8 @@ export class TicketService implements OnModuleInit {
         TicketStatus.DUPLICATE,
         TicketStatus.FREEZE,
       ].includes(dto.status as TicketStatus) &&
-      saved.assignedToId
+      saved.assignedToId &&
+      !(dto.status === TicketStatus.DUPLICATE && originalStatusForLogging === TicketStatus.RESOLVED)
     ) {
       const assignedTechnicianId = saved.assignedToId;
       await this.withAutoAssignmentLock(async () => {
@@ -4926,7 +4963,8 @@ export class TicketService implements OnModuleInit {
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .addSelect('t.satisfactionFormData')
-      .where('t.satisfactionRating IS NOT NULL');
+      .where('t.satisfactionRating IS NOT NULL')
+      .andWhere('t.status != :duplicateStatus', { duplicateStatus: TicketStatus.DUPLICATE });
 
     if (filters.year) {
       qb.andWhere('YEAR(t.satisfactionSubmittedAt) = :year', { year: filters.year });
@@ -5260,7 +5298,7 @@ export class TicketService implements OnModuleInit {
       else if (t.status === TicketStatus.DUPLICATE) duplicate++;
       else if (t.status === TicketStatus.CANCELLED) cancelled++;
 
-      if (t.satisfactionRating) {
+      if (t.status !== TicketStatus.DUPLICATE && t.satisfactionRating) {
         totalSat += t.satisfactionRating;
         countSat++;
       }
@@ -5303,6 +5341,7 @@ export class TicketService implements OnModuleInit {
       .where('t.assignedToId = :techId', { techId })
       .andWhere('t.createdAt >= :startDate', { startDate })
       .andWhere('t.createdAt <= :endDate', { endDate })
+      .andWhere('t.status != :duplicateStatus', { duplicateStatus: TicketStatus.DUPLICATE })
       .getMany();
     await this.enrichTicketsWithUsers(tickets);
 
@@ -5423,16 +5462,14 @@ export class TicketService implements OnModuleInit {
     return results;
   }
 
-  /** Only ticket administrators can select older, readable originals for a visible source. */
+  /** Ticket Admins can select originals for active sources; correction capability can do so after resolution. */
   async getOpenTicketsForRequester(
     requesterId: number,
     viewerId?: number,
     viewerRole?: UserRole,
     sourceTicketId?: string,
   ): Promise<Ticket[]> {
-    if (!viewerId || !viewerRole || !this.roleCapSvc.isTicketSettingsFocal(viewerRole)) {
-      throw new ForbiddenException('Only a Ticket Admin can select an original ticket.');
-    }
+    if (!viewerId || !viewerRole) throw new ForbiddenException('Ticket access is required.');
     if (!sourceTicketId) {
       throw new BadRequestException('The source ticket is required to select an original.');
     }
@@ -5440,7 +5477,22 @@ export class TicketService implements OnModuleInit {
     if (Number(source.requesterId) !== Number(requesterId)) {
       throw new ForbiddenException('The source ticket does not belong to this requester.');
     }
-    assertValidDuplicateSource(source, Boolean((source as any).isOverdue));
+    const canCorrectResolvedDuplicate =
+      source.status === TicketStatus.RESOLVED &&
+      this.roleCapSvc.isTicketRequesterCorrection(viewerRole);
+    const canMarkActiveDuplicate =
+      this.roleCapSvc.isTicketSettingsFocal(viewerRole) &&
+      [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS].includes(source.status);
+    if (!canCorrectResolvedDuplicate && !canMarkActiveDuplicate) {
+      throw new ForbiddenException(
+        'Ticket Admin capability is required for active tickets; Ticket Record Correction capability is required for resolved tickets.',
+      );
+    }
+    assertValidDuplicateSource(
+      source,
+      Boolean((source as any).isOverdue),
+      canCorrectResolvedDuplicate,
+    );
 
     const candidates = await this.ticketRepo
       .createQueryBuilder('t')
@@ -6151,7 +6203,7 @@ export class TicketService implements OnModuleInit {
         resolvedCount: 0,
         totalCount: 0,
       };
-      const hasRating = t.satisfactionRating !== null;
+      const hasRating = t.status !== TicketStatus.DUPLICATE && t.satisfactionRating !== null;
       const isResolved = [TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(t.status);
       byTypeMap.set(key, {
         sum: cur.sum + (hasRating ? t.satisfactionRating! : 0),
@@ -7107,6 +7159,7 @@ export class TicketService implements OnModuleInit {
             middleName: user.middle_name,
             lastName: user.last_name,
             suffix: user.suffix,
+            staffId: user.staff_id,
           });
         }
       }),

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState } from 'react';
 import {
@@ -254,20 +255,17 @@ export default function RepositoryPage() {
 
   return (
     <Box p={3}>
-      <Typography variant="h4" fontWeight={700} gutterBottom>
+<WorkspaceLayout kind="standard" context={<><Typography variant="h4" fontWeight={700} gutterBottom>
         Report Repository
       </Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>
+<Typography variant="body2" color="text.secondary" mb={3}>
         All submitted documents organized by reporting period. Click a folder to browse documents.
       </Typography>
-
-      <Divider sx={{ mb: 3 }} />
-
-      {years.length === 0 && (
+<Divider sx={{ mb: 3 }} /></>}>
+{years.length === 0 && (
         <Typography color="text.secondary">No documents found in the repository.</Typography>
       )}
-
-      {years.map((yearGroup) => (
+{years.map((yearGroup) => (
         <Accordion
           key={yearGroup.year}
           defaultExpanded={yearGroup.year === currentYear}
@@ -326,8 +324,8 @@ export default function RepositoryPage() {
           </AccordionDetails>
         </Accordion>
       ))}
-
-      <Dialog open={Boolean(previewDoc)} onClose={closePreview} fullWidth maxWidth="lg">
+</WorkspaceLayout>
+<Dialog open={Boolean(previewDoc)} onClose={closePreview} fullWidth maxWidth="lg">
         <DialogTitle
           sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}
         >
@@ -372,6 +370,6 @@ export default function RepositoryPage() {
           )}
         </DialogContent>
       </Dialog>
-    </Box>
+</Box>
   );
 }

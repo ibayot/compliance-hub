@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useState } from 'react';
 import {
@@ -57,7 +58,9 @@ export default function ArchivedDocumentsPage() {
 
   return (
     <Container maxWidth="xl">
-      <Box sx={{ py: 4 }}>
+
+<WorkspaceLayout kind="standard">
+<Box sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <IconButton onClick={() => router.push('/governance/documents')}>
@@ -153,6 +156,8 @@ export default function ArchivedDocumentsPage() {
           </Button>
         </Box>
       </Box>
-    </Container>
+</WorkspaceLayout>
+
+</Container>
   );
 }

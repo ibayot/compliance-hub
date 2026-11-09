@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -190,16 +191,15 @@ export default function ChangelogManagementPage() {
 
   return (
     <Box>
-      <Typography variant="h4" mb={2}>
+<Typography variant="h4" mb={2}>
         Changelog Management
       </Typography>
-      <Alert severity="info" sx={{ mb: 2 }}>
+<Alert severity="info" sx={{ mb: 2 }}>
         Publish only user-visible Feature, Enhancement, or Bug Fix information. End User-only notes
         should use short, general wording for the limited requester experience. Do not include
         database, test, Docker, or internal deployment details.
       </Alert>
-
-      <Card sx={{ mb: 3 }}>
+<WorkspaceLayout kind="standard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>
           <Stack spacing={2}>
             <Typography variant="h6">
@@ -345,9 +345,8 @@ export default function ChangelogManagementPage() {
           </Button>
           {editingId && <Button onClick={resetForm}>Cancel Edit</Button>}
         </CardActions>
-      </Card>
-
-      <Stack spacing={2}>
+      </Card></>}>
+<Stack spacing={2}>
         {releases.map((release) => (
           <Card key={release.id}>
             <CardContent>
@@ -411,6 +410,8 @@ export default function ChangelogManagementPage() {
           <Typography color="text.secondary">No changelog releases have been created.</Typography>
         )}
       </Stack>
-    </Box>
+</WorkspaceLayout>
+
+</Box>
   );
 }

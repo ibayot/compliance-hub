@@ -1,9 +1,12 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSse } from '@/lib/utils/useSse';
 import {
   Box,
+  Alert,
+  Button,
   Typography,
   Paper,
   Grid,
@@ -34,6 +37,7 @@ export default function IncidentsPage() {
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [periodStats, setPeriodStats] = useState<IncidentPeriodStats | null>(null);
   const [recentIncidents, setRecentIncidents] = useState<Incident[]>([]);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -52,6 +56,7 @@ export default function IncidentsPage() {
       setTodayStats(todayData);
       setPeriodStats(periodsData);
       setRecentIncidents(incidentsData.slice(0, 10)); // Latest 10
+      setLoadError(false);
     } catch (err) {
       console.error('Failed to fetch incident data silently:', err);
     }
@@ -74,8 +79,10 @@ export default function IncidentsPage() {
       setTodayStats(todayData);
       setPeriodStats(periodsData);
       setRecentIncidents(incidentsData.slice(0, 10)); // Latest 10
+      setLoadError(false);
     } catch (err) {
       console.error('Failed to fetch incident data:', err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -111,6 +118,9 @@ export default function IncidentsPage() {
     }
   };
 
+  const getPercentage = (count: number) =>
+    statistics && statistics.total > 0 ? (count / statistics.total) * 100 : 0;
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -119,10 +129,28 @@ export default function IncidentsPage() {
     );
   }
 
+  if (!statistics || !todayStats || !periodStats) {
+    return (
+      <Box sx={{ maxWidth: 720, mx: 'auto', mt: 4 }}>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={fetchData}>
+              Retry
+            </Button>
+          }
+        >
+          {loadError
+            ? 'Incident data could not be loaded. Check your connection and retry.'
+            : 'Incident data is unavailable.'}
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box>
-      {/* Page Header */}
-      <Box mb={4}>
+<Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
           Incident Response Dashboard
         </Typography>
@@ -130,9 +158,7 @@ export default function IncidentsPage() {
           Real-time security incident tracking • 8:00 AM - 5:00 PM Philippines Time
         </Typography>
       </Box>
-
-      {/* Today's Stats */}
-      {todayStats && (
+<WorkspaceLayout kind="dashboard" context={<>{todayStats && (
         <Card sx={{ mb: 4, borderLeft: 4, borderColor: 'error.main' }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -146,7 +172,7 @@ export default function IncidentsPage() {
             </Box>
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
-                <Paper sx={{ p: 3, bgcolor: 'grey.50' }}>
+                <Paper sx={{ p: 3, bgcolor: 'background.default' }}>
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     Start of Day (8:00 AM)
                   </Typography>
@@ -233,10 +259,11 @@ export default function IncidentsPage() {
             </Box>
           </CardContent>
         </Card>
-      )}
-
-      {/* Posture Overview by Period */}
-      {periodStats && (
+      )}</>}>
+{/* Page Header */}
+{/* Today's Stats */}
+{/* Posture Overview by Period */}
+{periodStats && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -284,9 +311,8 @@ export default function IncidentsPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Overall Statistics */}
-      {statistics && (
+{/* Overall Statistics */}
+{statistics && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={6}>
             <Card>
@@ -303,7 +329,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.byStatus.open / statistics.total) * 100}
+                    value={getPercentage(statistics.byStatus.open)}
                     color="error"
                     sx={{ mb: 2 }}
                   />
@@ -316,7 +342,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.byStatus.in_progress / statistics.total) * 100}
+                    value={getPercentage(statistics.byStatus.in_progress)}
                     color="warning"
                     sx={{ mb: 2 }}
                   />
@@ -329,7 +355,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.byStatus.resolved / statistics.total) * 100}
+                    value={getPercentage(statistics.byStatus.resolved)}
                     color="success"
                     sx={{ mb: 2 }}
                   />
@@ -342,7 +368,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.byStatus.closed / statistics.total) * 100}
+                    value={getPercentage(statistics.byStatus.closed)}
                     sx={{ mb: 2 }}
                   />
                 </Box>
@@ -365,10 +391,10 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.bySeverity.critical / statistics.total) * 100}
+                    value={getPercentage(statistics.bySeverity.critical)}
                     sx={{
                       mb: 2,
-                      bgcolor: 'grey.200',
+                      bgcolor: 'action.hover',
                       '& .MuiLinearProgress-bar': { bgcolor: 'error.dark' },
                     }}
                   />
@@ -381,7 +407,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.bySeverity.high / statistics.total) * 100}
+                    value={getPercentage(statistics.bySeverity.high)}
                     color="error"
                     sx={{ mb: 2 }}
                   />
@@ -394,7 +420,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.bySeverity.medium / statistics.total) * 100}
+                    value={getPercentage(statistics.bySeverity.medium)}
                     color="warning"
                     sx={{ mb: 2 }}
                   />
@@ -407,7 +433,7 @@ export default function IncidentsPage() {
                   </Box>
                   <LinearProgress
                     variant="determinate"
-                    value={(statistics.bySeverity.low / statistics.total) * 100}
+                    value={getPercentage(statistics.bySeverity.low)}
                     color="info"
                     sx={{ mb: 2 }}
                   />
@@ -429,9 +455,8 @@ export default function IncidentsPage() {
           </Grid>
         </Grid>
       )}
-
-      {/* Recent Open/In-Progress Incidents */}
-      <Card>
+{/* Recent Open/In-Progress Incidents */}
+<Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Open & In-Progress Incidents
@@ -505,6 +530,8 @@ export default function IncidentsPage() {
           </TableContainer>
         </CardContent>
       </Card>
-    </Box>
+</WorkspaceLayout>
+
+</Box>
   );
 }

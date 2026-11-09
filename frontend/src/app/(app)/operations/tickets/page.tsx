@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
 
@@ -7,6 +8,7 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   Typography,
   Table,
@@ -96,6 +98,7 @@ import { useSse } from '@/lib/utils/useSse';
 import OvertimeTicketQueue from '@/components/OvertimeTicketQueue';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
+import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
 
 import {
   PRIORITY_CHIP_SX,
@@ -105,17 +108,6 @@ import {
 } from '@/lib/utils/ticket-colors';
 
 
-const populatedFieldSx = (populated: boolean) =>
-  populated
-    ? {
-        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
-        '& .MuiInputBase-input.Mui-disabled': {
-          color: '#000',
-          WebkitTextFillColor: '#000',
-          fontStyle: 'italic',
-        },
-      }
-    : undefined;
 function ticketTypeIcon(t: TicketType) {
   if (t === 'desktop_support') return <DesktopIcon />;
   if (t === 'pantawid_ict_support') return <PantawidIcon />;
@@ -1441,8 +1433,7 @@ export default function TicketsPage({
 
   return (
     <Box>
-      {personalRequestedOnly && user?.role !== 'user' && <OvertimeTicketQueue key={user?.id} />}
-      <Box
+<Box
         display="flex"
         flexWrap="wrap"
         gap={2}
@@ -1480,109 +1471,7 @@ export default function TicketsPage({
           onToggleEscalations={() => setShowEscalations(value => !value)}
         />
       </Box>
-
-      {!showEscalations && ticketLoadError && (
-        <Alert severity={tickets.length ? 'warning' : 'error'} sx={{ mb: 2 }}
-          action={<Button color="inherit" size="small" disabled={loading} onClick={() => void fetchTickets()}>Retry</Button>}>
-          {ticketLoadError}{tickets.length > 0 ? ' Previously loaded tickets are shown.' : ''}
-        </Alert>
-      )}
-      {(ticketSummaryError || requestedCountsError) && (
-        <Alert severity="warning" sx={{ mb: 2 }}
-          action={<Button color="inherit" size="small" onClick={() => { void refreshTicketSummary(); if (requestedCountsError) void fetchTickets(); }}>Refresh counts</Button>}>
-          Ticket counts could not be refreshed and may be out of date.
-        </Alert>
-      )}
-      {showEscalations && escalationHistoryError && (
-        <Alert severity="error" sx={{ mb: 2 }}
-          action={<Button color="inherit" size="small" disabled={escalationHistoryLoading} onClick={() => void refreshEscalationHistory()}>Retry</Button>}>
-          Escalation history could not be refreshed.{allEscalations.length > 0 ? ' Previously loaded history is shown.' : ''}
-        </Alert>
-      )}
-
-      <Dialog
-        open={ratingInvitationOpen}
-        onClose={() => !sendingRatingInvitations && setRatingInvitationOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Send Rating Invitation</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select regular users with completed tickets awaiting feedback. Re-sending creates a new
-            seven-day link and immediately invalidates that recipient&apos;s earlier link.
-          </Typography>
-          <Autocomplete
-            multiple
-            loading={loadingRatingRecipients}
-            options={ratingInvitationRecipients}
-            value={selectedRatingRecipients}
-            onChange={(_, value) => setSelectedRatingRecipients(value)}
-            getOptionLabel={(option) =>
-              `${option.name} — ${option.eligibleTicketCount} ticket${
-                option.eligibleTicketCount === 1 ? '' : 's'
-              } awaiting rating`
-            }
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            noOptionsText={
-              loadingRatingRecipients
-                ? 'Loading eligible recipients...'
-                : 'No regular users currently have tickets awaiting feedback.'
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Eligible recipients"
-                placeholder="Search by name or email"
-              />
-            )}
-            renderOption={(props, option) => (
-              <li {...props} key={option.id}>
-                <Box>
-                  <Typography variant="body2" fontWeight={600}>
-                    {option.name}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {option.email} • {option.eligibleTicketCount} awaiting rating
-                  </Typography>
-                </Box>
-              </li>
-            )}
-          />
-          {selectedRatingRecipients.length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              {selectedRatingRecipients.length} recipient
-              {selectedRatingRecipients.length === 1 ? '' : 's'} selected with{' '}
-              {selectedRatingRecipients.reduce(
-                (total, recipient) => total + recipient.eligibleTicketCount,
-                0,
-              )}{' '}
-              eligible ticket(s).
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setRatingInvitationOpen(false)}
-            disabled={sendingRatingInvitations}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={sendRatingInvitations}
-            disabled={
-              sendingRatingInvitations ||
-              loadingRatingRecipients ||
-              selectedRatingRecipients.length === 0
-            }
-          >
-            {sendingRatingInvitations ? 'Sending...' : 'Send Invitation'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {!showEscalations && !canManageAll && (
+<WorkspaceLayout kind="standard" context={<>{!showEscalations && !canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={ticketFilterPanelSx}>
             <Box sx={ticketFilterGridSx}>
@@ -1711,8 +1600,7 @@ export default function TicketsPage({
           </CardContent>
         </Card>
       )}
-
-      {!showEscalations && canManageAll && (
+{!showEscalations && canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={ticketFilterPanelSx}>
             <Box sx={ticketFilterGridSx}>
@@ -1941,7 +1829,7 @@ export default function TicketsPage({
           </CardContent>
         </Card>
       )}
-      {!showEscalations &&
+{!showEscalations &&
         !restrictedAssignedOnly &&
         !canManageAll &&
         (isFocalTech || canViewEscalatedQueue) && (
@@ -1996,7 +1884,7 @@ export default function TicketsPage({
             </CardContent>
           </Card>
         )}
-      {!showEscalations && !personalRequestedOnly && isLowerLevelTech && (
+{!showEscalations && !personalRequestedOnly && isLowerLevelTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Typography variant="body2" color="text.secondary">
@@ -2006,7 +1894,8 @@ export default function TicketsPage({
           </CardContent>
         </Card>
       )}
-      {!showEscalations && (
+      </>}>
+{!showEscalations && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ px: { xs: 1, sm: 2 }, py: 1, '&:last-child': { pb: 1 } }}>
             <Tabs
@@ -2018,6 +1907,7 @@ export default function TicketsPage({
               variant="scrollable"
               scrollButtons="auto"
               allowScrollButtonsMobile
+              aria-label="Filter tickets by status"
               sx={{ minHeight: 48, '& .MuiTab-root': { minHeight: 48, px: { xs: 1.5, sm: 2 }, fontSize: '0.875rem' } }}
             >
               {statusTabs.map(({ key, label }) => (
@@ -2035,8 +1925,26 @@ export default function TicketsPage({
           </CardContent>
         </Card>
       )}
-
-      {canViewEscalatedQueue && showEscalations ? (
+{personalRequestedOnly && user?.role !== 'user' && <OvertimeTicketQueue key={user?.id} />}
+{!showEscalations && ticketLoadError && (
+        <Alert severity={tickets.length ? 'warning' : 'error'} sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" disabled={loading} onClick={() => void fetchTickets()}>Retry</Button>}>
+          {ticketLoadError}{tickets.length > 0 ? ' Previously loaded tickets are shown.' : ''}
+        </Alert>
+      )}
+{(ticketSummaryError || requestedCountsError) && (
+        <Alert severity="warning" sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" onClick={() => { void refreshTicketSummary(); if (requestedCountsError) void fetchTickets(); }}>Refresh counts</Button>}>
+          Ticket counts could not be refreshed and may be out of date.
+        </Alert>
+      )}
+{showEscalations && escalationHistoryError && (
+        <Alert severity="error" sx={{ mb: 2 }}
+          action={<Button color="inherit" size="small" disabled={escalationHistoryLoading} onClick={() => void refreshEscalationHistory()}>Retry</Button>}>
+          Escalation history could not be refreshed.{allEscalations.length > 0 ? ' Previously loaded history is shown.' : ''}
+        </Alert>
+      )}
+{canViewEscalatedQueue && showEscalations ? (
         <Card sx={{ mb: 2 }}>
           <CardContent>
             <Box
@@ -2460,13 +2368,14 @@ export default function TicketsPage({
             <Table
               size="small"
               stickyHeader
-              sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1060 }}
+              sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1260 }}
             >
               <TableHead>
                 <TableRow>
                   <TableCell
                     sx={{
-                      width: 90,
+                      width: 120,
+                      minWidth: 120,
                       position: 'sticky',
                       left: 0,
                       backgroundColor: 'background.paper',
@@ -2542,11 +2451,14 @@ export default function TicketsPage({
                           sx={{
                             fontFamily: 'monospace',
                             fontWeight: 600,
-                            wordBreak: 'break-word',
+                            width: 120,
+                            minWidth: 120,
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'normal',
                             position: 'sticky',
                             left: 0,
-                            bgcolor: (theme) =>
-                              theme.palette.mode === 'dark' ? '#121212' : '#ffffff',
+                            bgcolor: 'background.paper',
                             zIndex: 2,
                             borderRight: '1px solid',
                             borderColor: 'divider',
@@ -2775,8 +2687,7 @@ export default function TicketsPage({
           </TableContainer>
         </Box>
       )}
-
-      {!showEscalations && totalPages > 1 && (
+{!showEscalations && totalPages > 1 && (
         <Box display="flex" justifyContent="center" sx={{ mt: 1, mb: 2 }}>
           <Pagination
             count={totalPages}
@@ -2789,9 +2700,94 @@ export default function TicketsPage({
           />
         </Box>
       )}
-
-      {/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
-      <Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="md" fullWidth>
+{/* New Ticket Dialog — Redesigned with highlighted support type cards + category dropdown */}
+{/* Assign Dialog */}
+{/* Assign Dialog */}
+{/* Dedicated Escalate Dialog */}
+{/* Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM */}
+</WorkspaceLayout>
+<Dialog
+        open={ratingInvitationOpen}
+        onClose={() => !sendingRatingInvitations && setRatingInvitationOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Send Rating Invitation</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select regular users with completed tickets awaiting feedback. Re-sending creates a new
+            seven-day link and immediately invalidates that recipient&apos;s earlier link.
+          </Typography>
+          <Autocomplete
+            multiple
+            loading={loadingRatingRecipients}
+            options={ratingInvitationRecipients}
+            value={selectedRatingRecipients}
+            onChange={(_, value) => setSelectedRatingRecipients(value)}
+            getOptionLabel={(option) =>
+              `${option.name} — ${option.eligibleTicketCount} ticket${
+                option.eligibleTicketCount === 1 ? '' : 's'
+              } awaiting rating`
+            }
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            noOptionsText={
+              loadingRatingRecipients
+                ? 'Loading eligible recipients...'
+                : 'No regular users currently have tickets awaiting feedback.'
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Eligible recipients"
+                placeholder="Search by name or email"
+              />
+            )}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {option.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {option.email} • {option.eligibleTicketCount} awaiting rating
+                  </Typography>
+                </Box>
+              </li>
+            )}
+          />
+          {selectedRatingRecipients.length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {selectedRatingRecipients.length} recipient
+              {selectedRatingRecipients.length === 1 ? '' : 's'} selected with{' '}
+              {selectedRatingRecipients.reduce(
+                (total, recipient) => total + recipient.eligibleTicketCount,
+                0,
+              )}{' '}
+              eligible ticket(s).
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRatingInvitationOpen(false)}
+            disabled={sendingRatingInvitations}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={sendRatingInvitations}
+            disabled={
+              sendingRatingInvitations ||
+              loadingRatingRecipients ||
+              selectedRatingRecipients.length === 0
+            }
+          >
+            {sendingRatingInvitations ? 'Sending...' : 'Send Invitation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+<Dialog open={newDialogOpen} onClose={() => setNewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>Submit a Help Desk Ticket</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
@@ -2840,42 +2836,55 @@ export default function TicketsPage({
               ].map((opt) => (
                 <Card
                   key={opt.value}
-                  onClick={() =>
-                    setForm({
-                      ...form,
-                      ticketType: opt.value,
-                      categoryId: undefined,
-                      issueTypeId: undefined,
-                    })
-                  }
                   sx={{
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    py: 2,
-                    px: 1,
                     minHeight: 170,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
                     border:
                       form.ticketType === opt.value
                         ? `2.5px solid ${opt.color}`
                         : '2px solid transparent',
                     bgcolor: form.ticketType === opt.value ? `${opt.color}10` : 'background.paper',
                     boxShadow: form.ticketType === opt.value ? 4 : 1,
-                    transition: 'all 0.2s',
                     '&:hover': { boxShadow: 3, borderColor: opt.color },
                   }}
                 >
-                  <Typography variant="h5" sx={{ mb: 0.5 }}>
-                    {opt.icon}
-                  </Typography>
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    {opt.label}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {opt.desc}
-                  </Typography>
+                  <CardActionArea
+                    component="button"
+                    type="button"
+                    disableRipple
+                    aria-pressed={form.ticketType === opt.value}
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        ticketType: opt.value,
+                        categoryId: undefined,
+                        issueTypeId: undefined,
+                      })
+                    }
+                    sx={{
+                      minHeight: 170,
+                      height: '100%',
+                      p: 2,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      '&:focus-visible': {
+                        outline: '3px solid',
+                        outlineColor: 'primary.main',
+                        outlineOffset: -3,
+                      },
+                    }}
+                  >
+                    <Typography variant="h5" sx={{ mb: 0.5 }}>
+                      {opt.icon}
+                    </Typography>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {opt.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {opt.desc}
+                    </Typography>
+                  </CardActionArea>
                 </Card>
               ))}
             </Box>
@@ -3264,8 +3273,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={requestedForConfirmOpen}
         onClose={() => setRequestedForConfirmOpen(false)}
         maxWidth="xs"
@@ -3290,8 +3298,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={reminderOpen} onClose={() => setReminderOpen(false)} maxWidth="sm" fullWidth>
+<Dialog open={reminderOpen} onClose={() => setReminderOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{reminderTitle}</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mt: 1 }}>
@@ -3320,9 +3327,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Assign Dialog */}
-      <Dialog
+<Dialog
         open={!!resolutionOverrideTicket}
         onClose={closeResolutionOverrideDialog}
         maxWidth="sm"
@@ -3403,9 +3408,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Assign Dialog */}
-      <Dialog
+<Dialog
         open={assignDialogOpen}
         onClose={() => setAssignDialogOpen(false)}
         maxWidth="xs"
@@ -3454,9 +3457,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Dedicated Escalate Dialog */}
-      <Dialog
+<Dialog
         open={escalateDialogOpen}
         onClose={() => setEscalateDialogOpen(false)}
         maxWidth="sm"
@@ -3521,9 +3522,7 @@ export default function TicketsPage({
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM */}
-      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
+<Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
           CLIENT SATISFACTION MEASUREMENT FORM
           <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
@@ -3740,6 +3739,7 @@ export default function TicketsPage({
                       >
                         <ToggleButton
                           value={1}
+                          aria-label="Very dissatisfied (1)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3747,11 +3747,12 @@ export default function TicketsPage({
                           }}
                         >
                           <SentimentVeryDissatisfied
-                            sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 1 ? 'error.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={2}
+                          aria-label="Dissatisfied (2)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3759,11 +3760,12 @@ export default function TicketsPage({
                           }}
                         >
                           <SentimentDissatisfied
-                            sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 2 ? 'warning.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={3}
+                          aria-label="Neutral (3)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3771,11 +3773,12 @@ export default function TicketsPage({
                           }}
                         >
                           <SentimentNeutral
-                            sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 3 ? 'warning.dark' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={4}
+                          aria-label="Satisfied (4)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3783,11 +3786,12 @@ export default function TicketsPage({
                           }}
                         >
                           <SentimentSatisfied
-                            sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 4 ? 'success.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={5}
+                          aria-label="Very satisfied (5)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3795,7 +3799,7 @@ export default function TicketsPage({
                           }}
                         >
                           <SentimentVerySatisfied
-                            sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 5 ? 'primary.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                       </ToggleButtonGroup>
@@ -3819,6 +3823,6 @@ export default function TicketsPage({
           )}
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

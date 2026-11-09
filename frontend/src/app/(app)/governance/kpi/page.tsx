@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
@@ -94,14 +95,14 @@ const BAND_COLORS: Record<string, string> = {
 
 /** Distinct palette for units / KPIs in multi-line charts. */
 const UNIT_COLORS: string[] = [
-  '#1565c0',
-  '#6a1b9a',
-  '#00695c',
-  '#e65100',
-  '#558b2f',
-  '#4527a0',
-  '#ad1457',
-  '#00838f',
+  'var(--app-chart-1)',
+  'var(--app-chart-2)',
+  'var(--app-chart-3)',
+  'var(--app-chart-4)',
+  'var(--app-chart-5)',
+  'var(--app-chart-6)',
+  'var(--app-chart-7)',
+  'var(--app-chart-8)',
 ];
 
 function computeBand(
@@ -1019,7 +1020,7 @@ export default function KpiPage() {
 
   return (
     <Box>
-      <Box mb={3}>
+<Box mb={3}>
         <Typography variant="h4" gutterBottom>
           KPI Monitoring & Dashboard
         </Typography>
@@ -1028,8 +1029,12 @@ export default function KpiPage() {
           Dashboard computes normalized unit performance.
         </Typography>
       </Box>
-
-      <Card sx={{ mb: 3 }}>
+<Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+        <Tab label="KPI Dashboard" />
+        {canManage && <Tab label="KPI Master" />}
+        {canManage && <Tab label="KPI Monitoring" />}
+      </Tabs>
+<WorkspaceLayout kind="dashboard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={2}>
@@ -1137,22 +1142,14 @@ export default function KpiPage() {
             </Grid>
           </Grid>
         </CardContent>
-      </Card>
-
-      {!canManage && !hasAssignedUnit && (
+      </Card></>}>
+{!canManage && !hasAssignedUnit && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           No unit is assigned to your account. KPI data cannot be loaded until an administrator
           assigns your unit.
         </Alert>
       )}
-
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
-        <Tab label="KPI Dashboard" />
-        {canManage && <Tab label="KPI Master" />}
-        {canManage && <Tab label="KPI Monitoring" />}
-      </Tabs>
-
-      {canManage && tab === 1 && (
+{canManage && tab === 1 && (
         <Card>
           <CardHeader
             title="KPI Master"
@@ -1203,8 +1200,7 @@ export default function KpiPage() {
           </CardContent>
         </Card>
       )}
-
-      {canManage && tab === 2 && (
+{canManage && tab === 2 && (
         <Card>
           <CardHeader
             title="KPI Monitoring"
@@ -1268,8 +1264,7 @@ export default function KpiPage() {
           </CardContent>
         </Card>
       )}
-
-      {tab === 0 && (
+{tab === 0 && (
         <Grid container spacing={2}>
           {/* ── Scorecard row ── */}
           <Grid item xs={12} md={4}>
@@ -1288,7 +1283,7 @@ export default function KpiPage() {
                     mt: 1,
                     height: 8,
                     borderRadius: 4,
-                    bgcolor: 'grey.200',
+                    bgcolor: 'action.hover',
                     '& .MuiLinearProgress-bar': { bgcolor: overallBandColor },
                   }}
                 />
@@ -1862,8 +1857,8 @@ export default function KpiPage() {
           </Grid>
         </Grid>
       )}
-
-      <Dialog open={masterOpen} onClose={() => setMasterOpen(false)} maxWidth="md" fullWidth>
+</WorkspaceLayout>
+<Dialog open={masterOpen} onClose={() => setMasterOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{masterEditingCode ? 'Edit KPI Master' : 'Create KPI Master'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
@@ -1990,8 +1985,7 @@ export default function KpiPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={monitoringOpen}
         onClose={() => setMonitoringOpen(false)}
         maxWidth="md"
@@ -2101,6 +2095,6 @@ export default function KpiPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

@@ -1,3 +1,4 @@
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
@@ -100,12 +101,12 @@ export default function TicketReportBuilder() {
   const setPeriod = (key: 'year' | 'month', value: number) => { request.current++; setGenerating(false); key === 'year' ? setYear(value) : setMonth(value); };
 
   return <Stack spacing={2}>
-    <Typography variant="h6" component="h2">Monthly Ticket Report Builder</Typography>
-    <Typography color="text.secondary">Choose your sections, save a personal template, and generate a monthly report. Required metrics are always included.</Typography>
-    {loadingTemplates && <Box role="status" aria-label="Loading report templates"><CircularProgress size={24} /></Box>}
-    {loadError && <Alert severity="error">{loadError}</Alert>}
-    {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
-    <Card><CardContent><Stack spacing={2}>
+<Typography variant="h6" component="h2">Monthly Ticket Report Builder</Typography>
+<Typography color="text.secondary">Choose your sections, save a personal template, and generate a monthly report. Required metrics are always included.</Typography>
+{loadingTemplates && <Box role="status" aria-label="Loading report templates"><CircularProgress size={24} /></Box>}
+{loadError && <Alert severity="error">{loadError}</Alert>}
+{error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+<WorkspaceLayout kind="report" className="ticket-report-builder" context={<><Card><CardContent><Stack spacing={2}>
       <Typography variant="subtitle1" component="h3" fontWeight={600}>Personal templates</Typography>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField select fullWidth size="small" label="Saved template" value={selectedId} onChange={e => chooseTemplate(e.target.value)} disabled={busy || loadingTemplates}>
@@ -122,7 +123,7 @@ export default function TicketReportBuilder() {
       {selected && !canManage && selected.configuration.technicianId && selected.configuration.technicianId !== user?.id &&
         <Alert severity="warning">This template contains a staff scope your current permissions do not allow. Use your own account below and save the updated template.</Alert>}
     </Stack></CardContent></Card>
-    <Card><CardContent><Stack spacing={2}>
+<Card><CardContent><Stack spacing={2}>
       <Typography variant="subtitle1" component="h3" fontWeight={600}>Report settings</Typography>
       <TextField size="small" label="Report title" value={configuration.title} onChange={e => change('title', e.target.value)} inputProps={{ maxLength: 120 }} />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
@@ -173,8 +174,9 @@ export default function TicketReportBuilder() {
         </Stack>
       </Stack>}
       <Box><Button variant="contained" onClick={generate} disabled={generating || !validConfig} aria-busy={generating}>{generating ? 'Generating…' : 'Generate preview'}</Button></Box>
-    </Stack></CardContent></Card>
-    {report && <Card><CardContent><Stack spacing={2}>
+    </Stack></CardContent></Card></>}>
+{!report && <Alert severity="info">Choose report options and select Generate preview to view your monthly report here.</Alert>}
+{report && <Card><CardContent><Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
         <Typography variant="h6" component="h2">{report.configuration.title}</Typography>
         <Button variant="outlined" startIcon={<PrintIcon />} disabled={stale || generating} onClick={() => { if (!printTicketReport(report)) setError('The print window was blocked. Allow pop-ups for this site and try again.'); }}>Print / Export PDF</Button>
@@ -195,9 +197,10 @@ export default function TicketReportBuilder() {
         {block.id === 'tickets' && <TablePagination component="div" count={block.rows.length} page={page} onPageChange={(_, value) => setPage(value)} rowsPerPage={25} rowsPerPageOptions={[25]} />}
       </Box>)}
     </Stack></CardContent></Card>}
-    <Dialog open={Boolean(deleteTarget)} onClose={() => { if (!busy) setDeleteTarget(null); }} aria-labelledby="delete-report-template-title">
+</WorkspaceLayout>
+<Dialog open={Boolean(deleteTarget)} onClose={() => { if (!busy) setDeleteTarget(null); }} aria-labelledby="delete-report-template-title">
       <DialogTitle id="delete-report-template-title">Delete template?</DialogTitle><DialogContent><DialogContentText>Delete “{deleteTarget?.name}” from your saved templates? Ticket records and the current report will remain available.</DialogContentText></DialogContent>
       <DialogActions><Button disabled={busy} onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="error" disabled={busy} onClick={remove}>Delete template</Button></DialogActions>
     </Dialog>
-  </Stack>;
+</Stack>;
 }

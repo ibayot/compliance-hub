@@ -34,6 +34,10 @@ class DutyMeetingRelieversDto {
   @IsString() @MinLength(3) @MaxLength(2000) reason: string;
 }
 
+class CancelDutyMeetingDto {
+  @IsString() @MinLength(3) @MaxLength(2000) reason: string;
+}
+
 class DutyReservationDto {
   @IsDateString() meetingDate: string;
   @IsEnum(DutyType) venueType: DutyType;
@@ -95,6 +99,9 @@ export class DutyController {
   }
   @Post('reservations/:id/complete') completeReservation(@Request() req: any, @Param('id') id: string) {
     return this.duty.completeReservation(req.user, id);
+  }
+  @Post('reservations/:id/cancel') cancelReservation(@Request() req: any, @Param('id') id: string, @Body() dto: CancelDutyMeetingDto) {
+    return this.duty.cancelReservation(req.user, id, dto.reason);
   }
   @Post('coverages/:id/release') release(@Request() req: any, @Param('id') id: string) { return this.duty.releaseCoverage(req.user, id); }
   @Post('coverages/:id/activate') activate(@Request() req: any, @Param('id') id: string, @Body('userId') userId: number) { return this.duty.activateCoverage(req.user, id, Number(userId)); }

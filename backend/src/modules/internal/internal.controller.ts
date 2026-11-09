@@ -61,7 +61,7 @@ export class InternalController {
       autoAssignmentEligible: u.autoAssignmentEligible !== false,
       attendanceEligible: (u as any).attendanceEligible === true,
       technicianEligible: (u as any).technicianEligible === true,
-      staff_id: (u as any).staff_id ?? null,
+      staff_id: u.staffId ?? null,
 
       units: u.units || [],
     }));
@@ -86,7 +86,7 @@ export class InternalController {
       autoAssignmentEligible: user.autoAssignmentEligible !== false,
       attendanceEligible: (user as any).attendanceEligible === true,
       technicianEligible: (user as any).technicianEligible === true,
-      staff_id: (user as any).staff_id ?? null,
+      staff_id: user.staffId ?? null,
       phone_number: user.phoneNumber ?? null,
 
       units: user.units || [],

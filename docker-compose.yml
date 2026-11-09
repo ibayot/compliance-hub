@@ -62,7 +62,8 @@ services:
       - TICKETING_SERVICE_URL=http://ticketing-service:4102
       - UMS_STAFF_SYNC_ENABLED=${UMS_STAFF_SYNC_ENABLED:-true}
       # Configure this secret in the project-root .env or directly here, never VITE_*.
-      - STAFF_DIRECTORY_API_KEY=${STAFF_DIRECTORY_API_KEY:-}
+      - STAFF_DIRECTORY_API_KEY= V?1fx5V@^=+|X90Nh3Q1,a~DvhQc>zfc
+      - SERVER_ADMIN_TICKETS_API_KEY= |X90Nh3Q1,a~DvhQV?1fx5V@^=+c>zfc
       - UMS_STAFF_VIEW=${UMS_STAFF_VIEW:-vStaffBasicInfo}
       - UMS_DB_DATABASE=${UMS_DB_DATABASE:-02_db_ums_prod}
       - TZ=Asia/Manila
@@ -101,7 +102,6 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - SERVER_ADMIN_TICKETS_API_KEY=${SERVER_ADMIN_TICKETS_API_KEY:-}
       - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
@@ -112,6 +112,8 @@ services:
       # This enables the Attendance Admin PRESENT fallback for local testing.
       - DTR_VIEW_ENABLED=false
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
+      # Read only from the project-root environment; do not share this integration key with other services.
+      - SERVER_ADMIN_TICKETS_API_KEY=${SERVER_ADMIN_TICKETS_API_KEY:-}
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
       - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
       - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -1122,7 +1123,7 @@ export default function IssuancesPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+<Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Reference Issuances</Typography>
         <Box display="flex" gap={1}>
           {canConfigureIssuances && (
@@ -1144,15 +1145,13 @@ export default function IssuancesPage() {
           )}
         </Box>
       </Box>
-
-      {!canManageIssuances && (
+{!canManageIssuances && (
         <Typography color="text.secondary" sx={{ mb: 2 }}>
           Read-only view. Issuance CRUD and document mapping actions are available to compliance and
           super admin roles.
         </Typography>
       )}
-
-      <Card sx={{ mb: 2 }}>
+<Card sx={{ mb: 2 }}>
         <Tabs
           value={view}
           onChange={(_, value) => setView(value)}
@@ -1165,8 +1164,7 @@ export default function IssuancesPage() {
           <Tab value="historical" label="Historical & Excluded" />
         </Tabs>
       </Card>
-
-      <Card sx={{ mb: 3 }}>
+<WorkspaceLayout kind="standard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>
           <Box display="flex" gap={2} alignItems="flex-start" flexWrap="wrap">
             <TextField
@@ -1246,9 +1244,8 @@ export default function IssuancesPage() {
             />
           </Box>
         </CardContent>
-      </Card>
-
-      <TableContainer component={Card}>
+      </Card></>}>
+<TableContainer component={Card}>
         <Table>
           <TableHead>
             <TableRow>
@@ -1346,8 +1343,8 @@ export default function IssuancesPage() {
           rowsPerPageOptions={[5, 10, 20, 50]}
         />
       </TableContainer>
-
-      <Menu
+</WorkspaceLayout>
+<Menu
         anchorEl={actionsAnchorEl}
         open={Boolean(actionsAnchorEl && actionsIssuance)}
         onClose={closeActionsMenu}
@@ -1491,8 +1488,7 @@ export default function IssuancesPage() {
           </MenuItem>
         )}
       </Menu>
-
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+<Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>{editingIssuance ? 'Edit Issuance' : 'Add Issuance'}</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1873,8 +1869,7 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={mappingOpen} onClose={closeMappingDialog} maxWidth="lg" fullWidth>
+<Dialog open={mappingOpen} onClose={closeMappingDialog} maxWidth="lg" fullWidth>
         <DialogTitle>
           Document Mapping {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
         </DialogTitle>
@@ -2003,8 +1998,7 @@ export default function IssuancesPage() {
           <Button onClick={closeMappingDialog}>Close</Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={relevanceOpen} onClose={closeRelevanceDialog} maxWidth="md" fullWidth>
+<Dialog open={relevanceOpen} onClose={closeRelevanceDialog} maxWidth="md" fullWidth>
         <DialogTitle>
           Applicability and Relevance{' '}
           {selectedIssuance ? `• ${selectedIssuance.issuance_number}` : ''}
@@ -2382,8 +2376,7 @@ export default function IssuancesPage() {
           <Button onClick={closeRelevanceDialog}>Close</Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={sourceDialogOpen}
         onClose={() => !sourceSaving && setSourceDialogOpen(false)}
         maxWidth="md"
@@ -2447,8 +2440,7 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={relationshipDialogOpen}
         onClose={() => !relationshipSaving && setRelationshipDialogOpen(false)}
         maxWidth="sm"
@@ -2511,8 +2503,7 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={Boolean(assessmentIssuance)}
         onClose={() => !assessmentSaving && setAssessmentIssuance(null)}
         maxWidth="sm"
@@ -2735,8 +2726,7 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={domainDialogOpen} onClose={() => setDomainDialogOpen(false)} maxWidth="sm" fullWidth>
+<Dialog open={domainDialogOpen} onClose={() => setDomainDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Compliance Domains</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -2785,8 +2775,7 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={!!deleteConfirmIssuance} onClose={() => setDeleteConfirmIssuance(null)}>
+<Dialog open={!!deleteConfirmIssuance} onClose={() => setDeleteConfirmIssuance(null)}>
         <DialogTitle>Confirm Removal</DialogTitle>
         <DialogContent>
           <Typography>
@@ -2801,6 +2790,6 @@ export default function IssuancesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -639,8 +640,7 @@ export default function DashboardPage() {
 
   return (
     <Box>
-      {/* Page Header */}
-      <Box mb={4}>
+<Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
           Dashboard
         </Typography>
@@ -648,8 +648,7 @@ export default function DashboardPage() {
           Welcome back, {user?.firstName || user?.email}!
         </Typography>
       </Box>
-
-      {ticketingEnabled && (
+<WorkspaceLayout kind="dashboard" context={<>{ticketingEnabled && (
         <Box mb={4}>
           <Box display="flex" alignItems="center" justifyContent="space-between" gap={2} mb={2}>
             <Box>
@@ -704,8 +703,7 @@ export default function DashboardPage() {
           </Grid>
         </Box>
       )}
-
-      {canViewDuties && (
+{canViewDuties && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={800} mb={2}>Today&apos;s Duty Coverage</Typography>
@@ -731,10 +729,10 @@ export default function DashboardPage() {
             </Grid>
           </CardContent>
         </Card>
-      )}
-
-      {/* Technician Personal Assignment Stats */}
-      {canViewAssignedTickets && appMode !== 'compliance_only' && (
+      )}</>}>
+{/* Page Header */}
+{/* Technician Personal Assignment Stats */}
+{canViewAssignedTickets && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box
@@ -933,12 +931,11 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Independent summary access does not grant report-management permissions. */}
-      {ticketingEnabled && user?.role !== 'user' && <OvertimeTicketQueue key={`ot-${user?.id}`} />}
-      {ticketingEnabled && myCap?.isTicketPerformanceAccess && <WeeklyTicketPerformance key={user?.id} />}
-      {/* Main Stats — hidden for all technicians */}
-      {!isTechnicianAny && complianceEnabled && canViewDocuments && (
+{/* Independent summary access does not grant report-management permissions. */}
+{ticketingEnabled && user?.role !== 'user' && <OvertimeTicketQueue key={`ot-${user?.id}`} />}
+{ticketingEnabled && myCap?.isTicketPerformanceAccess && <WeeklyTicketPerformance key={user?.id} />}
+{/* Main Stats — hidden for all technicians */}
+{!isTechnicianAny && complianceEnabled && canViewDocuments && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={6} lg={3}>
             <Card>
@@ -1051,9 +1048,8 @@ export default function DashboardPage() {
           )}
         </Grid>
       )}
-
-      {/* Incident Response Tracking — visible only to super_admin, CO, Section Head, and Cybersecurity Officer */}
-      {canViewSecurityIncidents && incidentStats && appMode !== 'ticketing_only' && (
+{/* Incident Response Tracking — visible only to super_admin, CO, Section Head, and Cybersecurity Officer */}
+{canViewSecurityIncidents && incidentStats && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -1149,9 +1145,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* IT Help Desk Metrics */}
-      {isFullDashboard && isComplianceOfficer && ticketMetrics && appMode !== 'compliance_only' && (
+{/* IT Help Desk Metrics */}
+{isFullDashboard && isComplianceOfficer && ticketMetrics && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
@@ -1404,8 +1399,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {!!myCap?.isTicketSettingsFocal && slaSummary && appMode !== 'compliance_only' && (
+{!!myCap?.isTicketSettingsFocal && slaSummary && appMode !== 'compliance_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6" fontWeight={600} mb={2}>
@@ -1507,9 +1501,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Cybersecurity Metrics */}
-      {isFullDashboard && appMode !== 'ticketing_only' && (
+{/* Cybersecurity Metrics */}
+{isFullDashboard && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -1580,9 +1573,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Compliance Management Metrics */}
-      {isFullDashboard && appMode !== 'ticketing_only' && (
+{/* Compliance Management Metrics */}
+{isFullDashboard && appMode !== 'ticketing_only' && (
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
@@ -1652,9 +1644,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Recent Documents and Compliance Overview — CO / super_admin only */}
-      {isFullDashboard && appMode !== 'ticketing_only' && (
+{/* Recent Documents and Compliance Overview — CO / super_admin only */}
+{isFullDashboard && appMode !== 'ticketing_only' && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={8}>
             <Card>
@@ -1729,9 +1720,8 @@ export default function DashboardPage() {
           </Grid>
         </Grid>
       )}
-
-      {/* Staff / Technician Quick Actions */}
-      {!isRequesterDashboard && (
+{/* Staff / Technician Quick Actions */}
+{!isRequesterDashboard && (
         <Grid container spacing={3} mb={4}>
           <Grid item xs={12} md={4}>
             <Card>
@@ -1846,6 +1836,8 @@ export default function DashboardPage() {
           </Grid>
         </Grid>
       )}
-    </Box>
+</WorkspaceLayout>
+
+</Box>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -433,7 +434,7 @@ export default function MetricsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+<WorkspaceLayout kind="standard" context={<><Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
             Metrics Template Builder
@@ -447,8 +448,7 @@ export default function MetricsPage() {
           Create Template
         </Button>
       </Box>
-
-      <Paper sx={{ mb: 3 }}>
+<Paper sx={{ mb: 3 }}>
         <Tabs value={tab} onChange={(_, value) => setTab(value)}>
           <Tab label="All Templates" />
           <Tab label="Section Rules" />
@@ -456,9 +456,8 @@ export default function MetricsPage() {
           <Tab label="Number Extraction" />
           <Tab label="Date Check" />
         </Tabs>
-      </Paper>
-
-      <Paper sx={{ p: 2 }}>
+      </Paper></>}>
+<Paper sx={{ p: 2 }}>
         {loading ? (
           <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
@@ -526,8 +525,8 @@ export default function MetricsPage() {
           </TableContainer>
         )}
       </Paper>
-
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+</WorkspaceLayout>
+<Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{editing ? 'Edit Metric Template' : 'Create Metric Template'}</DialogTitle>
         <DialogContent>
           <TextField
@@ -788,6 +787,6 @@ export default function MetricsPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

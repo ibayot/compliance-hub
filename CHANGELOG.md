@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-11-09 - Workspace Layouts and Ticket Workflow Updates
+
+### Added
+- Added account-saved workspace layout presets and color themes that apply across the application.
+- Ticket details show the requester's staff profile image, which can be opened in a larger view.
+- Duty administrators can cancel an active meeting without recording completed duty.
+
+### Changed
+- Updated navigation and page layouts across tickets, duties, reports, settings, documents, and administration for clearer, more consistent use.
+- Authorized record correction can reclassify a resolved ticket as a duplicate. Duplicate tickets no longer count as completed work, SLA results, resolution-time metrics, or satisfaction results.
+
 ## [1.0.37] - 2026-11-05 - Approved Unit Access and Security Emails
 
 ### Changed

@@ -29,6 +29,7 @@ export function getTicketDetailActionKeys(context: TicketDetailActionContext): T
   const actions: TicketDetailActionKey[] = [];
   if (c.canShowStatusAction) actions.push('updateStatus');
   if (c.isTicketAdmin && c.canShowStatusAction && active) actions.push('duplicate');
+  else if (c.canCorrectTicketRecord && c.status === 'resolved') actions.push('duplicate');
   if (c.isDisposal) {
     actions.push('printDisposal');
     if (c.isTechnician || c.isTicketAdmin) actions.push('printInspection');

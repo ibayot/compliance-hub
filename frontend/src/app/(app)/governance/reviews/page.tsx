@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -216,7 +217,7 @@ export default function ReviewsPage() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+<WorkspaceLayout kind="standard" context={<><Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
             Manual Compliance Reviews
@@ -227,9 +228,8 @@ export default function ReviewsPage() {
           </Typography>
         </Box>
         <Chip label={`${pendingCount} Pending Reviews`} color="primary" />
-      </Box>
-
-      <Paper sx={{ p: 2 }}>
+      </Box></>}>
+<Paper sx={{ p: 2 }}>
         {loading ? (
           <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
@@ -300,8 +300,8 @@ export default function ReviewsPage() {
           </TableContainer>
         )}
       </Paper>
-
-      <Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xl">
+</WorkspaceLayout>
+<Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xl">
         <DialogTitle>Submit Manual Review</DialogTitle>
         <DialogContent>
           <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '2fr 1fr' }} gap={2}>
@@ -408,6 +408,6 @@ export default function ReviewsPage() {
           )}
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

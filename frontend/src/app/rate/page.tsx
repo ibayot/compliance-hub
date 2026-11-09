@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import type { CsatFormData } from '@/app/api/references';
 import { publicRatingApi, PublicRatingSession, PublicRatingTicket } from '@/lib/api/public-rating';
+import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
 
 const QUALITY_ITEMS = [
   'I am satisfied with the service that I availed.',
@@ -49,18 +50,6 @@ const QUALITY_ITEMS = [
   'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
   'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
 ];
-
-const populatedFieldSx = (populated: boolean) =>
-  populated
-    ? {
-        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
-        '& .MuiInputBase-input.Mui-disabled': {
-          color: '#000',
-          WebkitTextFillColor: '#000',
-          fontStyle: 'italic',
-        },
-      }
-    : undefined;
 
 const manilaDate = (value: string | null | undefined) =>
   value

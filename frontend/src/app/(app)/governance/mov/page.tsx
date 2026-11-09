@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -989,16 +990,27 @@ export default function MovBuilderPage() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
+<Typography variant="h4" gutterBottom>
         MoV Builder
       </Typography>
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+<Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         Organized workspace for register reporting, assessment reporting, plan updates, and schedule
         monitoring.
       </Typography>
-
-      {/* ── Period Filters ── */}
-      <Card sx={{ mb: 2 }}>
+<Card sx={{ mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_e, value) => setTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="Reports" />
+          <Tab label="Assessment Plan" />
+          <Tab label="Assessment Schedule" />
+          <Tab label="Artifacts" />
+        </Tabs>
+      </Card>
+<WorkspaceLayout kind="report" context={<><Card sx={{ mb: 2 }}>
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={3}>
@@ -1060,27 +1072,13 @@ export default function MovBuilderPage() {
             </Grid>
           </Grid>
         </CardContent>
-      </Card>
-
-      {/* ── Tabs ── */}
-      <Card sx={{ mb: 2 }}>
-        <Tabs
-          value={tab}
-          onChange={(_e, value) => setTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab label="Reports" />
-          <Tab label="Assessment Plan" />
-          <Tab label="Assessment Schedule" />
-          <Tab label="Artifacts" />
-        </Tabs>
-      </Card>
-
-      {/* ══════════════════════════════════════════════════════════════
+      </Card></>}>
+{/* ── Period Filters ── */}
+{/* ── Tabs ── */}
+{/* ══════════════════════════════════════════════════════════════
           TAB 0: REPORTS
       ══════════════════════════════════════════════════════════════ */}
-      {tab === 0 && (
+{tab === 0 && (
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
             {/* ── Generate Buttons ── */}
@@ -1488,11 +1486,10 @@ export default function MovBuilderPage() {
           </Grid>
         </Grid>
       )}
-
-      {/* ══════════════════════════════════════════════════════════════
+{/* ══════════════════════════════════════════════════════════════
           TAB 1: ASSESSMENT PLAN (Timeline Design)
       ══════════════════════════════════════════════════════════════ */}
-      {tab === 1 && (
+{tab === 1 && (
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
@@ -1736,11 +1733,10 @@ export default function MovBuilderPage() {
           </Grid>}
         </Grid>
       )}
-
-      {/* ══════════════════════════════════════════════════════════════
+{/* ══════════════════════════════════════════════════════════════
           TAB 2: ASSESSMENT SCHEDULE
       ══════════════════════════════════════════════════════════════ */}
-      {tab === 2 && (
+{tab === 2 && (
         <Grid container spacing={2}>
           <Grid item xs={12}>
             <Card>
@@ -1969,11 +1965,10 @@ export default function MovBuilderPage() {
           </Grid>
         </Grid>
       )}
-
-      {/* ══════════════════════════════════════════════════════════════
+{/* ══════════════════════════════════════════════════════════════
           TAB 3: ARTIFACTS (with status edit)
       ══════════════════════════════════════════════════════════════ */}
-      {tab === 3 && (
+{tab === 3 && (
         <Card>
           <CardHeader
             title={`Saved MoV Artifacts – ${year} Q${quarter}`}
@@ -2102,6 +2097,8 @@ export default function MovBuilderPage() {
           </CardContent>
         </Card>
       )}
-    </Box>
+</WorkspaceLayout>
+
+</Box>
   );
 }

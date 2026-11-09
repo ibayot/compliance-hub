@@ -1,4 +1,6 @@
 'use client';
+import WorkspaceTabs from '@/components/layout/WorkspaceTabs';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -416,15 +418,13 @@ export default function AttendancePage() {
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} mb={0.5}>
+<Typography variant="h4" fontWeight={700} mb={0.5}>
         Attendance Management
       </Typography>
-      <Typography variant="body2" color="text.secondary" mb={3}>
+<Typography variant="body2" color="text.secondary" mb={3}>
         Manage the office day calendar and track technician attendance by support type
       </Typography>
-
-      {/* Month Navigation */}
-      <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+<Stack direction="row" alignItems="center" spacing={1} mb={2}>
         <IconButton onClick={() => navMonth(-1)}>
           <PrevIcon />
         </IconButton>
@@ -435,16 +435,17 @@ export default function AttendancePage() {
           <NextIcon />
         </IconButton>
       </Stack>
-
-      <Card>
-        <Tabs
+<WorkspaceLayout kind="standard">
+{/* Month Navigation */}
+<Card>
+        <WorkspaceTabs
           value={tab}
           onChange={(_, v) => setTab(v)}
           sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab label="Office Days" />
           <Tab label="Attendance" />
-        </Tabs>
+        </WorkspaceTabs>
 
         {/* ── Office Days Calendar ── */}
         {tab === 0 && (
@@ -496,7 +497,7 @@ export default function AttendancePage() {
                           textAlign: 'center',
                           py: 1.5,
                           borderRadius: 1,
-                          bgcolor: isOvertime ? 'warning.light' : isOffice ? 'success.light' : 'grey.200',
+                          bgcolor: isOvertime ? 'warning.light' : isOffice ? 'success.light' : 'action.hover',
                           color: isOvertime ? 'warning.contrastText' : isOffice ? 'success.contrastText' : 'text.disabled',
                           cursor: canManageOfficeDays && !isPastOrToday ? 'pointer' : 'default',
                           opacity: isPastOrToday ? 0.55 : 1,
@@ -806,8 +807,9 @@ export default function AttendancePage() {
           </CardContent>
         )}
       </Card>
-      {/* Time Picker Dialog */}
-      <Dialog open={!!officeDaySelection} onClose={() => !savingOfficeDay && setOfficeDaySelection(null)} fullWidth maxWidth="sm" aria-labelledby="office-day-dialog-title">
+{/* Time Picker Dialog */}
+</WorkspaceLayout>
+<Dialog open={!!officeDaySelection} onClose={() => !savingOfficeDay && setOfficeDaySelection(null)} fullWidth maxWidth="sm" aria-labelledby="office-day-dialog-title">
         <DialogTitle id="office-day-dialog-title">Office calendar — {officeDaySelection?.date}</DialogTitle>
         <DialogContent>
           <TextField autoFocus select fullWidth label="Day type" value={officeDaySelection?.type || 'off'} disabled={savingOfficeDay}
@@ -818,7 +820,7 @@ export default function AttendancePage() {
         </DialogContent>
         <DialogActions><Button disabled={savingOfficeDay} onClick={() => setOfficeDaySelection(null)}>Cancel</Button><Button variant="contained" disabled={savingOfficeDay} onClick={() => void saveOfficeDay()}>{savingOfficeDay ? 'Saving…' : 'Save'}</Button></DialogActions>
       </Dialog>
-      <Dialog open={Boolean(timePickerData)} onClose={() => setTimePickerData(null)} maxWidth="sm" fullWidth>
+<Dialog open={Boolean(timePickerData)} onClose={() => setTimePickerData(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Set Clock-In Time</DialogTitle>
         <DialogContent>
           <Box py={2}>
@@ -854,6 +856,6 @@ export default function AttendancePage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

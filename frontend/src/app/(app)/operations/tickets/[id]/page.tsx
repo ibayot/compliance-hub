@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
 
@@ -43,6 +44,8 @@ import {
   ListItemButton,
   IconButton,
   Link,
+  Avatar,
+  ButtonBase,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -50,6 +53,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
+import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -122,17 +126,6 @@ const formatElapsedHoursMinutes = (milliseconds: number) => {
   return hours > 0 ? `${hours} hr(s) ${minutes} min(s)` : `${minutes} min(s)`;
 };
 
-const populatedFieldSx = (populated: boolean) =>
-  populated
-    ? {
-        '& .MuiInputBase-input': { color: '#000', fontStyle: 'italic' },
-        '& .MuiInputBase-input.Mui-disabled': {
-          color: '#000',
-          WebkitTextFillColor: '#000',
-          fontStyle: 'italic',
-        },
-      }
-    : undefined;
 const classificationFieldSx = {
   minWidth: 0, width: '100%',
   '& .MuiInputLabel-root': { fontWeight: 600 },
@@ -237,6 +230,11 @@ export default function TicketDetailPage() {
   // Guard: auto-view mark fires only once per ticket load
   const viewedRef = useRef(false);
   const emailActionHandledRef = useRef(false);
+  const activeTicketIdRef = useRef(ticketId);
+  activeTicketIdRef.current = ticketId;
+  const ticketLoadSequenceRef = useRef(0);
+  const eventsLoadSequenceRef = useRef(0);
+  const escalationsLoadSequenceRef = useRef(0);
 
   const [parentTicketNumber, setParentTicketNumber] = useState<string | null>(null);
 
@@ -254,12 +252,18 @@ export default function TicketDetailPage() {
   const [isInternal, setIsInternal] = useState(false);
   const [mentionCandidates, setMentionCandidates] = useState<InternalNoteMentionCandidate[]>([]);
   const [mentionedUserIds, setMentionedUserIds] = useState<number[]>([]);
-  const [submittingComment, setSubmittingComment] = useState(false);
+  const [submittingCommentFor, setSubmittingCommentFor] = useState<string | null>(null);
   const [visibleCommentCount, setVisibleCommentCount] = useState(COMMENTS_PAGE_SIZE);
   const [imageReplacement, setImageReplacement] = useState<{commentId: string; path: string} | null>(null);
   const [replacementFiles, setReplacementFiles] = useState<File[]>([]);
   const [replacingImage, setReplacingImage] = useState(false);
   const [imageHistory, setImageHistory] = useState<{oldPath: string; newPath: string} | null>(null);
+  const [requesterImageOpen, setRequesterImageOpen] = useState(false);
+  const [requesterPhotoFailed, setRequesterPhotoFailed] = useState(false);
+  useEffect(() => {
+    setRequesterImageOpen(false);
+    setRequesterPhotoFailed(false);
+  }, [ticketId, ticket?.requester?.staffId]);
 
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
@@ -556,6 +560,15 @@ export default function TicketDetailPage() {
   }, [ticket?.assignedToId, timelineEvents]);
 
   useEffect(() => {
+    viewedRef.current = false;
+    emailActionHandledRef.current = false;
+    setTicket(null);
+    setEvents([]);
+    setEscalations([]);
+    setParentTicketNumber(null);
+  }, [ticketId]);
+
+  useEffect(() => {
     fetchTicket();
   }, [ticketId]);
 
@@ -589,27 +602,47 @@ export default function TicketDetailPage() {
   };
 
   const fetchEvents = async () => {
+    const requestedTicketId = ticketId;
+    if (!requestedTicketId || String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
+    const requestSequence = ++eventsLoadSequenceRef.current;
     try {
       setEventsLoading(true);
-      const data = await ticketsApi.getEvents(ticketId);
+      const data = await ticketsApi.getEvents(requestedTicketId);
+      if (
+        requestSequence !== eventsLoadSequenceRef.current ||
+        String(activeTicketIdRef.current) !== String(requestedTicketId)
+      ) return;
       setEvents(data);
     } catch {
       /* silent */
     } finally {
-      setEventsLoading(false);
+      if (
+        requestSequence === eventsLoadSequenceRef.current &&
+        String(activeTicketIdRef.current) === String(requestedTicketId)
+      ) setEventsLoading(false);
     }
   };
 
   const fetchEscalations = async () => {
     if (!ticketId) return;
+    const requestedTicketId = ticketId;
+    if (String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
+    const requestSequence = ++escalationsLoadSequenceRef.current;
     try {
       setEscalationsLoading(true);
-      const data = await ticketsApi.getEscalations(ticketId);
+      const data = await ticketsApi.getEscalations(requestedTicketId);
+      if (
+        requestSequence !== escalationsLoadSequenceRef.current ||
+        String(activeTicketIdRef.current) !== String(requestedTicketId)
+      ) return;
       setEscalations(data);
     } catch {
       /* silent */
     } finally {
-      setEscalationsLoading(false);
+      if (
+        requestSequence === escalationsLoadSequenceRef.current &&
+        String(activeTicketIdRef.current) === String(requestedTicketId)
+      ) setEscalationsLoading(false);
     }
   };
 
@@ -642,13 +675,18 @@ export default function TicketDetailPage() {
   // Live updates – listen for SSE changes (QA #7: ensures user-side sees status changes)
   useSse(['TICKET_UPDATED'], async (payload) => {
     // Only refresh if the update is for this specific ticket (or global)
-    if (!payload?.ticketId || payload.ticketId === ticketId) {
+    const requestedTicketId = ticketId;
+    if (!payload?.ticketId || String(payload.ticketId) === String(requestedTicketId)) {
       try {
         const [ticketData, eventsData, escalationsData] = await Promise.all([
-          ticketsApi.getById(ticketId),
-          ticketsApi.getEvents(ticketId),
-          ticketsApi.getEscalations(ticketId),
+          ticketsApi.getById(requestedTicketId),
+          ticketsApi.getEvents(requestedTicketId),
+          ticketsApi.getEscalations(requestedTicketId),
         ]);
+        if (
+          String(activeTicketIdRef.current) !== String(requestedTicketId) ||
+          String(ticketData.id) !== String(requestedTicketId)
+        ) return;
         setTicket(ticketData);
         setEvents(eventsData);
         setEscalations(escalationsData);
@@ -663,9 +701,16 @@ export default function TicketDetailPage() {
   }, [canStaff, ticket?.ticketType]);
 
   const fetchTicket = async () => {
+    const requestedTicketId = ticketId;
+    if (!requestedTicketId || String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
+    const requestSequence = ++ticketLoadSequenceRef.current;
     try {
       setLoading(true);
-      const data = await ticketsApi.getById(ticketId);
+      const data = await ticketsApi.getById(requestedTicketId);
+      if (
+        requestSequence !== ticketLoadSequenceRef.current ||
+        String(activeTicketIdRef.current) !== String(requestedTicketId)
+      ) return;
       setTicket(data);
       setNewStatus(data.status);
       setNewPriority(data.priority || '');
@@ -701,20 +746,32 @@ export default function TicketDetailPage() {
         isTechnician
       ) {
         viewedRef.current = true;
-        ticketsApi
-          .markViewed(ticketId)
+          ticketsApi
+          .markViewed(requestedTicketId)
           .then((updated) => {
-            if (updated) setTicket(updated);
+            if (
+              updated &&
+              String(activeTicketIdRef.current) === String(requestedTicketId) &&
+              String(updated.id) === String(requestedTicketId)
+            ) setTicket(updated);
           })
           .catch(() => {});
       }
     } catch (err: any) {
-      if ([403, 404].includes(err.response?.status)) setTicket(null);
-      enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
-        variant: 'error',
-      });
+      if (
+        requestSequence === ticketLoadSequenceRef.current &&
+        String(activeTicketIdRef.current) === String(requestedTicketId)
+      ) {
+        if ([403, 404].includes(err.response?.status)) setTicket(null);
+        enqueueSnackbar(err.response?.data?.message || 'Failed to fetch ticket', {
+          variant: 'error',
+        });
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestSequence === ticketLoadSequenceRef.current &&
+        String(activeTicketIdRef.current) === String(requestedTicketId)
+      ) setLoading(false);
     }
   };
 
@@ -800,35 +857,51 @@ export default function TicketDetailPage() {
 
   const [commentAttachments, setCommentAttachments] = useState<File[]>([]);
 
+  useEffect(() => {
+    setComment('');
+    setIsInternal(false);
+    setMentionedUserIds([]);
+    setMentionCandidates([]);
+    setCommentAttachments([]);
+    setVisibleCommentCount(COMMENTS_PAGE_SIZE);
+  }, [ticketId]);
+
   const handleAddComment = async () => {
     if (!comment.trim() && !commentAttachments.length) return;
+    const submittedTicketId = ticketId;
+    const submittedTicketNumber = ticket?.ticketNumber;
     try {
-      setSubmittingComment(true);
+      setSubmittingCommentFor(submittedTicketId);
       const createdComment = await ticketsApi.addComment(
-        ticketId,
+        submittedTicketId,
         comment,
         isInternal && canViewInternalNotes,
         commentAttachments,
         isInternal && canViewInternalNotes ? mentionedUserIds : [],
       );
-      setTicket((current) =>
-        current
-          ? {
-              ...current,
-              comments: [...(current.comments ?? []), createdComment],
-            }
-          : current,
-      );
-      setVisibleCommentCount(COMMENTS_PAGE_SIZE);
-      setComment('');
-      setMentionedUserIds([]);
-      setCommentAttachments([]);
-      setIsInternal(false);
-      enqueueSnackbar('Comment added.', { variant: 'success' });
+      if (String(activeTicketIdRef.current) === String(submittedTicketId)) {
+        setTicket((current) =>
+          current && String(current.id) === String(submittedTicketId)
+            ? { ...current, comments: [...(current.comments ?? []), createdComment] }
+            : current,
+        );
+        setVisibleCommentCount(COMMENTS_PAGE_SIZE);
+        setComment('');
+        setMentionedUserIds([]);
+        setCommentAttachments([]);
+        setIsInternal(false);
+        enqueueSnackbar('Comment added.', { variant: 'success' });
+      } else {
+        enqueueSnackbar(`Comment added to ticket ${submittedTicketNumber || submittedTicketId}.`, { variant: 'success' });
+      }
     } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.message || 'Failed to add comment', { variant: 'error' });
+      if (String(activeTicketIdRef.current) === String(submittedTicketId)) {
+        enqueueSnackbar(err.response?.data?.message || 'Failed to add comment', { variant: 'error' });
+      }
     } finally {
-      setSubmittingComment(false);
+      setSubmittingCommentFor((current) =>
+        current === submittedTicketId ? null : current,
+      );
     }
   };
 
@@ -1211,10 +1284,13 @@ export default function TicketDetailPage() {
   const requesterLabel = ticket.createdById && Number(ticket.createdById) !== Number(ticket.requesterId)
     ? 'Requested For' : 'Requestor';
   const requesterName = ticket.requester ? formatPersonName(ticket.requester, `User #${ticket.requesterId}`) : `User #${ticket.requesterId}`;
+  const requesterPhotoUrl = ticket.requester?.staffId && import.meta.env.VITE_PROFILE_IMAGE_URL
+    ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${ticket.requester.staffId}.jpg`
+    : '';
   const slaSummary = getTicketSlaSummary(ticket);
   const detailActions: Record<TicketDetailActionKey, TicketMenuAction> = {
     updateStatus: { label: 'Update Status', icon: <EditIcon fontSize="small" />, onClick: () => setEditingStatus(true) },
-    duplicate: { label: 'Mark as Duplicate', icon: <DuplicateIcon fontSize="small" />, disabled: getSlaStatus(ticket) === 'overdue', onClick: openDuplicateFlow },
+    duplicate: { label: 'Mark as Duplicate', icon: <DuplicateIcon fontSize="small" />, disabled: ticket.status !== 'resolved' && getSlaStatus(ticket) === 'overdue', onClick: openDuplicateFlow },
     printDisposal: { label: 'Print Disposal Form', icon: <PrintIcon fontSize="small" />, onClick: () => window.print() },
     printInspection: { label: 'Print Inspection Form', icon: <PrintIcon fontSize="small" />, onClick: () => window.print() },
     assign: { label: ticket.assignedToId ? 'Reassign Ticket' : 'Assign Technician', icon: <AssignIcon fontSize="small" />, onClick: async () => {
@@ -1253,16 +1329,14 @@ export default function TicketDetailPage() {
 
   return (
     <Box>
-      <Button
+<Button
         startIcon={<BackIcon />}
         onClick={() => router.push(ticketListPath)}
         sx={{ mb: 2 }}
       >
         Back to Tickets
       </Button>
-
-      {/* ── Ticket Header ── */}
-      <Card sx={{ mb: 3 }}>
+<Card sx={{ mb: 3 }}>
         <CardContent>
           <Box
             display="grid"
@@ -1271,9 +1345,31 @@ export default function TicketDetailPage() {
             gap={2}
           >
             <Box minWidth={0}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, overflowWrap: 'anywhere' }}>
-                {requesterLabel}: <strong>{requesterName}</strong>
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 1 }}>
+                <ButtonBase
+                  disabled={!requesterPhotoUrl || requesterPhotoFailed}
+                  onClick={() => setRequesterImageOpen(true)}
+                  aria-label={requesterPhotoUrl && !requesterPhotoFailed ? `View ${requesterName}'s profile photo` : `${requesterName} profile photo unavailable`}
+                  sx={{ borderRadius: '50%', flexShrink: 0, '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}
+                >
+                  <Avatar
+                    src={requesterPhotoUrl || undefined}
+                    alt={requesterName}
+                    imgProps={{ style: { objectPosition: 'center 20%' }, onError: () => setRequesterPhotoFailed(true) }}
+                    sx={{ width: 42, height: 42, bgcolor: 'primary.light', color: 'primary.contrastText', cursor: requesterPhotoUrl && !requesterPhotoFailed ? 'zoom-in' : 'default' }}
+                  >
+                    {`${ticket.requester?.firstName?.[0] || ''}${ticket.requester?.lastName?.[0] || ''}` || 'U'}
+                  </Avatar>
+                </ButtonBase>
+                <Box minWidth={0}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.04em' }}>
+                    {requesterLabel}
+                  </Typography>
+                  <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>
+                    {requesterName}
+                  </Typography>
+                </Box>
+              </Stack>
               <Typography variant="h5" gutterBottom sx={{ overflowWrap: 'anywhere' }}>
                 {ticket.subject}
               </Typography>
@@ -1727,116 +1823,10 @@ export default function TicketDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* ── Ticket Details ── */}
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                Description
-              </Typography>
-              <LinkifiedText variant="body2">
-                {ticket.description}
-              </LinkifiedText>
-
-              {ticket.status === 'duplicate' && ticket.duplicateOfId && (
-                <Box mt={2}>
-                  <Alert
-                    severity="warning"
-                    action={
-                      <Button
-                        color="inherit"
-                        size="small"
-                        onClick={() => router.push(`/operations/tickets/${ticket.duplicateOfId}`)}
-                      >
-                        View Original
-                      </Button>
-                    }
-                  >
-                    This ticket is a duplicate of{' '}
-                    <strong>{parentTicketNumber || 'another ticket'}</strong>.
-                  </Alert>
-                </Box>
-              )}
-
-              {(() => {
-                const initialAttachmentComments = ticket.comments?.filter(
-                  (c) =>
-                    c.comment === '[Initial Ticket Attachment]' &&
-                    !c.isInternal && Number(c.userId) === Number(ticket.createdById ?? ticket.requesterId) &&
-                    ((c.attachmentPaths?.length ?? 0) > 0 || c.attachmentPath),
-                );
-                if (!initialAttachmentComments?.length) return null;
-
-                return (
-                  <Box mt={2}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Attached Images
-                    </Typography>
-                    {initialAttachmentComments.map((initialAttachmentComment) => (
-                    <Box key={initialAttachmentComment.id} mb={1}>
-                    <AuthenticatedImageGallery
-                      onReplace={canReplaceImage(initialAttachmentComment) ? (_, index) => openImageReplacement(initialAttachmentComment, index) : undefined}
-                      images={ticketCommentImages(initialAttachmentComment).map((attachmentPath, index) => ({
-                        url: `/tickets/comment-attachment/${ticket.id}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
-                        alt: `Initial attachment ${index + 1}`,
-                      }))}
-                      thumbnailStyle={{ width: 160, height: 120 }}
-                    />
-                    </Box>
-                    ))}
-                  </Box>
-                );
-              })()}
-
-              {ticket.resolutionNotes && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Resolution Notes
-                  </Typography>
-                  <Typography variant="body2" whiteSpace="pre-wrap">
-                    {ticket.resolutionNotes}
-                  </Typography>
-                </>
-              )}
-
-              {ticket.satisfactionRating && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    Client Satisfaction
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={0.5}>
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <StarIcon
-                        key={i}
-                        sx={{
-                          fontSize: 20,
-                          color:
-                            i < (ticket.satisfactionRating ?? 0)
-                              ? 'warning.main'
-                              : 'action.disabled',
-                        }}
-                      />
-                    ))}
-                    <Typography variant="body2" color="text.secondary" ml={0.5}>
-                      {ticket.satisfactionRating}/5
-                    </Typography>
-                  </Box>
-                  {ticket.satisfactionComment && (
-                    <Typography variant="body2" color="text.secondary" mt={0.5}>
-                      "{ticket.satisfactionComment}"
-                    </Typography>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={4}>
+<WorkspaceLayout kind="standard">
+{/* ── Ticket Header ── */}
+{/* ── Ticket Details ── */}
+<WorkspaceLayout kind="detail" contextPosition="end" context={<>
           <Accordion expanded={detailsExpanded} onChange={(_, expanded) => setDetailsExpanded(expanded)} disableGutters sx={{ '&:before': { display: 'none' } }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />} id="ticket-details-summary" aria-controls="ticket-details-content">
               <Box sx={{ width: '100%', minWidth: 0, py: 0.5 }}>
@@ -2058,10 +2048,113 @@ export default function TicketDetailPage() {
               </Box>
             </AccordionDetails>
           </Accordion>
-        </Grid>
-      </Grid>
+        </>}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Description
+              </Typography>
+              <LinkifiedText variant="body2">
+                {ticket.description}
+              </LinkifiedText>
 
-      {/* ── Escalation Details ── (always shown; placed before comments for at-a-glance access) */}
+              {ticket.status === 'duplicate' && ticket.duplicateOfId && (
+                <Box mt={2}>
+                  <Alert
+                    severity="warning"
+                    action={
+                      <Button
+                        color="inherit"
+                        size="small"
+                        onClick={() => router.push(`/operations/tickets/${ticket.duplicateOfId}`)}
+                      >
+                        View Original
+                      </Button>
+                    }
+                  >
+                    This ticket is a duplicate of{' '}
+                    <strong>{parentTicketNumber || 'another ticket'}</strong>.
+                  </Alert>
+                </Box>
+              )}
+
+              {(() => {
+                const initialAttachmentComments = ticket.comments?.filter(
+                  (c) =>
+                    c.comment === '[Initial Ticket Attachment]' &&
+                    !c.isInternal && Number(c.userId) === Number(ticket.createdById ?? ticket.requesterId) &&
+                    ((c.attachmentPaths?.length ?? 0) > 0 || c.attachmentPath),
+                );
+                if (!initialAttachmentComments?.length) return null;
+
+                return (
+                  <Box mt={2}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Attached Images
+                    </Typography>
+                    {initialAttachmentComments.map((initialAttachmentComment) => (
+                    <Box key={initialAttachmentComment.id} mb={1}>
+                    <AuthenticatedImageGallery
+                      onReplace={canReplaceImage(initialAttachmentComment) ? (_, index) => openImageReplacement(initialAttachmentComment, index) : undefined}
+                      images={ticketCommentImages(initialAttachmentComment).map((attachmentPath, index) => ({
+                        url: `/tickets/comment-attachment/${ticket.id}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
+                        alt: `Initial attachment ${index + 1}`,
+                      }))}
+                      thumbnailStyle={{ width: 160, height: 120 }}
+                    />
+                    </Box>
+                    ))}
+                  </Box>
+                );
+              })()}
+
+              {ticket.resolutionNotes && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Resolution Notes
+                  </Typography>
+                  <Typography variant="body2" whiteSpace="pre-wrap">
+                    {ticket.resolutionNotes}
+                  </Typography>
+                </>
+              )}
+
+              {ticket.satisfactionRating && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    Client Satisfaction
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <StarIcon
+                        key={i}
+                        sx={{
+                          fontSize: 20,
+                          color:
+                            i < (ticket.satisfactionRating ?? 0)
+                              ? 'warning.main'
+                              : 'action.disabled',
+                        }}
+                      />
+                    ))}
+                    <Typography variant="body2" color="text.secondary" ml={0.5}>
+                      {ticket.satisfactionRating}/5
+                    </Typography>
+                  </Box>
+                  {ticket.satisfactionComment && (
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                      "{ticket.satisfactionComment}"
+                    </Typography>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </WorkspaceLayout>
+{/* Escalation content appears only when the ticket has escalation history. */}
+{!escalationsLoading && escalations.length > 0 && (
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -2184,8 +2277,8 @@ export default function TicketDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      {ticket.resolutionTimeOverrides && ticket.resolutionTimeOverrides.length > 0 && (
+      )}
+{ticket.resolutionTimeOverrides && ticket.resolutionTimeOverrides.length > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -2256,14 +2349,16 @@ export default function TicketDetailPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* ── Comments ── */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+{/* ── Comments and Timeline ── */}
+<Grid container spacing={2} alignItems="stretch" className="ticket-conversation-grid app-split-pane">
+        <Grid item xs={12} lg={6} sx={{ display: 'flex', minWidth: 0 }}>
+      <Card className="ticket-conversation-panel" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', '&:last-child': { pb: 2 } }}>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
             Comments ({sortedComments.length})
           </Typography>
 
+          <Box sx={{ flex: 1, minHeight: 0, maxHeight: { xs: 300, lg: 420 }, overflowY: 'auto', pr: 0.5 }}>
           {olderCommentCount > 0 && (
             <Box display="flex" justifyContent="center" mb={1}>
               <Button
@@ -2297,7 +2392,7 @@ export default function TicketDetailPage() {
                               <Chip
                                 label="User"
                                 size="small"
-                                sx={{ bgcolor: 'grey.300', color: 'grey.800' }}
+                                variant="outlined"
                               />
                             );
                           })()}
@@ -2346,11 +2441,11 @@ export default function TicketDetailPage() {
               No comments yet.
             </Typography>
           )}
+          </Box>
 
           {/* Add comment */}
           {ticket.status !== 'closed' && ticket.status !== 'duplicate' && (
-            <Box mt={3}>
-              <Divider sx={{ mb: 2 }} />
+            <Box mt="auto" pt={1.5} sx={{ borderTop: 1, borderColor: 'divider' }}>
               <TextField
                 fullWidth
                 multiline
@@ -2407,20 +2502,22 @@ export default function TicketDetailPage() {
                   variant="contained"
                   size="small"
                   onClick={handleAddComment}
-                  disabled={submittingComment || (!comment.trim() && !commentAttachments.length)}
+                  disabled={submittingCommentFor === ticketId || (!comment.trim() && !commentAttachments.length)}
                 >
-                  {submittingComment ? 'Submitting…' : 'Add Comment'}
+                  {submittingCommentFor === ticketId ? 'Submitting…' : 'Add Comment'}
                 </Button>
               </Stack>
             </Box>
           )}
         </CardContent>
       </Card>
+        </Grid>
 
       {/* ── Ticket Timeline ── */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+        <Grid item xs={12} lg={6} sx={{ display: 'flex', minWidth: 0 }}>
+      <Card className="ticket-conversation-panel" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', '&:last-child': { pb: 2 } }}>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
             Timeline
           </Typography>
           {eventsLoading ? (
@@ -2432,9 +2529,19 @@ export default function TicketDetailPage() {
               No events recorded yet.
             </Typography>
           ) : (
-            <Box>
+            <Box sx={{ flex: 1, minHeight: 0, maxHeight: { xs: 300, lg: 490 }, overflowY: 'auto', pr: 0.5 }}>
               {timelineEvents.map((ev, idx) => {
                 const isLast = idx === timelineEvents.length - 1;
+                const isStatusUpdate = ['status_changed', 'status_extended', 'in_progress', 'resolved', 'closed', 'user_closed'].includes(ev.eventType);
+                const eventAccent = isStatusUpdate
+                  ? 'primary.main'
+                  : ev.eventType.startsWith('sla_alert_')
+                    ? 'warning.main'
+                    : ev.eventType.startsWith('escalation') || ev.eventType === 'escalated'
+                      ? 'secondary.main'
+                      : ev.eventType === 'resolution_time_overridden'
+                        ? 'success.main'
+                        : 'divider';
                 const EVENT_LABELS: Record<string, string> = {
                   created: 'Ticket Created',
                   auto_assigned: 'Auto-Assigned',
@@ -2478,7 +2585,7 @@ export default function TicketDetailPage() {
                           width: 12,
                           height: 12,
                           borderRadius: '50%',
-                          bgcolor: 'primary.main',
+                          bgcolor: eventAccent,
                           mt: 0.5,
                           flexShrink: 0,
                         }}
@@ -2489,14 +2596,24 @@ export default function TicketDetailPage() {
                         />
                       )}
                     </Box>
-                    <Box pb={isLast ? 0 : 1}>
-                      <Typography variant="body2" fontWeight={600}>
-                        {label}
-                      </Typography>
-                      {actorLine && (
-                        <Typography variant="caption" color="text.secondary">
-                          {actorLine}
+                    <Paper variant="outlined" sx={{ flex: 1, minWidth: 0, p: 1.25, mb: isLast ? 0 : 1.25, borderLeft: 3, borderLeftColor: eventAccent, bgcolor: 'background.paper' }}>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'flex-start' }} gap={0.5}>
+                        <Box minWidth={0}>
+                          <Typography variant="body2" fontWeight={700}>
+                            {label}
+                          </Typography>
+                          {actorLine && (
+                            <Typography variant="caption" color="text.secondary">
+                              {actorLine}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: { sm: 'nowrap' }, flexShrink: 0 }}>
+                          {new Date(ev.createdAt).toLocaleString()}
                         </Typography>
+                      </Stack>
+                      {isStatusUpdate && ev.meta?.to && (
+                        <Chip size="small" color="primary" variant="outlined" label={`${ev.meta?.from ? `${String(ev.meta.from).replace(/_/g, ' ')} → ` : ''}${String(ev.meta.to).replace(/_/g, ' ')}`} sx={{ mt: 0.75, textTransform: 'capitalize' }} />
                       )}
                       {ev.eventType === 'attachment_replaced' && (
                         <Box mt={1}>
@@ -2511,7 +2628,7 @@ export default function TicketDetailPage() {
                           → {ev.meta.technicianName}
                         </Typography>
                       )}
-                      {ev.meta?.to && (
+                      {ev.meta?.to && !isStatusUpdate && (
                         <Typography variant="caption" color="text.secondary" display="block">
                           Status:{' '}
                           {ev.meta?.from
@@ -2533,6 +2650,12 @@ export default function TicketDetailPage() {
                         <Typography variant="caption" color="text.secondary" display="block">
                           The ticket consumed 75% of its configured SLA and was approaching its deadline.
                         </Typography>
+                      )}
+                      {(ev.meta?.remarks || ev.meta?.remark) && (
+                        <Paper variant="outlined" sx={{ p: 1, mt: 1, bgcolor: 'action.hover' }}>
+                          <Typography variant="overline" color="text.secondary" sx={{ fontSize: 9, fontWeight: 800 }}>Remarks</Typography>
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{String(ev.meta.remarks || ev.meta.remark)}</Typography>
+                        </Paper>
                       )}
                       {ev.meta?.justification && (
                         <Typography
@@ -2574,10 +2697,7 @@ export default function TicketDetailPage() {
                           Reason: {String(ev.meta.reason)}
                         </Typography>
                       )}
-                      <Typography variant="caption" color="text.disabled" display="block">
-                        {new Date(ev.createdAt).toLocaleString()}
-                      </Typography>
-                    </Box>
+                    </Paper>
                   </Box>
                 );
               })}
@@ -2585,9 +2705,19 @@ export default function TicketDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* ── Assign / Escalate Dialog ── */}
-      <Dialog
+        </Grid>
+      </Grid>
+{/* ── Assign / Escalate Dialog ── */}
+{/* ── Dedicated Escalate Dialog ── */}
+{/* ── Return Escalation Dialog ── */}
+{/* ── Add Notes / Proof to Pending Escalation Dialog ── */}
+{/* ── Duplicate Confirmation Dialog ── */}
+{/* ── Duplicate Picker Dialog ── */}
+{/* ── Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM ── */}
+{/* ── Correct Resolution Time Dialog ── */}
+{/* ── KB Picker Dialog ── */}
+</WorkspaceLayout>
+<Dialog
         open={assignDialogOpen}
         onClose={() => setAssignDialogOpen(false)}
         maxWidth="xs"
@@ -2632,8 +2762,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={imageHistory !== null} onClose={() => setImageHistory(null)} maxWidth="md" fullWidth>
+<Dialog open={imageHistory !== null} onClose={() => setImageHistory(null)} maxWidth="md" fullWidth>
         <DialogTitle>Image Replacement History</DialogTitle>
         <DialogContent>
           <Typography variant="body2" mb={2}>Previous image, followed by its replacement. These are history records, not additional attachments.</Typography>
@@ -2644,8 +2773,23 @@ export default function TicketDetailPage() {
         </DialogContent>
         <DialogActions><Button onClick={() => setImageHistory(null)}>Close</Button></DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog open={requesterImageOpen && !!requesterPhotoUrl && !requesterPhotoFailed} onClose={() => setRequesterImageOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{requesterName}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', justifyContent: 'center', bgcolor: 'background.default', p: { xs: 1, sm: 2 } }}>
+          <Box
+            component="img"
+            src={requesterPhotoUrl}
+            alt={`${requesterName} profile photo`}
+            onError={() => {
+              setRequesterPhotoFailed(true);
+              setRequesterImageOpen(false);
+            }}
+            sx={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 1 }}
+          />
+        </DialogContent>
+        <DialogActions><Button onClick={() => setRequesterImageOpen(false)}>Close</Button></DialogActions>
+      </Dialog>
+<Dialog
         open={imageReplacement !== null}
         onClose={() => !replacingImage && setImageReplacement(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Replace Image</DialogTitle>
@@ -2663,8 +2807,7 @@ export default function TicketDetailPage() {
           <Button variant="contained" disabled={replacingImage || replacementFiles.length !== 1} onClick={handleImageReplacement}>{replacingImage ? 'Replacing…' : 'Replace'}</Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={requesterDialogOpen}
         onClose={() => !savingRequesterCorrection && setRequesterDialogOpen(false)}
         maxWidth="xs"
@@ -2706,8 +2849,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog
+<Dialog
         open={assigneeCorrectionDialogOpen}
         onClose={() => !savingAssigneeCorrection && setAssigneeCorrectionDialogOpen(false)}
         maxWidth="xs"
@@ -2746,9 +2888,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Dedicated Escalate Dialog ── */}
-      <Dialog
+<Dialog
         open={escalateDialogOpen}
         onClose={() => setEscalateDialogOpen(false)}
         maxWidth="sm"
@@ -2814,9 +2954,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Return Escalation Dialog ── */}
-      <Dialog
+<Dialog
         open={returnDialogOpen}
         onClose={() => setReturnDialogOpen(false)}
         maxWidth="xs"
@@ -2848,9 +2986,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Add Notes / Proof to Pending Escalation Dialog ── */}
-      <Dialog
+<Dialog
         open={addProofDialogOpen}
         onClose={() => setAddProofDialogOpen(false)}
         maxWidth="sm"
@@ -2891,9 +3027,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Duplicate Confirmation Dialog ── */}
-      <Dialog
+<Dialog
         open={dupConfirmOpen}
         onClose={() => setDupConfirmOpen(false)}
         maxWidth="xs"
@@ -2903,8 +3037,10 @@ export default function TicketDetailPage() {
         <DialogContent>
           <Alert severity="warning" sx={{ mt: 1 }}>
             This action is <strong>permanent</strong>. Once a ticket is marked as Duplicate it
-            cannot be updated or re-assigned. You will be prompted to select the original ticket in
-            the next step.
+            cannot be updated or re-assigned. A resolved ticket will no longer count toward completed,
+            SLA, efficiency, or satisfaction metrics; its original resolution and correction history
+            remain recorded. It will still count as a filed ticket where intake totals include duplicates.
+            You will select the original ticket in the next step.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -2914,9 +3050,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Duplicate Picker Dialog ── */}
-      <Dialog open={dupDialogOpen} onClose={() => setDupDialogOpen(false)} maxWidth="sm" fullWidth>
+<Dialog open={dupDialogOpen} onClose={() => setDupDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Mark as Duplicate Of…</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -2959,9 +3093,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── Satisfaction Dialog — CLIENT SATISFACTION MEASUREMENT FORM ── */}
-      <Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
+<Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
           CLIENT SATISFACTION MEASUREMENT FORM
           <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
@@ -3166,6 +3298,7 @@ export default function TicketDetailPage() {
                       >
                         <ToggleButton
                           value={1}
+                          aria-label="Very dissatisfied (1)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3173,11 +3306,12 @@ export default function TicketDetailPage() {
                           }}
                         >
                           <SentimentVeryDissatisfied
-                            sx={{ color: val === 1 ? '#d32f2f' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 1 ? 'error.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={2}
+                          aria-label="Dissatisfied (2)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3185,11 +3319,12 @@ export default function TicketDetailPage() {
                           }}
                         >
                           <SentimentDissatisfied
-                            sx={{ color: val === 2 ? '#ed6c02' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 2 ? 'warning.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={3}
+                          aria-label="Neutral (3)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3197,11 +3332,12 @@ export default function TicketDetailPage() {
                           }}
                         >
                           <SentimentNeutral
-                            sx={{ color: val === 3 ? '#f5a623' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 3 ? 'warning.dark' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={4}
+                          aria-label="Satisfied (4)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3209,11 +3345,12 @@ export default function TicketDetailPage() {
                           }}
                         >
                           <SentimentSatisfied
-                            sx={{ color: val === 4 ? '#2e7d32' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 4 ? 'success.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                         <ToggleButton
                           value={5}
+                          aria-label="Very satisfied (5)"
                           sx={{
                             px: 0.5,
                             border: 'none',
@@ -3221,7 +3358,7 @@ export default function TicketDetailPage() {
                           }}
                         >
                           <SentimentVerySatisfied
-                            sx={{ color: val === 5 ? '#1976d2' : 'action.disabled', fontSize: 28 }}
+                            sx={{ color: val === 5 ? 'primary.main' : 'action.disabled', fontSize: 28 }}
                           />
                         </ToggleButton>
                       </ToggleButtonGroup>
@@ -3246,8 +3383,7 @@ export default function TicketDetailPage() {
           )}
         </DialogActions>
       </Dialog>
-      {/* ── Correct Resolution Time Dialog ── */}
-      <Dialog
+<Dialog
         open={resolutionOverrideDialogOpen}
         onClose={closeResolutionOverrideDialog}
         maxWidth="sm"
@@ -3324,9 +3460,7 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* ── KB Picker Dialog ── */}
-      <Dialog open={kbPickerOpen} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
+<Dialog open={kbPickerOpen} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Load from Knowledge Base</DialogTitle>
         <DialogContent dividers>
           <TextField
@@ -3416,6 +3550,6 @@ export default function TicketDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

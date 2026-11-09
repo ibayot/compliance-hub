@@ -1,38 +1,45 @@
+import { Component, lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
+import { usersApi } from '@/lib/api/users';
+import {
+  DEFAULT_APP_APPEARANCE,
+  normalizeAppAppearance,
+} from '@/lib/appearance';
+import { useThemeMode } from '@/contexts/ThemeModeContext';
 
-import HomePage from '@/app/page';
-import LoginPage from '@/app/login/page';
-import MfaVerifyPage from '@/app/mfa-verify/page';
-import DashboardPage from '@/app/(app)/dashboard/page';
-import DocumentsPage from '@/app/(app)/governance/documents/page';
-import DocumentUploadPage from '@/app/(app)/governance/documents/upload/page';
-import DocumentDetailPage from '@/app/(app)/governance/documents/[id]/page';
-import IncidentsPage from '@/app/(app)/governance/incidents/page';
-import IssuancesPage from '@/app/(app)/governance/issuances/page';
-import TicketsPage from '@/app/(app)/operations/tickets/page';
-import TicketDetailPage from '@/app/(app)/operations/tickets/[id]/page';
-import UnitsPage from '@/app/(app)/admin/units/page';
-import StaffDirectoryPage from '@/app/(app)/operations/staff-directory/page';
-import MetricsPage from '@/app/(app)/governance/metrics/page';
-import ReviewsPage from '@/app/(app)/governance/reviews/page';
-import KpiPage from '@/app/(app)/governance/kpi/page';
-import SettingsPage from '@/app/(app)/admin/settings/page';
-import UserManualPage from '@/app/(app)/admin/user-manual/page';
-import RepositoryPage from '@/app/(app)/governance/repository/page';
-import ReportsPage from '@/app/(app)/governance/reports/page';
-import MovPlannerPage from '@/app/(app)/governance/mov/page';
-import TicketSettingsPage from '@/app/(app)/operations/settings/page';
-import AttendancePage from '@/app/(app)/admin/attendance/page';
-import TicketReportsPage from '@/app/(app)/operations/reports/page';
-import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
-import AuditLogsPage from '@/app/(app)/admin/audit-logs/page';
-import DutiesPage from '@/app/(app)/operations/duties/page';
-import ChangelogManagementPage from '@/app/(app)/admin/changelog/page';
-import PublicRatingPage from '@/app/rate/page';
+const HomePage = lazy(() => import('@/app/page'));
+const LoginPage = lazy(() => import('@/app/login/page'));
+const MfaVerifyPage = lazy(() => import('@/app/mfa-verify/page'));
+const DashboardPage = lazy(() => import('@/app/(app)/dashboard/page'));
+const DocumentsPage = lazy(() => import('@/app/(app)/governance/documents/page'));
+const DocumentUploadPage = lazy(() => import('@/app/(app)/governance/documents/upload/page'));
+const DocumentDetailPage = lazy(() => import('@/app/(app)/governance/documents/[id]/page'));
+const IncidentsPage = lazy(() => import('@/app/(app)/governance/incidents/page'));
+const IssuancesPage = lazy(() => import('@/app/(app)/governance/issuances/page'));
+const TicketsPage = lazy(() => import('@/app/(app)/operations/tickets/page'));
+const TicketDetailPage = lazy(() => import('@/app/(app)/operations/tickets/[id]/page'));
+const UnitsPage = lazy(() => import('@/app/(app)/admin/units/page'));
+const StaffDirectoryPage = lazy(() => import('@/app/(app)/operations/staff-directory/page'));
+const MetricsPage = lazy(() => import('@/app/(app)/governance/metrics/page'));
+const ReviewsPage = lazy(() => import('@/app/(app)/governance/reviews/page'));
+const KpiPage = lazy(() => import('@/app/(app)/governance/kpi/page'));
+const SettingsPage = lazy(() => import('@/app/(app)/admin/settings/page'));
+const UserManualPage = lazy(() => import('@/app/(app)/admin/user-manual/page'));
+const RepositoryPage = lazy(() => import('@/app/(app)/governance/repository/page'));
+const ReportsPage = lazy(() => import('@/app/(app)/governance/reports/page'));
+const MovPlannerPage = lazy(() => import('@/app/(app)/governance/mov/page'));
+const TicketSettingsPage = lazy(() => import('@/app/(app)/operations/settings/page'));
+const AttendancePage = lazy(() => import('@/app/(app)/admin/attendance/page'));
+const TicketReportsPage = lazy(() => import('@/app/(app)/operations/reports/page'));
+const KnowledgeBasePage = lazy(() => import('@/app/(app)/operations/knowledge-base/page'));
+const AuditLogsPage = lazy(() => import('@/app/(app)/admin/audit-logs/page'));
+const DutiesPage = lazy(() => import('@/app/(app)/operations/duties/page'));
+const ChangelogManagementPage = lazy(() => import('@/app/(app)/admin/changelog/page'));
+const PublicRatingPage = lazy(() => import('@/app/rate/page'));
 
 function ProtectedDashboard({
   children,
@@ -78,7 +85,70 @@ function ProtectedDashboard({
     return <Navigate to="/dashboard" replace state={{ deniedPath: location.pathname }} />;
   }
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <Suspense fallback={<PageLoadingFallback />}>
+        {children}
+      </Suspense>
+    </DashboardLayout>
+  );
+}
+
+function PageLoadingFallback() {
+  return (
+    <Box
+      role="status"
+      aria-live="polite"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      gap={1.5}
+      minHeight="55vh"
+      color="text.secondary"
+    >
+      <CircularProgress size={24} aria-label="Loading page" />
+      <Typography variant="body2">Loading page…</Typography>
+    </Box>
+  );
+}
+
+class RouteLoadErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Box
+          role="alert"
+          display="flex"
+          flexDirection="column"
+          alignItems="center"
+          justifyContent="center"
+          gap={1.5}
+          minHeight="55vh"
+          px={2}
+          textAlign="center"
+        >
+          <Typography variant="h6">This page couldn’t load</Typography>
+          <Typography color="text.secondary" maxWidth={440}>
+            Check your connection, then reload the page. Your account session is not being cleared.
+          </Typography>
+          <Button variant="contained" onClick={() => window.location.reload()}>
+            Reload page
+          </Button>
+        </Box>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function TicketListEntry() {
@@ -97,8 +167,50 @@ function UnknownRouteRedirect() {
   return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
 }
 
+function AppearancePreferenceLoader() {
+  const { user, loading } = useAuth();
+  const { setAppearance, setAppearanceReady } = useThemeMode();
+
+  useEffect(() => {
+    if (loading) return;
+
+    let active = true;
+    if (!user) {
+      setAppearanceReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAppearanceReady(false);
+    usersApi
+      .getUiPreferences()
+      .then((stored) => {
+        if (!active) return;
+        setAppearance(stored ? normalizeAppAppearance(stored) : DEFAULT_APP_APPEARANCE);
+      })
+      .catch(() => {
+        // An unavailable preference endpoint must not prevent a user from opening the app.
+        if (active) setAppearance(DEFAULT_APP_APPEARANCE);
+      })
+      .finally(() => {
+        if (active) setAppearanceReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loading, setAppearance, setAppearanceReady, user?.id]);
+
+  return null;
+}
+
 export default function App() {
   return (
+    <>
+    <AppearancePreferenceLoader />
+    <RouteLoadErrorBoundary>
+    <Suspense fallback={<PageLoadingFallback />}>
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
@@ -316,5 +428,8 @@ export default function App() {
 
       <Route path="*" element={<UnknownRouteRedirect />} />
     </Routes>
+    </Suspense>
+    </RouteLoadErrorBoundary>
+    </>
   );
 }

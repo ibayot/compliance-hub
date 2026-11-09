@@ -8,6 +8,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import IconButton from '@mui/material/IconButton';
 import { getAppTheme } from '@/lib/theme';
 import type { AppLayoutMode } from '@/lib/theme';
+import type {
+  AppAppearancePreferences,
+  AppColorTheme,
+  AppLayoutPreset,
+} from '@/lib/appearance';
 
 const StyledMaterialDesignContent = styled(MaterialDesignContent)(({ theme }) => ({
   '&.notistack-MuiContent-success': {
@@ -28,8 +33,11 @@ type ThemeMode = 'light' | 'dark';
 
 type ThemeModeContextValue = {
   mode: ThemeMode;
-  setMode: (mode: ThemeMode) => void;
-  toggleMode: () => void;
+  colorTheme: AppColorTheme;
+  layoutPreset: AppLayoutPreset;
+  setAppearance: (preferences: AppAppearancePreferences) => void;
+  appearanceReady: boolean;
+  setAppearanceReady: (ready: boolean) => void;
   layoutMode: AppLayoutMode;
   setLayoutMode: (mode: AppLayoutMode) => void;
   toggleLayoutMode: () => void;
@@ -86,15 +94,6 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     return stored === 'dark' ? 'dark' : 'light';
   });
 
-  const setMode = React.useCallback((nextMode: ThemeMode) => {
-    setModeState(nextMode);
-    localStorage.setItem('app-theme-mode', nextMode);
-  }, []);
-
-  const toggleMode = React.useCallback(() => {
-    setMode(mode === 'light' ? 'dark' : 'light');
-  }, [mode, setMode]);
-
   const [layoutMode, setLayoutModeState] = useState<AppLayoutMode>(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('app-layout-mode') : null;
     return stored === 'mobile' ? 'mobile' : 'web';
@@ -109,12 +108,58 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     setLayoutMode(layoutMode === 'web' ? 'mobile' : 'web');
   }, [layoutMode, setLayoutMode]);
 
+  const [colorTheme, setColorThemeState] = useState<AppColorTheme>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('app-color-theme') : null;
+    return stored === 'slate-teal' || stored === 'warm-neutral' ? stored : 'clean-blue';
+  });
+
+  const [layoutPreset, setLayoutPresetState] = useState<AppLayoutPreset>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('app-layout-preset') : null;
+    return stored === 'split-pane-workbench' || stored === 'sectioned-workspace'
+      ? stored
+      : 'operations-grid';
+  });
+
+  const [appearanceReady, setAppearanceReady] = useState(false);
+
+  const setAppearance = React.useCallback((preferences: AppAppearancePreferences) => {
+    setModeState(preferences.mode);
+    setColorThemeState(preferences.colorTheme);
+    setLayoutPresetState(preferences.layoutPreset);
+    localStorage.setItem('app-theme-mode', preferences.mode);
+    localStorage.setItem('app-color-theme', preferences.colorTheme);
+    localStorage.setItem('app-layout-preset', preferences.layoutPreset);
+  }, []);
+
   const value = useMemo(
-    () => ({ mode, setMode, toggleMode, layoutMode, setLayoutMode, toggleLayoutMode }),
-    [mode, setMode, toggleMode, layoutMode, setLayoutMode, toggleLayoutMode],
+    () => ({
+      mode,
+      colorTheme,
+      layoutPreset,
+      setAppearance,
+      appearanceReady,
+      setAppearanceReady,
+      layoutMode,
+      setLayoutMode,
+      toggleLayoutMode,
+    }),
+    [
+      mode,
+      colorTheme,
+      layoutPreset,
+      setAppearance,
+      appearanceReady,
+      setAppearanceReady,
+      layoutMode,
+      setLayoutMode,
+      toggleLayoutMode,
+    ],
   );
 
-  const theme = useMemo(() => getAppTheme(mode, layoutMode), [mode, layoutMode]);
+  const theme = useMemo(
+    () => getAppTheme(mode, layoutMode, colorTheme, layoutPreset),
+    [mode, layoutMode, colorTheme, layoutPreset],
+  );
 
   return (
     <ThemeModeContext.Provider value={value}>

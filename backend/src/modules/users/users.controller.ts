@@ -25,6 +25,7 @@ import {
   CreateUserDto,
   UpdateUserDto,
   UpdateRoleCapabilityDto,
+  UpdateUiPreferencesDto,
 } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -235,6 +236,19 @@ export class UsersController {
   @Get('unit-assignment-source')
   getUnitAssignmentSource(@Request() req: any) {
     return this.usersService.getUnitAssignmentSource(Number(req.user.id ?? req.user.userId));
+  }
+
+  @Get('me/ui-preferences')
+  getMyUiPreferences(@Request() req: any) {
+    return this.usersService.getUiPreferences(Number(req.user.id ?? req.user.userId));
+  }
+
+  @Patch('me/ui-preferences')
+  updateMyUiPreferences(@Request() req: any, @Body() dto: UpdateUiPreferencesDto) {
+    return this.usersService.updateUiPreferences(
+      Number(req.user.id ?? req.user.userId),
+      dto,
+    );
   }
 
   @Get('validate-staff-id')

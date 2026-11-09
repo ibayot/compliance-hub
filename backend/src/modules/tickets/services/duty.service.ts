@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cron } from '@nestjs/schedule';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 import { formatPersonName } from '../../../shared/utils/person-name';
 import {
@@ -101,7 +101,8 @@ export class DutyService {
       row.status === DutyReservationStatus.CONFIRMED && relievers.length > 0);
     const purposeOnly = hasDutyLogs || row.status === DutyReservationStatus.COMPLETED;
     return { hasDutyLogs, hasActiveDuty, purposeOnly, scheduleLocked: purposeOnly || hasActiveDuty,
-      canDelete: !purposeOnly && !hasActiveDuty };
+      canDelete: !purposeOnly && !hasActiveDuty,
+      canCancel: !purposeOnly && row.status !== DutyReservationStatus.CANCELLED };
   }
 
   private async isOdOverrideEnabled(): Promise<boolean> {
@@ -791,6 +792,9 @@ export class DutyService {
     this.assertWritableFields(body, ['venueType', 'meetingDate', 'status', 'startTime', 'endTime', 'purpose', 'remarks']);
     const existing = id ? await this.reservationRepo.findOne({ where: { id } }) : null;
     if (id && !existing) throw new NotFoundException('Meeting reservation not found.');
+    if (existing && body.status === DutyReservationStatus.CANCELLED && existing.status !== DutyReservationStatus.CANCELLED) {
+      throw new BadRequestException('Use Cancel Meeting and provide a reason to cancel this meeting.');
+    }
     if (existing && !access.admin && existing.meetingDate < this.today()) {
       throw new ForbiddenException('Only a Duty Administrator can edit historical meetings.');
     }
@@ -841,16 +845,79 @@ export class DutyService {
         throw new BadRequestException(`${venueType} already has a ${otherSlot.replace('_', ' ')} meeting on ${meetingDate}. Only one AM and one PM meeting are allowed per duty area.`);
       }
     }
-    const saved = await this.reservationRepo.save(this.reservationRepo.create({ ...existing, venueType, meetingDate, status, startTime, endTime,
+    const updated = this.reservationRepo.create({ ...existing, venueType, meetingDate, status, startTime, endTime,
       purpose: body.purpose !== undefined ? body.purpose : existing?.purpose ?? null,
       remarks: body.remarks !== undefined ? body.remarks : existing?.remarks ?? null,
-      createdById: existing?.createdById ?? actor.id }));
+      createdById: existing?.createdById ?? actor.id });
+    const saved = existing ? await this.reservationRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(DutyMeetingReservation);
+      const current = await repo.findOne({ where: { id: existing.id }, lock: { mode: 'pessimistic_write' } });
+      if (!current || current.status !== existing.status) {
+        throw new BadRequestException('The meeting status changed. Refresh before saving your changes.');
+      }
+      return repo.save(updated);
+    }) : await this.reservationRepo.save(updated);
     if (existing && (existing.meetingDate !== meetingDate || existing.venueType !== venueType)) {
       await this.relieverRepo.delete({ reservationId: saved.id });
     }
     if (meetingDate === this.today() && status !== DutyReservationStatus.CANCELLED) await this.reconcileToday();
     this.sse.emitDutyUpdated();
     return saved;
+  }
+
+  async cancelReservation(actor: Actor, id: string, reason: string) {
+    const access = await this.getAccess(actor);
+    if (!access.canSchedule) throw new ForbiddenException('Meeting scheduling access is required.');
+    const normalizedReason = String(reason || '').trim();
+    if (normalizedReason.length < 3 || normalizedReason.length > 2000) {
+      throw new BadRequestException('Provide a cancellation reason between 3 and 2000 characters.');
+    }
+    const result = await this.reservationRepo.manager.transaction(async (manager) => {
+      const reservations = manager.getRepository(DutyMeetingReservation);
+      const reservation = await reservations.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+      if (!access.admin && reservation.meetingDate < this.today()) {
+        throw new ForbiddenException('Only a Duty Administrator can cancel historical meetings.');
+      }
+      if (reservation.status === DutyReservationStatus.CANCELLED) return { reservation, userIds: [], restoredIds: [] };
+      if (reservation.status === DutyReservationStatus.COMPLETED || await manager.getRepository(DutyAssignment).exist({ where: { reservationId: id } })) {
+        throw new BadRequestException('A completed or logged meeting cannot be cancelled. Its duty history must be retained.');
+      }
+      const coverages = manager.getRepository(DutyDailyCoverage);
+      const rows = await coverages.find({ where: { reservationId: id }, lock: { mode: 'pessimistic_write' } });
+      if (rows.some((row) => [DutyCoverageStatus.COMPLETED, DutyCoverageStatus.RELEASED].includes(row.status))) {
+        throw new BadRequestException('This meeting already has completed duty. Its history must be retained.');
+      }
+      const relievers = await manager.getRepository(DutyMeetingReliever).find({ where: { reservationId: id } });
+      const userIds = [...new Set([...rows.map((row) => row.assignedUserId).filter((value): value is number => value != null), ...relievers.map((row) => row.userId)])];
+      const restoredIds: number[] = [];
+      for (const coverage of rows) {
+        if (coverage.assignedUserId && coverage.attendanceOverridden) {
+          const attendanceRepo = manager.getRepository(TechAttendance);
+          const attendance = await attendanceRepo.findOne({ where: { date: coverage.dutyDate, userId: coverage.assignedUserId }, lock: { mode: 'pessimistic_write' } });
+          const otherActive = await coverages.find({ where: { dutyDate: coverage.dutyDate, assignedUserId: coverage.assignedUserId, status: DutyCoverageStatus.ACTIVE } });
+          if (attendance?.status === AttendanceStatus.OUT_OF_OFFICE && attendance.notes === `${coverage.dutyType} DUTY` && !otherActive.some((row) => row.reservationId !== id)) {
+            attendance.status = (coverage.previousAttendanceStatus as AttendanceStatus) || AttendanceStatus.PRESENT;
+            attendance.notes = coverage.previousAttendanceNotes;
+            await attendanceRepo.save(attendance);
+            restoredIds.push(coverage.assignedUserId);
+          }
+        }
+        coverage.status = DutyCoverageStatus.CANCELLED;
+        coverage.attendanceOverridden = false;
+        coverage.releasedAt = new Date();
+        await coverages.save(coverage);
+      }
+      reservation.status = DutyReservationStatus.CANCELLED;
+      reservation.remarks = [reservation.remarks, `Cancelled by account #${actor.id} at ${new Date().toISOString()}: ${normalizedReason}. Assigned staff: ${userIds.join(', ') || 'none'}.`].filter(Boolean).join('\n');
+      await reservations.save(reservation);
+      return { reservation, userIds, restoredIds };
+    });
+    this.sse.emitAttendanceUpdated();
+    this.sse.emitDutyUpdated();
+    for (const userId of result.restoredIds) await this.eventBus.publish('attendance.verified', { userId });
+    this.notifyDutyUsers(result.userIds, `${result.reservation.venueType} meeting on ${result.reservation.meetingDate} was cancelled. No completed duty was logged.`);
+    return result.reservation;
   }
 
   async replaceMeetingRelievers(actor: Actor, reservationId: string, userIds: number[], reason: string) {
@@ -1178,7 +1245,13 @@ export class DutyService {
       attendanceOverridden: false,
       releasedAt: null,
     });
-    coverage = await this.coverageRepo.save(coverage);
+    const plannedCoverage = coverage;
+    coverage = reservation ? await this.reservationRepo.manager.transaction(async (manager) => {
+      const current = await manager.getRepository(DutyMeetingReservation).findOne({ where: { id: reservation.id }, lock: { mode: 'pessimistic_write' } });
+      if (!current || [DutyReservationStatus.CANCELLED, DutyReservationStatus.COMPLETED].includes(current.status)) return null;
+      return manager.getRepository(DutyDailyCoverage).save(plannedCoverage);
+    }) : await this.coverageRepo.save(coverage);
+    if (!coverage) return null;
     this.sse.emitDutyUpdated();
     return { ...coverage, activeTicketCounts: Object.fromEntries(activeCounts) };
   }
@@ -1224,8 +1297,20 @@ export class DutyService {
     attendance.status = AttendanceStatus.OUT_OF_OFFICE;
     attendance.notes = `${coverage.dutyType} DUTY`;
     attendance.isManualOverride = true;
-    await this.attendanceRepo.save(attendance);
-    await this.coverageRepo.save(coverage);
+    await this.coverageRepo.manager.transaction(async (manager) => {
+      if (coverage.reservationId) {
+        const meeting = await manager.getRepository(DutyMeetingReservation).findOne({ where: { id: coverage.reservationId }, lock: { mode: 'pessimistic_write' } });
+        if (!meeting || [DutyReservationStatus.CANCELLED, DutyReservationStatus.COMPLETED].includes(meeting.status)) {
+          throw new BadRequestException('This meeting is no longer available for duty activation.');
+        }
+      }
+      const current = await manager.getRepository(DutyDailyCoverage).findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (current?.status !== DutyCoverageStatus.INTERVENTION_REQUIRED || current.reservationId !== coverage.reservationId) {
+        throw new BadRequestException('Duty coverage changed. Refresh before activating it.');
+      }
+      await manager.getRepository(TechAttendance).save(attendance);
+      await manager.getRepository(DutyDailyCoverage).save(coverage);
+    });
     this.sse.emitAttendanceUpdated();
     this.sse.emitDutyUpdated();
     return coverage;
@@ -1261,17 +1346,29 @@ export class DutyService {
     return { skippedUserId: userId, dashboard: await this.getDashboard(coverage.dutyDate) };
   }
 
-  private async recordCompletedCoverage(coverage: DutyDailyCoverage): Promise<void> {
-    if (!coverage.assignedUserId) return;
+  private async recordCompletedCoverage(coverage: DutyDailyCoverage, manager?: EntityManager): Promise<boolean> {
+    if (!coverage.assignedUserId) return false;
+    if (coverage.reservationId && !manager) {
+      const reservationId = coverage.reservationId;
+      return this.reservationRepo.manager.transaction(async (transaction) => {
+        const reservation = await transaction.getRepository(DutyMeetingReservation).findOne({ where: { id: reservationId }, lock: { mode: 'pessimistic_write' } });
+        const current = await transaction.getRepository(DutyDailyCoverage).findOne({ where: { id: coverage.id }, lock: { mode: 'pessimistic_write' } });
+        if (!reservation || reservation.status === DutyReservationStatus.CANCELLED || !current
+          || current.reservationId !== reservation.id || current.assignedUserId !== coverage.assignedUserId
+          || ![DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED, DutyCoverageStatus.COMPLETED].includes(current.status)) return false;
+        return this.recordCompletedCoverage(current, transaction);
+      });
+    }
+    const assignmentRepo = manager?.getRepository(DutyAssignment) ?? this.assignmentRepo;
     const dutyPeriod = coverage.dutyPeriod ?? DutyPeriod.WHOLE_DAY;
     // A daily OD coverage row is intentionally reused during a handoff. Pair
     // the coverage with the staff member so every person who actually rendered
     // duty receives one log entry while retries remain idempotent.
-    const recorded = await this.assignmentRepo.exist({
+    const recorded = await assignmentRepo.exist({
       where: { coverageId: coverage.id, userId: coverage.assignedUserId },
     });
-    if (recorded) return;
-    await this.assignmentRepo.save(this.assignmentRepo.create({
+    if (recorded) return true;
+    await assignmentRepo.save(assignmentRepo.create({
       dutyDate: coverage.dutyDate,
       dutyType: coverage.dutyType,
       dutyPeriod,
@@ -1282,56 +1379,41 @@ export class DutyService {
       source: 'automatic',
       createdById: null,
     }));
+    return true;
+  }
+
+  private async recordRelieverAssignment(manager: EntityManager, reservation: DutyMeetingReservation, reliever: DutyMeetingReliever, remarks: string, actorId: number) {
+    const assignments = manager.getRepository(DutyAssignment);
+    if (await assignments.exist({ where: { reservationId: reservation.id, userId: reliever.userId } })) return;
+    await assignments.save(assignments.create({
+      dutyDate: reservation.meetingDate, dutyType: reservation.venueType,
+      dutyPeriod: this.reservationPeriod(reservation), userId: reliever.userId,
+      coverageId: null, reservationId: reservation.id, remarks,
+      source: 'management_override', createdById: actorId,
+    }));
   }
 
   async completeReservation(actor: Actor, id: string) {
     this.assertAdmin(actor);
-    const reservation = await this.reservationRepo.findOne({ where: { id } });
-    if (!reservation) throw new NotFoundException('Meeting reservation not found.');
-    if (reservation.status === DutyReservationStatus.CANCELLED) {
-      throw new BadRequestException('A cancelled meeting duty cannot be completed.');
-    }
-    if (reservation.status === DutyReservationStatus.COMPLETED) return reservation;
-    if (reservation.meetingDate !== this.today()) {
-      throw new BadRequestException("Only today's active meeting duty can be completed.");
-    }
-    const relievers = await this.relieverRepo.find({ where: { reservationId: id } });
-    if (relievers.length === 0) {
-      throw new BadRequestException('Finish the active coverage from the Duty overview.');
-    }
-    const dutyPeriod = this.reservationPeriod(reservation);
-    for (const reliever of relievers) {
-      const recorded = await this.assignmentRepo.exist({
-        where: { reservationId: id, userId: reliever.userId },
-      });
-      if (!recorded) {
-        await this.assignmentRepo.save(this.assignmentRepo.create({
-          dutyDate: reservation.meetingDate,
-          dutyType: reservation.venueType,
-          dutyPeriod,
-          userId: reliever.userId,
-          coverageId: null,
-          reservationId: id,
-          remarks: `Immediate reliever duty completed: ${reliever.reason}`,
-          source: 'management_override',
-          createdById: actor.id,
-        }));
+    const saved = await this.reservationRepo.manager.transaction(async (manager) => {
+      const reservations = manager.getRepository(DutyMeetingReservation);
+      const reservation = await reservations.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!reservation) throw new NotFoundException('Meeting reservation not found.');
+      if (reservation.status === DutyReservationStatus.CANCELLED) throw new BadRequestException('A cancelled meeting duty cannot be completed.');
+      if (reservation.status === DutyReservationStatus.COMPLETED) return reservation;
+      if (reservation.meetingDate !== this.today()) throw new BadRequestException("Only today's active meeting duty can be completed.");
+      const relievers = await manager.getRepository(DutyMeetingReliever).find({ where: { reservationId: id } });
+      if (!relievers.length) throw new BadRequestException('Finish the active coverage from the Duty overview.');
+      for (const reliever of relievers) {
+        await this.recordRelieverAssignment(manager, reservation, reliever, `Immediate reliever duty completed: ${reliever.reason}`, actor.id);
       }
-    }
-    reservation.status = DutyReservationStatus.COMPLETED;
-    const saved = await this.reservationRepo.save(reservation);
+      reservation.status = DutyReservationStatus.COMPLETED;
+      return reservations.save(reservation);
+    });
     const next = this.selectedReservation(
-      await this.reservationRepo.find({ where: { meetingDate: reservation.meetingDate, venueType: reservation.venueType } }),
-      reservation.venueType,
+      await this.reservationRepo.find({ where: { meetingDate: saved.meetingDate, venueType: saved.venueType } }), saved.venueType,
     );
-    if (next) {
-      await this.reconcileCoverage(
-        reservation.meetingDate,
-        reservation.venueType,
-        [],
-        this.reservationPeriod(next),
-      );
-    }
+    if (next) await this.reconcileCoverage(saved.meetingDate, saved.venueType, [], this.reservationPeriod(next));
     this.sse.emitDutyUpdated();
     return saved;
   }
@@ -1344,7 +1426,7 @@ export class DutyService {
       throw new BadRequestException('Only active Duty coverage can be returned to Ticket Assignment.');
     }
     if (coverage.dutyType !== DutyType.OD) {
-      await this.recordCompletedCoverage(coverage);
+      if (!(await this.recordCompletedCoverage(coverage))) throw new BadRequestException('This meeting was cancelled or its coverage changed. Refresh the duty overview.');
       await this.restoreAttendance(coverage);
       coverage.status = DutyCoverageStatus.COMPLETED;
       coverage.releasedAt = new Date();
@@ -1509,20 +1591,11 @@ export class DutyService {
         where: { assignedToId: reliever.userId, status: In(ACTIVE_TICKET_STATUSES) },
       });
       if (activeTickets > 0) continue;
-      const exists = await this.assignmentRepo.exist({ where: { reservationId: reservation.id, userId: reliever.userId } });
-      if (!exists) {
-        await this.assignmentRepo.save(this.assignmentRepo.create({
-          dutyDate: date,
-          dutyType: reservation.venueType,
-          dutyPeriod: this.reservationPeriod(reservation),
-          userId: reliever.userId,
-          coverageId: null,
-          reservationId: reservation.id,
-          remarks: `Immediate reliever: ${reliever.reason}`,
-          source: 'management_override',
-          createdById: reliever.createdById,
-        }));
-      }
+      await this.reservationRepo.manager.transaction(async (manager) => {
+        const current = await manager.getRepository(DutyMeetingReservation).findOne({ where: { id: reservation.id }, lock: { mode: 'pessimistic_write' } });
+        if (!current || ![DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(current.status)) return;
+        await this.recordRelieverAssignment(manager, current, reliever, `Immediate reliever: ${reliever.reason}`, reliever.createdById);
+      });
     }
     const coverages = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED]) } });
     for (const coverage of coverages) {
@@ -1532,7 +1605,7 @@ export class DutyService {
       const dutyOccurred = coverage.dutyType === DutyType.OD
         || Boolean(reservation && [DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status));
       if (coverage.assignedUserId && dutyOccurred) {
-        await this.recordCompletedCoverage(coverage);
+        if (!(await this.recordCompletedCoverage(coverage))) continue;
         coverage.status = DutyCoverageStatus.COMPLETED;
         await this.coverageRepo.save(coverage);
         if (reservation && reservation.status !== DutyReservationStatus.CANCELLED) {

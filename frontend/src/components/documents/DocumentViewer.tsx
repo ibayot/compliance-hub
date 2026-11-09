@@ -242,7 +242,7 @@ export default function DocumentViewer({
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: 600,
-          bgcolor: 'grey.100',
+          bgcolor: 'action.hover',
           borderRadius: 1,
           overflow: 'auto',
           position: 'relative',

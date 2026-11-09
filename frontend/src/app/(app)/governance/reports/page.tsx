@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useRef, useMemo, useState } from 'react';
 import {
@@ -82,14 +83,14 @@ const MONTH_ABBR = [
 ];
 
 const UNIT_COLORS: string[] = [
-  '#1565c0',
-  '#6a1b9a',
-  '#00695c',
-  '#e65100',
-  '#558b2f',
-  '#4527a0',
-  '#ad1457',
-  '#00838f',
+  'var(--app-chart-1)',
+  'var(--app-chart-2)',
+  'var(--app-chart-3)',
+  'var(--app-chart-4)',
+  'var(--app-chart-5)',
+  'var(--app-chart-6)',
+  'var(--app-chart-7)',
+  'var(--app-chart-8)',
 ];
 
 const BAND_COLORS: Record<string, string> = {
@@ -799,7 +800,7 @@ function ReportView({ params }: { params: ReportParams }) {
                         mt: 1.5,
                         height: 6,
                         borderRadius: 3,
-                        bgcolor: 'grey.200',
+                        bgcolor: 'action.hover',
                         '& .MuiLinearProgress-bar': { bgcolor: overallBandColor },
                       }}
                     />
@@ -857,7 +858,7 @@ function ReportView({ params }: { params: ReportParams }) {
               </Grid>
             ) : (
               <Box
-                sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}
+                sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1, borderLeft: '4px solid', borderLeftColor: 'primary.main' }}
               >
                 <Typography variant="body2">
                   No KPI summary data available for {periodLabel}.
@@ -1029,9 +1030,10 @@ function ReportView({ params }: { params: ReportParams }) {
                   <Box
                     sx={{
                       p: 2,
-                      bgcolor: '#e3f2fd',
+                      bgcolor: 'action.hover',
                       borderRadius: 1,
-                      borderLeft: '4px solid #1976d2',
+                      borderLeft: '4px solid',
+                      borderLeftColor: 'primary.main',
                     }}
                   >
                     <Typography variant="body2">
@@ -1146,9 +1148,10 @@ function ReportView({ params }: { params: ReportParams }) {
                   <Box
                     sx={{
                       p: 2,
-                      bgcolor: '#e3f2fd',
+                      bgcolor: 'action.hover',
                       borderRadius: 1,
-                      borderLeft: '4px solid #1976d2',
+                      borderLeft: '4px solid',
+                      borderLeftColor: 'primary.main',
                     }}
                   >
                     <Typography variant="body2">
@@ -1323,7 +1326,7 @@ function ReportView({ params }: { params: ReportParams }) {
 
             {filteredDocs.length === 0 ? (
               <Box
-                sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, borderLeft: '4px solid #1976d2' }}
+                sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1, borderLeft: '4px solid', borderLeftColor: 'primary.main' }}
               >
                 <Typography variant="body2">No documents found for this period.</Typography>
               </Box>
@@ -1457,8 +1460,7 @@ export default function ReportsPage() {
 
   return (
     <Box p={3}>
-      {/* Page header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <ReportIcon color="primary" fontSize="large" />
         <Box>
           <Typography variant="h4" fontWeight={700}>
@@ -1470,11 +1472,8 @@ export default function ReportsPage() {
           </Typography>
         </Box>
       </Box>
-
-      <Divider sx={{ mb: 3 }} />
-
-      {/* Filter / Controls */}
-      <Card elevation={2} sx={{ mb: 3 }}>
+<Divider sx={{ mb: 3 }} />
+<WorkspaceLayout kind="report" context={<><Card elevation={2} sx={{ mb: 3 }}>
         <CardHeader
           title="Report Parameters"
           titleTypographyProps={{ variant: 'subtitle1', fontWeight: 600 }}
@@ -1599,10 +1598,13 @@ export default function ReportsPage() {
             </Grid>
           </Grid>
         </CardContent>
-      </Card>
+      </Card></>}>
+{/* Page header */}
+{/* Filter / Controls */}
+{/* Report output */}
+{generateParams && <ReportView params={generateParams} />}
+</WorkspaceLayout>
 
-      {/* Report output */}
-      {generateParams && <ReportView params={generateParams} />}
-    </Box>
+</Box>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -42,7 +43,7 @@ function formatKey(key: string): string {
 }
 
 function formatJsonValue(val: any): React.ReactNode {
-  if (val === null || val === undefined) return <em style={{ color: '#888' }}>none</em>;
+  if (val === null || val === undefined) return <Box component="em" sx={{ color: 'text.secondary' }}>none</Box>;
   
   if (typeof val === 'boolean') {
     return <Chip size="small" label={val ? 'Yes' : 'No'} color={val ? 'success' : 'default'} />;
@@ -71,11 +72,11 @@ function formatJsonValue(val: any): React.ReactNode {
   }
   
   if (Array.isArray(val)) {
-    if (val.length === 0) return <em style={{ color: '#888' }}>empty array</em>;
+    if (val.length === 0) return <Box component="em" sx={{ color: 'text.secondary' }}>empty array</Box>;
     return (
       <Stack spacing={0.5}>
         {val.map((item, index) => (
-          <Box key={index} sx={{ p: 0.5, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid #eee' }}>
+          <Box key={index} sx={{ p: 0.5, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider', overflowWrap: 'anywhere' }}>
             {formatJsonValue(item)}
           </Box>
         ))}
@@ -85,13 +86,13 @@ function formatJsonValue(val: any): React.ReactNode {
   
   if (typeof val === 'object') {
     return (
-      <Box sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid #eee' }}>
+      <Box sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider', minWidth: 0 }}>
         {Object.entries(val).map(([k, v]) => (
-          <Box key={k} sx={{ display: 'flex', mb: 0.5 }}>
+            <Box key={k} sx={{ display: 'flex', mb: 0.5, minWidth: 0 }}>
             <Typography variant="caption" sx={{ fontWeight: 600, width: 100, flexShrink: 0, color: 'text.secondary' }}>
               {formatKey(k)}:
             </Typography>
-            <Box sx={{ flex: 1 }}>{formatJsonValue(v)}</Box>
+            <Box sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{formatJsonValue(v)}</Box>
           </Box>
         ))}
       </Box>
@@ -147,19 +148,20 @@ function JsonDiffViewer({ oldValues, newValues }: { oldValues: any; newValues: a
 
     if (oldStr !== newStr) {
       rows.push(
-        <Box key={key} sx={{ mb: 2, p: 1.5, bgcolor: '#f8f9fa', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+        <Box key={key} sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
           <Typography variant="subtitle2" color="primary" sx={{ mb: 1, fontWeight: 700 }}>
             {formatKey(key)}
           </Typography>
-          <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}>
-            <Box sx={{ flex: 1, p: 1, bgcolor: '#ffebee', borderRadius: 1, border: '1px dashed #ef9a9a', minWidth: 0 }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch" sx={{ wordBreak: 'break-all', overflowWrap: 'break-word' }}>
+            <Box sx={{ flex: 1, p: 1, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(239, 83, 80, 0.14)' : 'rgba(211, 47, 47, 0.07)', borderRadius: 1, border: '1px dashed', borderColor: 'error.light', minWidth: 0 }}>
               <Typography variant="caption" color="error" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>PREVIOUS</Typography>
               {formatJsonValue(oldVal)}
             </Box>
-            <Box sx={{ pt: 2, flexShrink: 0 }}>
-              <Typography color="text.secondary">→</Typography>
+            <Box sx={{ pt: { xs: 0, sm: 2 }, flexShrink: 0, textAlign: 'center' }}>
+              <Typography color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>→</Typography>
+              <Typography color="text.secondary" sx={{ display: { xs: 'block', sm: 'none' } }}>↓</Typography>
             </Box>
-            <Box sx={{ flex: 1, p: 1, bgcolor: '#e8f5e9', borderRadius: 1, border: '1px dashed #a5d6a7', minWidth: 0 }}>
+            <Box sx={{ flex: 1, p: 1, bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(77, 187, 139, 0.14)' : 'rgba(25, 135, 84, 0.07)', borderRadius: 1, border: '1px dashed', borderColor: 'success.light', minWidth: 0 }}>
               <Typography variant="caption" color="success.main" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>NEW</Typography>
               {formatJsonValue(newVal)}
             </Box>
@@ -231,20 +233,20 @@ export default function AuditLogsPage() {
 
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} mb={3}>
+<Typography variant="h4" fontWeight={700} mb={3}>
         Audit Logs
       </Typography>
-
-      <Card sx={{ mb: 3 }}>
+<WorkspaceLayout kind="standard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap" alignItems={{ xs: 'stretch', sm: 'center' }}>
+          <Stack spacing={2} alignItems="stretch">
             <TextField
               select
+              fullWidth
               label="Action"
               value={filterAction}
               onChange={(e) => { setFilterAction(e.target.value); setPage(0); }}
               size="small"
-              sx={{ minWidth: { xs: 0, sm: 150 } }}
+              sx={{ width: '100%', minWidth: 0 }}
             >
               <MenuItem value="">All Actions</MenuItem>
               <MenuItem value="INSERT">INSERT</MenuItem>
@@ -262,18 +264,17 @@ export default function AuditLogsPage() {
               onChange={(table) => { setFilterTable(table || ''); setPage(0); }}
               size="small"
               clearable={false}
-              fullWidth={false}
-              sx={{ minWidth: { xs: 0, sm: 200 } }}
+              fullWidth
+              sx={{ width: '100%', minWidth: 0 }}
             />
 
-            <Button variant="outlined" onClick={() => { setFilterAction(''); setFilterTable(''); setPage(0); }}>
+            <Button fullWidth variant="outlined" onClick={() => { setFilterAction(''); setFilterTable(''); setPage(0); }}>
               Reset Filters
             </Button>
           </Stack>
         </CardContent>
-      </Card>
-
-      <ResponsiveTable component={Paper} minWidth={900} testId="audit-log-table">
+      </Card></>}>
+<ResponsiveTable component={Paper} minWidth={900} testId="audit-log-table">
         <Table size="small">
           <TableHead sx={{ bgcolor: 'background.default' }}>
             <TableRow>
@@ -332,13 +333,13 @@ export default function AuditLogsPage() {
           }}
         />
       </ResponsiveTable>
-
-      <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
+</WorkspaceLayout>
+<Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Audit Log Details</DialogTitle>
         <DialogContent dividers>
           {selectedLog && (
             <Stack spacing={2}>
-              <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
+                <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
                 
                 <Typography variant="body2"><strong>Timestamp:</strong> {new Date(selectedLog.createdAt).toLocaleString()}</Typography>
                 <Typography variant="body2"><strong>Action:</strong> {selectedLog.action}</Typography>
@@ -358,8 +359,8 @@ export default function AuditLogsPage() {
               <Box>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>Data Changes</Typography>
                 <JsonDiffViewer 
-                  oldValues={selectedLog.oldValues ? JSON.parse(selectedLog.oldValues) : null} 
-                  newValues={selectedLog.newValues ? JSON.parse(selectedLog.newValues) : null} 
+                  oldValues={selectedLog.oldValues || null}
+                  newValues={selectedLog.newValues || null}
                 />
               </Box>
             </Stack>
@@ -369,6 +370,6 @@ export default function AuditLogsPage() {
           <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+</Box>
   );
 }

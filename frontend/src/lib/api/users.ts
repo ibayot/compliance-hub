@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import { boundedGet, ReadOptions } from './bounded-read';
 import { UserRole } from '@/lib/types/auth';
+import type { AppAppearancePreferences } from '@/lib/appearance';
 
 export interface UserRecord {
   id: number;
@@ -243,6 +244,19 @@ export interface PendingStaffRecord {
 }
 
 export const usersApi = {
+  getUiPreferences: async (): Promise<AppAppearancePreferences | null> => {
+    const response = await apiClient.get<AppAppearancePreferences | null>('/users/me/ui-preferences');
+    return response.data;
+  },
+  updateUiPreferences: async (
+    preferences: Partial<AppAppearancePreferences>,
+  ): Promise<AppAppearancePreferences> => {
+    const response = await apiClient.patch<AppAppearancePreferences>(
+      '/users/me/ui-preferences',
+      preferences,
+    );
+    return response.data;
+  },
   syncUnits: async (): Promise<UnitSyncResult> => {
     const response = await apiClient.post<UnitSyncResult>('/users/sync-units', { force: true }, { timeout: 120_000 });
     return response.data;

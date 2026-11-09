@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
@@ -47,7 +48,6 @@ import {
   ExpandMore as ExpandMoreIcon,
   Edit as EditIcon,
   Key as KeyIcon,
-  Palette as PaletteIcon,
   PersonAdd as PersonAddIcon,
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
@@ -63,7 +63,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
-import { useThemeMode } from '@/contexts/ThemeModeContext';
+import AppearanceSettingsCard from '@/components/AppearanceSettingsCard';
 import { authApi } from '@/lib/api/auth';
 import { ticketSettingsApi } from '@/app/api/references';
 import { usersApi, RoleDefinition, RoleCapabilityRecord, UnitSyncResult } from '@/lib/api/users';
@@ -261,39 +261,6 @@ function ChangePasswordCard() {
     </Card>
   );
 }
-
-// --- Theme Card -------------------------------------------------------------
-
-function ThemeCard() {
-  const { mode, toggleMode } = useThemeMode();
-  return (
-    <Card elevation={2}>
-      <CardHeader
-        avatar={<PaletteIcon color="primary" />}
-        title="Theme Preference"
-        subheader="Switch between light and dark interface themes. Your preference is saved automatically."
-      />
-      <CardContent>
-        <FormControlLabel
-          control={<Switch checked={mode === 'dark'} onChange={toggleMode} color="primary" />}
-          label={
-            <Box>
-              <Typography variant="body1" component="span">
-                {mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" display="block">
-                {mode === 'dark'
-                  ? 'Using dark backgrounds  easier on the eyes in low-light environments.'
-                  : 'Using light backgrounds  standard high-contrast interface.'}
-              </Typography>
-            </Box>
-          }
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
 
 // --- Security Settings Card -------------------------------------------------
 
@@ -2710,7 +2677,7 @@ export default function SettingsPage() {
 
   return (
     <Box>
-      <Box mb={4}>
+<Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
           Settings
         </Typography>
@@ -2718,8 +2685,7 @@ export default function SettingsPage() {
           Manage your account, theme, and user administration preferences.
         </Typography>
       </Box>
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+<Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs 
           value={tabIndex} 
           onChange={handleTabChange} 
@@ -2733,11 +2699,9 @@ export default function SettingsPage() {
           ))}
         </Tabs>
       </Box>
-
-      {currentTab.label === 'Profile & Preferences' && (
-        <Box>
-          {/* Account Info */}
-          <Card elevation={2} sx={{ mb: 3 }}>
+<WorkspaceLayout kind="standard">
+{currentTab.label === 'Profile & Preferences' && (
+        <WorkspaceLayout kind="settings" context={<Card elevation={2} sx={{ mb: 3 }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 4 }}>
               <Avatar 
                 src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined} 
@@ -2773,18 +2737,29 @@ export default function SettingsPage() {
                     label={unit.name}
                     variant="outlined"
                     color="secondary"
+                    sx={{
+                      maxWidth: '100%',
+                      height: 'auto',
+                      alignItems: 'flex-start',
+                      '& .MuiChip-label': {
+                        display: 'block',
+                        whiteSpace: 'normal',
+                        overflowWrap: 'anywhere',
+                        textAlign: 'center',
+                        py: 0.5,
+                      },
+                    }}
                   />
                 ))}
               </Box>
             </CardContent>
-          </Card>
-
-          <Grid container spacing={3}>
+          </Card>}>
+<Grid container spacing={3}>
             <Grid item xs={12}>
               <ProfilePreferencesCard />
             </Grid>
             <Grid item xs={12}>
-              <ThemeCard />
+              <AppearanceSettingsCard />
             </Grid>
             <Grid item xs={12}>
               <MobileSettingsCard />
@@ -2793,39 +2768,35 @@ export default function SettingsPage() {
               <ChangePasswordCard />
             </Grid>
           </Grid>
-        </Box>
+</WorkspaceLayout>
       )}
-
-      {currentTab.label === 'User Management' && (
+{currentTab.label === 'User Management' && (
         <Box>
           <FocalUserManagementCard />
         </Box>
       )}
-
-      {currentTab.label === 'Role Management' && (
+{currentTab.label === 'Role Management' && (
         <Box>
           <RoleManagementCard />
         </Box>
       )}
-
-      {currentTab.label === 'Role Capabilities Matrix' && (
+{currentTab.label === 'Role Capabilities Matrix' && (
         <Box>
           <RoleCapabilitiesCard />
         </Box>
       )}
-
-      {currentTab.label === 'Global Settings' && (
+{currentTab.label === 'Global Settings' && (
         <Box>
           <GlobalSettingsCard />
         </Box>
       )}
-
-      {currentTab.label === 'Security Settings' && (
+{currentTab.label === 'Security Settings' && (
         <Box>
           <SecuritySettingsCard />
         </Box>
       )}
+</WorkspaceLayout>
 
-    </Box>
+</Box>
   );
 }

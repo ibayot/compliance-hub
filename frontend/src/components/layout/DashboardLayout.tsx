@@ -24,6 +24,8 @@ import AppBar from './AppBar';
 import EnvironmentOverlay from './EnvironmentOverlay';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { useSidebar } from '@/contexts/SidebarContext';
+import { useThemeMode } from '@/contexts/ThemeModeContext';
+import { APP_LAYOUT_MAX_WIDTH } from '@/lib/appearance';
 import { PageTitleProvider } from '@/contexts/PageTitleContext';
 import { useServiceAvailability } from '@/lib/utils/useServiceAvailability';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,7 +55,23 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { user, myCap, isSessionLocked, requiresPasswordChange } = useAuth();
+  const { layoutPreset, colorTheme, layoutMode, mode } = useThemeMode();
   const { services, loaded } = useServiceAvailability();
+  const pageFamily = location.pathname === '/dashboard'
+    ? 'dashboard'
+    : /^\/operations\/tickets\/[^/]+/.test(location.pathname)
+      ? 'ticket-detail'
+      : location.pathname.startsWith('/operations/tickets') || location.pathname.startsWith('/operations/my-')
+        ? 'ticket-list'
+        : location.pathname.includes('/reports')
+          ? 'reports'
+          : location.pathname.includes('/documents') || location.pathname.includes('/repository')
+            ? 'records'
+            : location.pathname.includes('/settings')
+              ? 'settings'
+              : location.pathname.includes('/duties') || location.pathname.includes('/attendance')
+                ? 'schedule'
+                : 'general';
   const [attendanceAlerts, setAttendanceAlerts] = useState<AttendanceAssignmentAlert[]>([]);
   const [attendanceAlertOpen, setAttendanceAlertOpen] = useState(false);
   const [reassigningUserId, setReassigningUserId] = useState<number | null>(null);
@@ -213,7 +231,33 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box
+      data-app-layout-preset={layoutPreset}
+      data-app-color-theme={colorTheme}
+      data-app-layout-mode={layoutMode}
+      sx={{ display: 'flex', minHeight: '100vh' }}
+    >
+      <Box
+        component="a"
+        href="#app-main"
+        sx={{
+          position: 'fixed',
+          top: -64,
+          left: 2,
+          zIndex: (theme) => theme.zIndex.tooltip + 1,
+          px: 2,
+          py: 1,
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1,
+          boxShadow: 2,
+          '&:focus': { top: 8 },
+        }}
+      >
+        Skip to main content
+      </Box>
       <EnvironmentOverlay />
       <Dialog
         open={attendanceAlertOpen && attendanceAlerts.length > 0}
@@ -310,6 +354,9 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       {/* Main Content */}
       <Box
         component="main"
+        id="app-main"
+        tabIndex={-1}
+        className="app-main"
         sx={{
           flexGrow: 1,
           minWidth: 0,
@@ -325,12 +372,29 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         {/* Toolbar spacing */}
         <Toolbar />
 
-        {/* Page content with 90% width */}
+        {/* Shared content frame keeps every authenticated page aligned to its appearance preset. */}
         <Box
+          className="app-page-content"
+          data-app-layout-preset={layoutPreset}
+          data-app-color-theme={colorTheme}
+          data-app-color-mode={mode}
+          data-app-page-family={pageFamily}
+          data-app-layout-mode={layoutMode}
           sx={{
-            width: '90%',
+            width: 'calc(100% - 48px)',
+            maxWidth: APP_LAYOUT_MAX_WIDTH[layoutPreset],
             mx: 'auto',
-            py: 4,
+            py: layoutPreset === 'operations-grid' ? 2.5 : 3,
+            '--app-layout-primary': (theme) => theme.palette.primary.main,
+            '--app-layout-paper': (theme) => theme.palette.background.paper,
+            '--app-layout-default': (theme) => theme.palette.background.default,
+            '--app-layout-divider': (theme) => theme.palette.divider,
+            '--app-layout-text': (theme) => theme.palette.text.primary,
+            '--app-layout-muted': (theme) => theme.palette.text.secondary,
+            '@media (max-width:600px)': {
+              width: 'calc(100% - 24px)',
+              py: 2,
+            },
           }}
         >
           {isComplianceLoading ? (

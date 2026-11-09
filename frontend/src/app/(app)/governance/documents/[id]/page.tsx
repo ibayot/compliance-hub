@@ -1,4 +1,5 @@
 'use client';
+import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -14,6 +15,7 @@ import {
   IconButton,
   Tooltip,
   Alert,
+  Stack,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -245,8 +247,7 @@ export default function DocumentDetailsPage() {
   return (
     <Container maxWidth="xl">
       <Box sx={{ py: 4 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
           <IconButton onClick={handleBack}>
             <BackIcon />
           </IconButton>
@@ -264,75 +265,16 @@ export default function DocumentDetailsPage() {
             </Button>
           )}
         </Box>
-
-        {/* Archived banner */}
-        {document.is_deleted && (
+<WorkspaceLayout kind="standard">
+{/* Header */}
+{/* Archived banner */}
+{document.is_deleted && (
           <Alert severity="info" sx={{ mb: 3 }}>
             This document has been archived and is no longer in the active submission queue.
           </Alert>
         )}
-
-        {/* Document Info */}
-        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Unit
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {document.unit?.name}
-                {document.unit?.code ? ` (${document.unit.code})` : ''}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Document Type
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {document.document_type}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Period
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {formatDocumentPeriod(document.year, document.period)}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Status
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>
-                {(() => {
-                  const wf = getWorkflowStatus(document);
-                  return <Chip label={wf.label} color={wf.color} size="small" />;
-                })()}
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Current Version
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                Version {document.current_version}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Uploaded By
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {document.uploader?.username} on{' '}
-                {format(new Date(document.created_at), 'MMM dd, yyyy')}
-              </Typography>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Return Remarks banner */}
-        {document.latest_review_remarks && (
+{/* Return Remarks banner */}
+{document.latest_review_remarks && (
           <Alert
             severity="error"
             variant="filled"
@@ -346,12 +288,55 @@ export default function DocumentDetailsPage() {
             </Typography>
           </Alert>
         )}
-
-        {/* Main Content */}
-        <Grid container spacing={3}>
-          {/* Document Viewer */}
-          <Grid item xs={12} lg={8}>
-            <Paper elevation={2} sx={{ p: 3 }}>
+{/* Main Content */}
+<WorkspaceLayout kind="detail" contextPosition="end" context={<>
+            <Paper
+              component="aside"
+              aria-label="Document information"
+              elevation={1}
+              sx={{ p: { xs: 2, sm: 2.5 }, width: '100%', height: '100%' }}
+            >
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Document Information
+              </Typography>
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Unit</Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {document.unit?.name || '—'}{document.unit?.code ? ` (${document.unit.code})` : ''}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Document Type</Typography>
+                  <Typography variant="body2" fontWeight={600}>{document.document_type || '—'}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Period</Typography>
+                  <Typography variant="body2" fontWeight={600}>{formatDocumentPeriod(document.year, document.period)}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Status</Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    {(() => {
+                      const wf = getWorkflowStatus(document);
+                      return <Chip label={wf.label} color={wf.color} size="small" />;
+                    })()}
+                  </Box>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Current Version</Typography>
+                  <Typography variant="body2" fontWeight={600}>Version {document.current_version}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Uploaded By</Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {document.uploader?.username || '—'} on {format(new Date(document.created_at), 'MMM dd, yyyy')}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Paper>
+          </>}>
+            <Paper elevation={2} sx={{ p: { xs: 1.5, sm: 2 }, height: '100%' }}>
               <Typography variant="h6" gutterBottom>
                 Document Viewer — {document.title}
               </Typography>
@@ -378,7 +363,7 @@ export default function DocumentDetailsPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: 'grey.100',
+                    bgcolor: 'action.hover',
                     borderRadius: 1,
                   }}
                 >
@@ -386,9 +371,10 @@ export default function DocumentDetailsPage() {
                 </Box>
               )}
             </Paper>
-          </Grid>
-        </Grid>
-      </Box>
+          </WorkspaceLayout>
+</WorkspaceLayout>
+
+</Box>
 
       <Dialog open={referenceDialogOpen} onClose={closeReferenceDialog} maxWidth="lg" fullWidth>
         <DialogTitle>Document-to-Document Mapping</DialogTitle>
