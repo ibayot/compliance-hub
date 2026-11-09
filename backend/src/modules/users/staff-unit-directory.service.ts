@@ -22,9 +22,9 @@ export class StaffUnitDirectoryService {
       throw new BadRequestException('Directory search must not exceed 100 characters.');
     const search = query.search?.trim();
     const schema = this.store.schema();
-    // Normalize UNION text across legacy collations; never fetch account credentials or private profile fields.
+    // Normalize UNION text across legacy collations. Select only the staff ID needed for the protected photo lookup; do not fetch credentials or other private profile fields.
     const text = (value: string) => `CONVERT(${value} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
-    const fields = (alias: string) => ['first_name', 'middle_name', 'last_name', 'suffix', 'position_full']
+    const fields = (alias: string) => ['staff_id', 'first_name', 'middle_name', 'last_name', 'suffix', 'position_full']
       .map(field => `${text(`${alias}.${field}`)} AS ${field}`).join(',');
     const base = `SELECT ${text("CONCAT('account:',a.id)")} entry_key,1 has_account,${fields('a')},
         COALESCE((SELECT GROUP_CONCAT(DISTINCT u.id ORDER BY u.id) FROM ${schema}.user_unit_access x
@@ -61,6 +61,8 @@ export class StaffUnitDirectoryService {
     return { page, limit, total: Number(count.total), units: safeUnits,
       data: rows.map((r: any) => ({ key: String(r.entry_key),
         name: formatPersonName({ firstName: r.first_name, middleName: r.middle_name, lastName: r.last_name, suffix: r.suffix }, 'Unnamed staff'),
+        // Restricted to this capability-protected projection for the configured profile-photo lookup.
+        staffId: r.staff_id == null ? null : String(r.staff_id),
         position: r.position_full || null, hasAccount: !!Number(r.has_account),
         units: String(r.unit_ids || '').split(',').map(Number).map(id => byUnit.get(id)).filter(Boolean),
       })),

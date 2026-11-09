@@ -1,4 +1,5 @@
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
+import StaffProfilePhoto from '@/components/StaffProfilePhoto';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Autocomplete, Box, Button, Chip, CircularProgress, Pagination, Paper, Stack, TextField, Typography } from '@mui/material';
 import { DirectoryUnit, StaffDirectoryResult, staffDirectoryApi } from '@/lib/api/staff-directory';
@@ -86,7 +87,10 @@ export default function StaffDirectoryPage() {
       <Stack spacing={1}>
         {result.data.map(staff => <Paper key={staff.key} variant="outlined" sx={{ p: 2 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 2fr) minmax(0, 2fr) minmax(0, 2fr) auto' }, gap: 1.5, alignItems: 'center' }}>
-            <Typography fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{staff.name}</Typography>
+            <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+              <StaffProfilePhoto key={`${staff.key}:${staff.staffId || ''}`} staffId={staff.staffId} name={staff.name} size={40} />
+              <Typography fontWeight={600} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{staff.name}</Typography>
+            </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{staff.position || 'Position not provided'}</Typography>
             <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{staff.units.map(u => u.name).join(' · ') || 'No active unit assigned'}</Typography>
             <Chip size="small" variant="outlined" label={staff.hasAccount ? 'Registered' : 'Directory only'} sx={{ justifySelf: 'start' }} />

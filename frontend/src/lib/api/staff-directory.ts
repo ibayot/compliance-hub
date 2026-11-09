@@ -4,6 +4,7 @@ export interface DirectoryUnit { id: number; name: string; staffCount: number }
 export interface DirectoryStaff {
   key: string;
   name: string;
+  staffId: string | null;
   position: string | null;
   hasAccount: boolean;
   units: Array<{ id: number; name: string }>;

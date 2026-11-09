@@ -1596,6 +1596,52 @@ export default function TicketsPage({
               >
                 Reset
               </Button>
+              {!restrictedAssignedOnly && (isFocalTech || canViewEscalatedQueue) && (
+                <Box sx={ticketFilterShortcutsSx}>
+                  {isFocalTech && (
+                    <Badge
+                      badgeContent={myTicketsCount}
+                      color="error"
+                      overlap="circular"
+                      sx={{ '& .MuiBadge-badge': { zIndex: 1 } }}
+                    >
+                      <Button
+                        size="small"
+                        variant={showMyTickets ? 'contained' : 'outlined'}
+                        aria-pressed={showMyTickets}
+                        color="primary"
+                        onClick={() => {
+                          setShowMyTickets((v) => !v);
+                          setShowEscalatedToMe(false);
+                        }}
+                      >
+                        Assigned to Me
+                      </Button>
+                    </Badge>
+                  )}
+                  {canViewEscalatedQueue && (
+                    <Badge
+                      badgeContent={escalatedToMeCount}
+                      color="error"
+                      overlap="circular"
+                      sx={{ '& .MuiBadge-badge': { zIndex: 1 } }}
+                    >
+                      <Button
+                        size="small"
+                        variant={showEscalatedToMe ? 'contained' : 'outlined'}
+                        color="warning"
+                        aria-pressed={showEscalatedToMe}
+                        onClick={() => {
+                          setShowEscalatedToMe((v) => !v);
+                          setShowMyTickets(false);
+                        }}
+                      >
+                        {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+                      </Button>
+                    </Badge>
+                  )}
+                </Box>
+              )}
             </Box>
           </CardContent>
         </Card>
@@ -1774,20 +1820,14 @@ export default function TicketsPage({
                     badgeContent={myTicketsCount}
                     color="error"
                     overlap="circular"
-                    sx={{
-                      width: '100%',
-                      minWidth: 0,
-                      height: 44,
-                      '& .MuiBadge-badge': { zIndex: 1 },
-                    }}
+                    sx={{ width: 'fit-content', minWidth: 170, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
                   >
                     <Button
-                      fullWidth
                       size="small"
                       variant={showMyTickets ? 'contained' : 'outlined'}
                       aria-pressed={showMyTickets}
                       color="primary"
-                      sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
+                      sx={{ minWidth: 170, height: '100%', whiteSpace: 'nowrap', px: 1.5 }}
                       onClick={() => {
                         setShowMyTickets((v) => !v);
                         setShowEscalatedToMe(false);
@@ -1802,19 +1842,14 @@ export default function TicketsPage({
                     badgeContent={escalatedToMeCount}
                     color="error"
                     overlap="circular"
-                    sx={{
-                      width: '100%',
-                      minWidth: 0,
-                      height: 44,
-                      '& .MuiBadge-badge': { zIndex: 1 },
-                    }}
+                    sx={{ width: 'fit-content', minWidth: 170, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
                   >
                     <Button
-                      fullWidth
                       size="small"
                       variant={showEscalatedToMe ? 'contained' : 'outlined'}
                       color="warning"
-                      sx={{ height: '100%', whiteSpace: 'nowrap', px: 1 }}
+                      aria-pressed={showEscalatedToMe}
+                      sx={{ minWidth: 170, height: '100%', whiteSpace: 'nowrap', px: 1.5 }}
                       onClick={() => {
                         setShowEscalatedToMe((v) => !v);
                         setShowMyTickets(false);
@@ -1829,61 +1864,6 @@ export default function TicketsPage({
           </CardContent>
         </Card>
       )}
-{!showEscalations &&
-        !restrictedAssignedOnly &&
-        !canManageAll &&
-        (isFocalTech || canViewEscalatedQueue) && (
-          <Card sx={{ mb: 2 }}>
-            <CardContent sx={ticketFilterPanelSx}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
-                sx={{ '& > *': { flex: 1, minWidth: 0 }, '& .MuiBadge-root': { minHeight: 44 } }}>
-                {(isFocalTech || canManageAll) && (
-                  <Badge
-                    badgeContent={myTicketsCount}
-                    color="error"
-                    overlap="circular"
-                    sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}
-                  >
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant={showMyTickets ? 'contained' : 'outlined'}
-                      aria-pressed={showMyTickets}
-                      color="primary"
-                      onClick={() => {
-                        setShowMyTickets((v) => !v);
-                        setShowEscalatedToMe(false);
-                      }}
-                    >
-                      Assigned to Me
-                    </Button>
-                  </Badge>
-                )}
-                {canViewEscalatedQueue && (
-                  <Badge
-                    badgeContent={escalatedToMeCount}
-                    color="error"
-                    overlap="circular"
-                    sx={{ width: '100%', '& .MuiBadge-badge': { zIndex: 1 } }}
-                  >
-                    <Button
-                      fullWidth
-                      size="small"
-                      variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                      color="warning"
-                      onClick={() => {
-                        setShowEscalatedToMe((v) => !v);
-                        setShowMyTickets(false);
-                      }}
-                    >
-                      {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                    </Button>
-                  </Badge>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
-        )}
 {!showEscalations && !personalRequestedOnly && isLowerLevelTech && (
         <Card sx={{ mb: 2 }}>
           <CardContent>
@@ -1989,7 +1969,7 @@ export default function TicketsPage({
                       <TableCell>Notes</TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody sx={{ '& .MuiTableCell-root': { verticalAlign: 'middle' } }}>
                     {visibleEscalations.map((e) => (
                       <TableRow
                         key={e.id}
@@ -2361,7 +2341,9 @@ export default function TicketsPage({
           )}
           <TableContainer
             component={Card}
-            sx={{ overflow: 'auto', maxHeight: 'calc(100vh - 320px)' }}
+            className="ticket-list-table-container"
+            data-has-ticket-rows={tabFilteredTickets.length > 0}
+            sx={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100dvh - 320px)', minHeight: 0, overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}
             ref={tableContainerRef}
             onScroll={handleTableScroll}
           >
@@ -2370,7 +2352,18 @@ export default function TicketsPage({
               stickyHeader
               sx={{ tableLayout: 'fixed', width: '100%', minWidth: canManageAll ? 1300 : 1260 }}
             >
-              <TableHead>
+              {(loading || tabFilteredTickets.length > 0) && <TableHead
+                sx={{
+                  '& .MuiTableCell-stickyHeader': {
+                    backgroundColor: 'background.paper',
+                    backgroundImage: 'none',
+                    zIndex: 2,
+                  },
+                  '& .MuiTableCell-stickyHeader:first-of-type': {
+                    zIndex: 4,
+                  },
+                }}
+              >
                 <TableRow>
                   <TableCell
                     sx={{
@@ -2401,17 +2394,17 @@ export default function TicketsPage({
                   </TableCell>
                   <TableCell align="right" sx={{ width: 80 }}>Actions</TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
+              </TableHead>}
+              <TableBody sx={{ '& .MuiTableCell-root': { verticalAlign: 'middle' } }}>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={11} align="center">
+                    <TableCell colSpan={canManageAll ? 11 : 9} align="center">
                       <CircularProgress size={28} />
                     </TableCell>
                   </TableRow>
                 ) : tabFilteredTickets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} align="center">
+                    <TableCell colSpan={canManageAll ? 11 : 9} align="center">
                       <Typography color="text.secondary" py={3}>
                         {ticketLoadError ? 'Tickets are unavailable. Use Retry above.' : 'No tickets found in this category.'}
                       </Typography>
@@ -2502,7 +2495,7 @@ export default function TicketsPage({
                           {ticket.subject}
                         </TableCell>
                         {/* Type */}
-                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
                           <Stack direction="column" spacing={0.5}>
                             {ticket.createdById && ticket.createdById !== ticket.requesterId && (
                               <Chip
@@ -2550,7 +2543,7 @@ export default function TicketsPage({
                           </Typography>
                         </TableCell>
                         {/* Priority */}
-                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
                           {ticket.priority ? (
                             <Chip
                               size="small"
@@ -2567,7 +2560,7 @@ export default function TicketsPage({
                           )}
                         </TableCell>
                         {/* Status */}
-                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
                           <Stack direction="column" spacing={0.5}>
                             <Chip
                               size="small"
@@ -2586,7 +2579,7 @@ export default function TicketsPage({
                           </Stack>
                         </TableCell>
                         {/* SLA */}
-                        <TableCell sx={{ verticalAlign: 'top', py: 1 }}>
+                        <TableCell sx={{ verticalAlign: 'middle', py: 1 }}>
                           {(() => {
                             const s = getSlaStatus(ticket);
                             return s ? (

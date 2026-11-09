@@ -213,9 +213,27 @@ body {
   padding: 3px 8px;
 }
 
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .ticket-list-table-container[data-has-ticket-rows='true'] {
+  height: min(66vh, 680px);
+  max-height: calc(100vh - 360px);
+  min-height: 240px;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+}
+
+@media (max-height: 640px) {
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .ticket-list-table-container[data-has-ticket-rows='true'] {
+    height: calc(100vh - 360px);
+    min-height: 180px;
+  }
+}
+
 .app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTable-root {
   border-collapse: separate;
   border-spacing: 0 4px;
+  margin-top: -4px;
 }
 
 .app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiTableBody-root .MuiTableRow-root {

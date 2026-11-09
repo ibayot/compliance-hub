@@ -4,6 +4,7 @@ import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
 
 import TicketActionsMenu, { TicketMenuAction } from '@/components/TicketActionsMenu';
+import StaffProfilePhoto from '@/components/StaffProfilePhoto';
 import { getTicketDetailActionKeys, TicketDetailActionKey } from '@/lib/utils/ticket-detail-actions';
 import { getTicketSlaSummary } from '@/lib/utils/ticket-sla-summary';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
@@ -44,8 +45,6 @@ import {
   ListItemButton,
   IconButton,
   Link,
-  Avatar,
-  ButtonBase,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
 import { useSnackbar } from 'notistack';
@@ -258,13 +257,6 @@ export default function TicketDetailPage() {
   const [replacementFiles, setReplacementFiles] = useState<File[]>([]);
   const [replacingImage, setReplacingImage] = useState(false);
   const [imageHistory, setImageHistory] = useState<{oldPath: string; newPath: string} | null>(null);
-  const [requesterImageOpen, setRequesterImageOpen] = useState(false);
-  const [requesterPhotoFailed, setRequesterPhotoFailed] = useState(false);
-  useEffect(() => {
-    setRequesterImageOpen(false);
-    setRequesterPhotoFailed(false);
-  }, [ticketId, ticket?.requester?.staffId]);
-
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
   const [claimingOvertime, setClaimingOvertime] = useState(false);
@@ -1284,9 +1276,6 @@ export default function TicketDetailPage() {
   const requesterLabel = ticket.createdById && Number(ticket.createdById) !== Number(ticket.requesterId)
     ? 'Requested For' : 'Requestor';
   const requesterName = ticket.requester ? formatPersonName(ticket.requester, `User #${ticket.requesterId}`) : `User #${ticket.requesterId}`;
-  const requesterPhotoUrl = ticket.requester?.staffId && import.meta.env.VITE_PROFILE_IMAGE_URL
-    ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${ticket.requester.staffId}.jpg`
-    : '';
   const slaSummary = getTicketSlaSummary(ticket);
   const detailActions: Record<TicketDetailActionKey, TicketMenuAction> = {
     updateStatus: { label: 'Update Status', icon: <EditIcon fontSize="small" />, onClick: () => setEditingStatus(true) },
@@ -1346,21 +1335,7 @@ export default function TicketDetailPage() {
           >
             <Box minWidth={0}>
               <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 1 }}>
-                <ButtonBase
-                  disabled={!requesterPhotoUrl || requesterPhotoFailed}
-                  onClick={() => setRequesterImageOpen(true)}
-                  aria-label={requesterPhotoUrl && !requesterPhotoFailed ? `View ${requesterName}'s profile photo` : `${requesterName} profile photo unavailable`}
-                  sx={{ borderRadius: '50%', flexShrink: 0, '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}
-                >
-                  <Avatar
-                    src={requesterPhotoUrl || undefined}
-                    alt={requesterName}
-                    imgProps={{ style: { objectPosition: 'center 20%' }, onError: () => setRequesterPhotoFailed(true) }}
-                    sx={{ width: 42, height: 42, bgcolor: 'primary.light', color: 'primary.contrastText', cursor: requesterPhotoUrl && !requesterPhotoFailed ? 'zoom-in' : 'default' }}
-                  >
-                    {`${ticket.requester?.firstName?.[0] || ''}${ticket.requester?.lastName?.[0] || ''}` || 'U'}
-                  </Avatar>
-                </ButtonBase>
+                <StaffProfilePhoto key={`${ticketId}:${ticket.requester?.staffId || ''}`} staffId={ticket.requester?.staffId} name={requesterName} size={42} />
                 <Box minWidth={0}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.04em' }}>
                     {requesterLabel}
@@ -2772,22 +2747,6 @@ export default function TicketDetailPage() {
           ]} thumbnailStyle={{width:160,height:120}} />}
         </DialogContent>
         <DialogActions><Button onClick={() => setImageHistory(null)}>Close</Button></DialogActions>
-      </Dialog>
-<Dialog open={requesterImageOpen && !!requesterPhotoUrl && !requesterPhotoFailed} onClose={() => setRequesterImageOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{requesterName}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', justifyContent: 'center', bgcolor: 'background.default', p: { xs: 1, sm: 2 } }}>
-          <Box
-            component="img"
-            src={requesterPhotoUrl}
-            alt={`${requesterName} profile photo`}
-            onError={() => {
-              setRequesterPhotoFailed(true);
-              setRequesterImageOpen(false);
-            }}
-            sx={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 1 }}
-          />
-        </DialogContent>
-        <DialogActions><Button onClick={() => setRequesterImageOpen(false)}>Close</Button></DialogActions>
       </Dialog>
 <Dialog
         open={imageReplacement !== null}

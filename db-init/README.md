@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.1 (from application version 1.1.0)
+
+There is no schema migration for this release. Rebuild/recreate Users, Ticketing, Compliance, Gateway and frontend together so the shared application version and staff-photo projection are aligned. Then apply `20261109-add-application-changelog-v1.1.1-users.sql` to the verified Users database so release notes match the deployed version. The file defaults to the local/staging-named Users schema; replace its `USE` target with the verified production Users schema before execution. Rebuild Android separately only if distributing a native package. The local Docker Users database is updated during implementation; staging/production SQL execution remains operator-managed. The SQL file is ignored by Git, so copy it separately; a Git pull does not deliver it. For a rollback to 1.1.0 during the 1.1.1 display window, redeploy the 1.1.0 images and set the 1.1.1 `app_releases.status` to `draft` in Users; preserve its release notes and delivery/acknowledgment rows.
+
 ## For release 1.1.0 (from application version 1.0.37)
 
 Verify the Users schema target, then apply `20261105-add-ui-preferences-users.sql` before starting the updated Users service. This additive migration is repeatable and preserves existing user data. Apply `20261109-add-application-changelog-v1.1.0-users.sql` to Users to publish the curated staff and End User notes. No Ticketing schema change is required for this release. Rebuild Users, Ticketing and frontend together; rebuild the Android application separately if distributing a native package. The local Docker Users database already has `ui_preferences`, and the 1.1.0 notes are applied during implementation. Staging/production SQL execution remains operator-managed. These SQL files are ignored by Git and must be copied separately; a Git pull does not deliver them.

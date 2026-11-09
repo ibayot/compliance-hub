@@ -28,5 +28,10 @@ export const ticketSearchSx = {
 export const ticketFilterShortcutsSx = {
   gridColumn: '1 / -1',
   '@container (min-width: 360px)': { gridColumn: 'span 2' },
-  display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.5, minWidth: 0,
+  display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-start', alignItems: 'center', gap: 1.5, minWidth: 0,
+  '& > .MuiBadge-root': { width: 'fit-content', minWidth: 170, height: 40, '& .MuiBadge-badge': { zIndex: 1 } },
+  '& .MuiButton-root': { minWidth: 170, minHeight: 40 },
+  '@container (max-width: 359px)': {
+    '& > .MuiBadge-root, & .MuiButton-root': { width: '100%' },
+  },
 } as const;
