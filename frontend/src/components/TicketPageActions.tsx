@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Ref } from 'react';
 import { Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip } from '@mui/material';
 import { Add, ArrowBack, History, MailOutline, MoreVert } from '@mui/icons-material';
 
@@ -9,6 +9,7 @@ export interface TicketPageActionsProps {
   showingEscalations: boolean;
   escalationCount?: number;
   onCreate: () => void;
+  createButtonRef?: Ref<HTMLButtonElement>;
   onInvite: () => void;
   onToggleEscalations: () => void;
 }
@@ -21,7 +22,7 @@ export default function TicketPageActions(props: TicketPageActionsProps) {
   ];
   if (!props.canCreate && !secondary.length) return null;
   return <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: { xs: '100%', sm: 'auto' }, minWidth: 0 }}>
-    {props.canCreate && <Button variant="contained" startIcon={<Add />} onClick={props.onCreate}
+    {props.canCreate && <Button ref={props.createButtonRef} variant="contained" startIcon={<Add />} onClick={props.onCreate}
       sx={{ minHeight: 44, whiteSpace: 'nowrap', flex: { xs: 1, sm: 'none' } }}>New Ticket</Button>}
     {secondary.length > 0 && <>
       <Tooltip title="More ticket actions"><IconButton aria-label="More ticket actions" aria-haspopup="menu"

@@ -2,6 +2,20 @@
 
 This log records changes to the context organization. It is separate from the application release changelog because documentation-only context changes do not change requester-visible behavior.
 
+## 2026-11-13 — Verification and completion claims
+
+- Adopted the shared 0.8.0 acceptance check. Added local retest cases for the UI and workflow discrepancies reported after earlier completion claims.
+
+## 2026-11-13 — Web and mobile UI/UX guidance
+
+- Adopted the two shared task-level UI/UX guides from 0.7.0. MASTER selects the relevant guide, and the workspace overlay owns the application's layout presets, mobile conventions and supported surfaces.
+
+## 2026-11-13 — Versioned review and workspace lessons
+
+- Merged relevant guidance from the independent 0.6.0 context library. The shared guidance covers versioned uploads, deployed preview rendering, constraint verification, protected sign-in return, responsive controls, metric corrections, and notification/MFA delivery safeguards.
+- Added the Compliance Hub workspace and mobile overlay and updated the application routes and canonical implementation links. Preset choices, phone controls, install and download paths, document review behavior, and reporting and attendance semantics are application-owned.
+- Recorded the observed limits of local verification and candidate document workflows in the compliance overlay.
+
 ## 2026-10-27 — Shared guidance and runtime/reporting lessons
 
 - Compared the earlier application context against the separate library 0.4.1; brought forward selected discovery, runnable-handoff, debugging/testing, UI-quality, engine, dependency and integration guidance, preserving local activation and history.

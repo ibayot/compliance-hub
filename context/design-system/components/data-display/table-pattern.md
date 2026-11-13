@@ -41,6 +41,7 @@ The list/query owner manages rows, filters, sort, and pages. Selection owns stab
 - **DS-TABLE-003** — Sorting MUST identify client/server ownership and must not sort only one page while implying global order.
 - **DS-TABLE-004** — Loading, refresh, empty, error, and partial/stale states MUST remain distinguishable.
 - **DS-TABLE-005** — Responsive alternatives MUST retain essential values and permitted actions; hidden columns need an intentional priority rule.
+- **DS-TABLE-006** — A pinned column MUST leave enough space to read and use the next relevant column at supported widths. When a comparison grid cannot do this on a phone, provide a focused record or date view with the same authorized actions and keep the comparison grid on wider screens.
 
 ## Accessibility
 
@@ -55,6 +56,8 @@ Server queries and returned columns must respect scope; hidden UI columns are no
 Test realistic long rows, no rows, failed refresh, pagination, selection across pages, keyboard actions, and narrow mode.
 
 For configurable wide reports, inspect the maximum useful selected fields with populated, long and narrative values. Preserve readable widths/row identity and provide an intentional scroll, detail-card or print alternative rather than squeezing every column into a page. Appearance must preserve the same authorized data, required fields and export totals. See [configurable reports](../../../domain/report-builder-pattern.md).
+
+For sticky headers, scroll the actual results region with populated rows. Check that no row shows through or overlaps the header and that short results fit their contents up to the scroll threshold.
 
 ## Related Patterns
 

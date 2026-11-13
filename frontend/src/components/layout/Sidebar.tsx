@@ -15,6 +15,9 @@ import {
   useTheme,
   useMediaQuery,
   Tooltip,
+  BottomNavigation,
+  BottomNavigationAction,
+  Paper,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -38,6 +41,7 @@ import {
   CalendarMonth as DutiesIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
+  MoreHoriz as MoreIcon,
 } from '@mui/icons-material';
 import type { ElementType } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,6 +54,7 @@ import { useState, useEffect } from 'react';
 interface SidebarProps {
   mobileOpen: boolean;
   onMobileClose: () => void;
+  onMobileMenuOpen: () => void;
 }
 
 interface NavItem {
@@ -63,13 +68,14 @@ interface NavItem {
   staffOnly?: boolean;
 }
 
-export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
+export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, myCap } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
+  const isNavigationCollapsed = !isMobile && isCollapsed;
   const [appMode, setAppMode] = useState<string>('loading');
 
   useEffect(() => {
@@ -267,6 +273,16 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     setExpandedSections((current) => ({ ...current, [activeSection.id]: true }));
   }, [activeSection?.id, location.pathname]);
 
+  useEffect(() => {
+    if (isMobile) {
+      setExpandedSections(Object.fromEntries(
+        navigationSections.map((section) => [section.id, section.id === activeSection?.id]),
+      ));
+      return;
+    }
+    setExpandedSections(Object.fromEntries(navigationSections.map((section) => [section.id, true])));
+  }, [isMobile, activeSection?.id]);
+
   const hasAccess = (
     capabilityKeys?: (keyof RoleCapabilityRecord)[],
     service?: NavItem['service'],
@@ -307,9 +323,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         selected={isActive}
         sx={{
           borderRadius: '12px',
-          justifyContent: isCollapsed ? 'center' : 'flex-start',
-          px: isCollapsed ? '8px' : '12px',
-          minHeight: 42,
+          justifyContent: isNavigationCollapsed ? 'center' : 'flex-start',
+          px: isNavigationCollapsed ? '8px' : '12px',
+          minHeight: isMobile ? 48 : 42,
           borderLeft: isActive ? '3px solid' : '3px solid transparent',
           borderColor: isActive ? 'primary.main' : 'transparent',
           '&.Mui-selected': {
@@ -325,14 +341,14 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         }}
         aria-current={isActive ? 'page' : undefined}
       >
-        <ListItemIcon sx={{ minWidth: isCollapsed ? 'auto' : 36, color: isActive ? 'primary.main' : 'text.secondary' }}>
+        <ListItemIcon sx={{ minWidth: isNavigationCollapsed ? 'auto' : 36, color: isActive ? 'primary.main' : 'text.secondary' }}>
           <Icon />
         </ListItemIcon>
-        {!isCollapsed && <ListItemText primary={item.label} primaryTypographyProps={{ variant: 'body2', fontSize: '0.875rem', fontFamily: 'inherit', fontWeight: isActive ? 700 : 500 }} />}
+        {!isNavigationCollapsed && <ListItemText primary={item.label} primaryTypographyProps={{ variant: 'body2', fontSize: '0.875rem', fontFamily: 'inherit', fontWeight: isActive ? 700 : 500 }} />}
       </ListItemButton>
     );
 
-    if (isCollapsed) {
+    if (isNavigationCollapsed) {
       return (
         <Tooltip title={item.label} placement="right" arrow>
           {content}
@@ -366,6 +382,32 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     }))
     .filter((section) => section.items.length > 0);
 
+  const visibleMobileItems = visibleNavigationSections.flatMap((section) => section.items);
+  const mobilePrimaryItems: NavItem[] = [];
+  const addMobilePrimaryItem = (item?: NavItem) => {
+    if (item && !mobilePrimaryItems.some((existing) => existing.path === item.path)) {
+      mobilePrimaryItems.push(item);
+    }
+  };
+  addMobilePrimaryItem(visibleMobileItems.find((item) => item.path === '/dashboard'));
+  addMobilePrimaryItem(
+    visibleMobileItems.find((item) => item.label === (user?.role === 'user' ? 'My Tickets' : 'Tickets')) ??
+      visibleMobileItems.find((item) => item.label === 'Tickets' || item.label === 'My Tickets'),
+  );
+  const secondaryMobileLabels = user?.role === 'user'
+    ? ['Knowledge Base', 'Duties', 'Documents', 'Staff Directory']
+    : ['Duties', 'Knowledge Base', 'Documents', 'Staff Directory', 'Ticket Reports', 'Reports'];
+  addMobilePrimaryItem(visibleMobileItems.find((item) => secondaryMobileLabels.includes(item.label)));
+  const activeMobileItem = mobilePrimaryItems.find((item) =>
+    item.path === '/dashboard'
+      ? location.pathname === item.path
+      : location.pathname === item.path ||
+        location.pathname.startsWith(`${item.path}/`) ||
+        (item.label === 'My Tickets' &&
+          user?.role === 'user' &&
+          location.pathname.startsWith('/operations/tickets/')),
+  );
+
   const drawerContent = (
     <Box sx={{
       display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0,
@@ -374,9 +416,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     }}>
       <Toolbar
         sx={{
-          px: isCollapsed ? '8px' : '16px',
+          px: isNavigationCollapsed ? '8px' : '16px',
           py: '16px',
-          justifyContent: isCollapsed ? 'center' : 'flex-start',
+          justifyContent: isNavigationCollapsed ? 'center' : 'flex-start',
         }}
       >
         <Box 
@@ -387,10 +429,10 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             height: 32, 
             width: 'auto', 
             objectFit: 'contain', 
-            mr: isCollapsed ? 0 : '12px'
+            mr: isNavigationCollapsed ? 0 : '12px'
           }} 
         />
-        {!isCollapsed && (
+        {!isNavigationCollapsed && (
           <Typography
             variant="subtitle1"
             component="div"
@@ -405,10 +447,10 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
       <Box component="nav" aria-label="Main navigation" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', py: '8px' }}>
         {visibleNavigationSections.map((section) => {
-          const expanded = isCollapsed || expandedSections[section.id];
+          const expanded = isNavigationCollapsed || expandedSections[section.id];
           return (
             <Box key={section.id} sx={{ mb: '6px' }}>
-              {isCollapsed ? (
+              {isNavigationCollapsed ? (
                 <Divider sx={{ mx: '12px', my: '8px' }} />
               ) : (
                 <ListItemButton
@@ -417,7 +459,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   aria-expanded={!!expandedSections[section.id]}
                   aria-controls={expandedSections[section.id] ? `navigation-section-${section.id}` : undefined}
                   sx={{
-                    minHeight: 34,
+                    minHeight: isMobile ? 44 : 34,
                     px: '18px',
                     borderRadius: '8px',
                     color: 'text.secondary',
@@ -432,7 +474,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                 </ListItemButton>
               )}
               {expanded && (
-                <List id={`navigation-section-${section.id}`} sx={{ px: isCollapsed ? '8px' : '12px', py: '2px' }}>
+                <List id={`navigation-section-${section.id}`} sx={{ px: isNavigationCollapsed ? '8px' : '12px', py: '2px' }}>
                   {section.items.map((item) => (
                     <ListItem key={item.path} disablePadding sx={{ mb: '2px' }}>
                       {renderNavItem(item)}
@@ -445,7 +487,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         })}
       </Box>
 
-      {!isCollapsed && (
+      {!isNavigationCollapsed && (
         <Box sx={{ px: '24px', py: '16px', bgcolor: 'background.default' }}>
           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem', fontFamily: 'inherit' }}>
             {formatPersonName(user, '—')}
@@ -460,6 +502,56 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
 
   return (
     <>
+      <Paper
+        component="nav"
+        id="app-mobile-nav"
+        aria-label="Quick navigation"
+        elevation={8}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          position: 'fixed',
+          zIndex: (currentTheme) => currentTheme.zIndex.appBar,
+          insetInline: 0,
+          bottom: 0,
+          pb: 'env(safe-area-inset-bottom)',
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
+          bgcolor: 'background.paper',
+          borderTop: 1,
+          borderColor: 'divider',
+        }}
+      >
+        <BottomNavigation
+          showLabels
+          value={activeMobileItem?.path ?? 'more'}
+          onChange={(_, value: string) => {
+            if (value === 'more') {
+              onMobileMenuOpen();
+              return;
+            }
+            handleNavigate(value);
+          }}
+          sx={{
+            height: 64,
+            minHeight: 64,
+            bgcolor: 'transparent',
+            '& .MuiBottomNavigationAction-root': { minWidth: 0, minHeight: 48, px: 0.5, py: 0.5 },
+            '& .MuiBottomNavigationAction-label': { fontSize: '0.7rem', whiteSpace: 'nowrap', mt: 0.25 },
+          }}
+        >
+          {mobilePrimaryItems.map((item) => {
+            const Icon = item.icon;
+            const label = item.label === 'Dashboard'
+              ? 'Home'
+              : item.label === 'Knowledge Base'
+                ? 'Knowledge'
+                : item.label;
+            return <BottomNavigationAction key={item.path} value={item.path} label={label} icon={<Icon />} />;
+          })}
+          <BottomNavigationAction value="more" label="More" icon={<MoreIcon />} />
+        </BottomNavigation>
+      </Paper>
+
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -471,7 +563,10 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           display: { xs: 'block', md: 'none' },
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
-            width: 260,
+            width: 'min(320px, calc(100vw - 40px))',
+            maxWidth: 'calc(100vw - 40px)',
+            paddingTop: 'env(safe-area-inset-top)',
+            paddingBottom: 'env(safe-area-inset-bottom)',
           },
         }}
       >

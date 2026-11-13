@@ -1,5 +1,7 @@
 import {
   Controller,
+  Delete,
+  Body,
   Get,
   Logger,
   Param,
@@ -16,6 +18,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TicketNotification } from '../entities/ticket-notification.entity';
 import { ApiTags } from '@nestjs/swagger';
 import { SseService } from '../services/sse.service';
+import { BrowserPushSubscriptionInput, WebPushService } from '../services/web-push.service';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -26,6 +29,7 @@ export class NotificationController {
   constructor(
     @InjectRepository(TicketNotification)
     private readonly notificationRepo: Repository<TicketNotification>,
+    @Optional() private readonly webPushService?: WebPushService,
     @Optional() private readonly sseService?: SseService,
   ) {}
 
@@ -33,6 +37,23 @@ export class NotificationController {
     const userId = Number(req.user?.id ?? req.user?.userId);
     if (!Number.isSafeInteger(userId) || userId < 1) throw new UnauthorizedException('A valid signed-in account is required.');
     return userId;
+  }
+
+  @Get('push-config')
+  getPushConfig() {
+    return this.webPushService?.getPublicConfig() ?? { enabled: false, publicKey: null };
+  }
+
+  @Post('push-subscription')
+  async savePushSubscription(@Request() req: any, @Body() body: BrowserPushSubscriptionInput) {
+    if (!this.webPushService) throw new UnauthorizedException('Browser notifications are unavailable.');
+    return this.webPushService.saveSubscription(this.userId(req), body);
+  }
+
+  @Delete('push-subscription')
+  async removePushSubscription(@Request() req: any, @Body() body: { endpoint?: string }) {
+    if (!this.webPushService) return { removed: false };
+    return this.webPushService.removeSubscription(this.userId(req), body?.endpoint ?? '');
   }
 
   @Get('summary')

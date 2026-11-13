@@ -1,6 +1,6 @@
 import WorkspaceTabs from '@/components/layout/WorkspaceTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
-import { useEffect, useId, useState } from 'react';
+import { Fragment, useEffect, useId, useState, type ReactNode } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Switch, Tab, Table, TableBody, TableCell, TableContainer as MuiTableContainer, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import { Add, Delete, Edit, ExpandMore, GroupAdd, Refresh, Star } from '@mui/icons-material';
 import { dutiesApi, DutyAccess, DutyType } from '@/lib/api/duties';
@@ -11,6 +11,7 @@ import { useSnackbar } from 'notistack';
 import { alpha, useTheme } from '@mui/material/styles';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableMultiSelect, SearchableSelect } from '@/components/SearchableSelect';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 const TYPES: DutyType[] = ['OD', 'ROC', 'CONFERENCE', 'OPCEN'];
 const VENUES = ['ROC', 'CONFERENCE', 'OPCEN'];
@@ -25,6 +26,43 @@ const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Numbe
 const TableContainer = ({ component, children, ...props }: any) => component
   ? <MuiTableContainer component={component} {...props}>{children}</MuiTableContainer>
   : <ResponsiveTable minWidth={620}>{children}</ResponsiveTable>;
+
+function DutyRecords({ columns, rows, empty }: {
+  columns: string[];
+  rows: { id: number | string; cells: ReactNode[] }[];
+  empty: string;
+}) {
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  if (!rows.length) return <Typography color="text.secondary" sx={{ p: 2 }}>{empty}</Typography>;
+  if (compact) return (
+    <Stack spacing={1}>
+      {rows.map(({ id, cells }) => (
+        <Card component="article" variant="outlined" key={id} sx={{
+          p: 1.5, overflowWrap: 'anywhere',
+          '& .MuiIconButton-root, & .MuiButton-root': { minHeight: 44, minWidth: 44 },
+        }}>
+          <Stack component="dl" spacing={0.75} sx={{ m: 0 }}>
+            {cells.map((value, index) => (
+              <Box key={columns[index]}>
+                <Typography component="dt" variant="caption" color="text.secondary">{columns[index]}</Typography>
+                <Box component="dd" sx={{ m: 0, typography: 'body2' }}>{value}</Box>
+              </Box>
+            ))}
+          </Stack>
+        </Card>
+      ))}
+    </Stack>
+  );
+  return <ResponsiveTable minWidth={620}>
+    <Table size="small">
+      <TableHead><TableRow>{columns.map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+      <TableBody>{rows.map(({ id, cells }) => <TableRow key={id}>
+        {cells.map((cell, index) => <TableCell key={columns[index]}>{cell}</TableCell>)}
+      </TableRow>)}</TableBody>
+    </Table>
+  </ResponsiveTable>;
+}
 
 export default function DutiesPage() {
   const now = new Date();
@@ -255,7 +293,7 @@ export default function DutiesPage() {
           <Typography variant="h6" fontWeight={700}>Duty Schedule</Typography>
           <Typography variant="body2" color="text.secondary">Select a date to review its assigned duties, meetings, and exceptions.</Typography>
         </Box>
-        <Stack direction="row" gap={1}>
+        <Stack direction="row" useFlexGap flexWrap="wrap" gap={1} sx={{ minWidth: 0 }}>
           <TextField size="small" type="number" label="Year" value={year} inputProps={{ min: 2000, max: 2100 }} onChange={(e) => setYear(+e.target.value)} sx={{ width: 120 }} />
           <TextField select size="small" label="Month" value={month} onChange={(e) => setMonth(+e.target.value)} sx={{ minWidth: 150 }}>
             {MONTHS.map((label, index) => <MenuItem key={label} value={index + 1}>{label}</MenuItem>)}
@@ -286,7 +324,7 @@ export default function DutiesPage() {
                     onClick={() => setSelectedDay(date)}
                     sx={{
                       minWidth: 0,
-                      minHeight: { xs: 64, sm: 72, lg: 76 },
+                      minHeight: { xs: 58, sm: 72, lg: 76 },
                       p: { xs: 0.5, sm: 1 },
                       display: 'flex',
                       flexDirection: 'column',
@@ -309,9 +347,12 @@ export default function DutiesPage() {
                       {dayEvents.length > 0 && <Chip size="small" label={dayEvents.length} color={isToday ? 'primary' : 'default'} sx={{ height: 20, '& .MuiChip-label': { px: 0.75 } }} />}
                     </Stack>
                     {dayEvents.slice(0, 2).map((event: any, eventIndex: number) => (
-                      <Typography key={`${event.kind}-${eventIndex}`} variant="caption" noWrap sx={{ mt: 0.25, px: 0.75, py: 0.25, borderRadius: 0.75, bgcolor: `${event.color}25`, color: 'text.primary', borderLeft: `3px solid ${event.color}` }}>
-                        {event.label}
-                      </Typography>
+                      <Fragment key={`${event.kind}-${eventIndex}`}>
+                        <Typography className="duty-map-event-label" variant="caption" noWrap sx={{ display: { xs: 'none', sm: 'block' }, mt: 0.25, px: 0.75, py: 0.25, borderRadius: 0.75, bgcolor: `${event.color}25`, color: 'text.primary', borderLeft: `3px solid ${event.color}` }}>
+                          {event.label}
+                        </Typography>
+                        <Box className="duty-map-event-marker" aria-hidden="true" sx={{ display: { xs: 'block', sm: 'none' }, mt: 0.25, width: 7, height: 7, borderRadius: '50%', bgcolor: event.color }} />
+                      </Fragment>
                     ))}
                     {dayEvents.length > 2 && <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25 }}>+{dayEvents.length - 2} more</Typography>}
                   </Box>
@@ -333,13 +374,13 @@ export default function DutiesPage() {
           </Paper>
         </Box>
         <Box sx={{ minWidth: 0, display: 'flex' }}>
-          <Paper variant="outlined" component="aside" aria-label="Selected day details" sx={{ p: { xs: 1.5, sm: 2 }, width: '100%', height: { xs: 'auto', lg: '100%' }, minHeight: { xs: 260, lg: 0 }, maxHeight: { xs: 420, lg: 'none' }, display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+          <Paper variant="outlined" component="aside" aria-label="Selected day details" sx={{ p: { xs: 1.5, sm: 2 }, width: '100%', height: { xs: 'auto', lg: '100%' }, minHeight: 0, maxHeight: 'none', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
             <Box sx={{ pb: 1.5, borderBottom: 1, borderColor: 'divider' }}>
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: '0.1em' }}>Selected Day</Typography>
               <Typography variant="h6" fontWeight={750}>{selectedDateLabel}</Typography>
               <Typography variant="body2" color="text.secondary">{selectedDayEvents.length} {selectedDayEvents.length === 1 ? 'entry' : 'entries'}</Typography>
             </Box>
-            <Box sx={{ overflowY: 'auto', py: 1.5, flex: 1, minHeight: 0 }}>
+            <Box sx={{ overflowY: { xs: 'visible', lg: 'auto' }, py: 1.5, flex: 1, minHeight: 0 }}>
               {selectedDayEvents.length === 0 ? (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
                   <Typography variant="body2" fontWeight={600}>No scheduled items</Typography>
@@ -368,9 +409,33 @@ export default function DutiesPage() {
       </Box>
     </>}
     {tab === 'rotation' && <Grid container spacing={2}>{TYPES.map((t) => <Grid item xs={12} md={6} key={t}><Card variant="outlined"><CardContent><Typography variant="h6" mb={1}>{t} ROTATION</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Name</TableCell><TableCell>Last Assigned</TableCell><TableCell>Days Since</TableCell><TableCell>Next?</TableCell></TableRow></TableHead><TableBody><RotationRows rows={data.rotation} t={t} /></TableBody></Table></TableContainer></CardContent></Card></Grid>)}</Grid>}
-    {tab === 'logs' && <Section title="Duty Log" add={() => open('log',{dutyDate:TODAY(),dutyType:'OD',dutyPeriod:'WHOLE_DAY'})}><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Date</TableCell><TableCell>Name</TableCell><TableCell>Duty</TableCell><TableCell>Period</TableCell><TableCell>Remarks</TableCell><TableCell /></TableRow></TableHead><TableBody>{data.logs.items.length ? data.logs.items.map((x:any)=><TableRow key={x.id}><TableCell>{x.dutyDate}</TableCell><TableCell>{x.name}</TableCell><TableCell>{formatType(x.dutyType)}</TableCell><TableCell>{formatType(x.dutyPeriod || 'WHOLE_DAY')}</TableCell><TableCell>{x.remarks}</TableCell><TableCell>{x.canModify ? <ActionButtons edit={()=>open('log',x)} remove={()=>requestDelete('log',x)} /> : <Typography variant="caption" color="text.secondary">Application log — read only</Typography>}</TableCell></TableRow>) : <EmptyTableRow colSpan={6} message="No duty log entries found." />}</TableBody></Table></TableContainer><TablePagination component="div" count={data.logs.total} page={logsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setLogsPage(value)} /></Section>}
-    {tab === 'exceptions' && <Section title="Notes & Exceptions" add={() => open('exception',{exceptionDate:TODAY(),type:'travel_order'})}><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Date</TableCell><TableCell>Name</TableCell><TableCell>Type</TableCell><TableCell>Remarks</TableCell><TableCell /></TableRow></TableHead><TableBody>{data.exceptions.items.length ? data.exceptions.items.map((x:any)=><TableRow key={x.id}><TableCell>{x.exceptionDate}</TableCell><TableCell>{userName(users,x.userId)}</TableCell><TableCell>{formatType(x.type)}</TableCell><TableCell>{x.remarks}</TableCell><TableCell><ActionButtons edit={()=>open('exception',x)} remove={()=>requestDelete('exception',x)} /></TableCell></TableRow>) : <EmptyTableRow colSpan={5} message="No duty exceptions found." />}</TableBody></Table></TableContainer><TablePagination component="div" count={data.exceptions.total} page={exceptionsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setExceptionsPage(value)} /></Section>}
-    {tab === 'meetings' && <Section title="Meeting Schedule" add={() => open('reservation',{meetingDate:TODAY(),venueType:'ROC',slot:'AM',status:'confirmed'})}><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Date</TableCell><TableCell>Duty Area</TableCell><TableCell>Period</TableCell><TableCell>Purpose</TableCell><TableCell>Immediate Relievers</TableCell><TableCell>Status</TableCell><TableCell /></TableRow></TableHead><TableBody>{data.reservations.items.length ? data.reservations.items.map((x:any)=><TableRow key={x.id}><TableCell>{x.meetingDate}</TableCell><TableCell>{x.venueType}</TableCell><TableCell>{meetingSlot(x)}</TableCell><TableCell>{x.purpose||'Meeting'}</TableCell><TableCell>{x.relievers?.length ? <Stack spacing={0.5}>{x.relievers.map((reliever:any)=><Chip key={reliever.id} size="small" label={reliever.name} />)}<Typography variant="caption" color="text.secondary">{x.relievers[0].reason}</Typography></Stack> : <Typography variant="body2" color="text.secondary">Normal rotation</Typography>}</TableCell><TableCell>{formatType(x.status)}{x.status === 'cancelled' && x.remarks && <Box component="details" sx={{mt:0.5,maxWidth:360}}><Typography component="summary" variant="caption" sx={{cursor:'pointer'}}>Cancellation details</Typography><Typography variant="caption" sx={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{x.remarks}</Typography></Box>}</TableCell><TableCell><Stack direction="row">{access?.admin && x.meetingDate >= TODAY() && !['cancelled','completed'].includes(x.status) && <IconButton color="secondary" size="small" aria-label="Assign immediate relievers" onClick={()=>open('relievers',{id:x.id,venueType:x.venueType,meetingDate:x.meetingDate,userIds:(x.relievers||[]).map((reliever:any)=>reliever.userId),reason:x.relievers?.[0]?.reason||''})}><GroupAdd fontSize="small" /></IconButton>}{(access?.admin || (access?.currentOd && x.meetingDate >= TODAY())) && <IconButton color="primary" size="small" aria-label="Edit meeting" onClick={()=>open('reservation',{...x,slot:meetingSlot(x).toUpperCase().replace(' ','_')})}><Edit fontSize="small" /></IconButton>}{access?.canSchedule && (access.admin || x.meetingDate >= TODAY()) && x.restrictions?.canCancel && <Button size="small" color="error" onClick={()=>requestMeetingCancellation(x)}>Cancel Meeting</Button>}{access?.admin && x.restrictions?.canDelete && <IconButton color="error" size="small" aria-label="Delete meeting" onClick={()=>requestDelete('reservation',x)}><Delete fontSize="small" /></IconButton>}</Stack></TableCell></TableRow>) : <EmptyTableRow colSpan={7} message="No meeting schedules found." />}</TableBody></Table></TableContainer><TablePagination component="div" count={data.reservations.total} page={reservationsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setReservationsPage(value)} /></Section>}
+    {tab === 'logs' && <Section title="Duty Log" add={() => open('log',{dutyDate:TODAY(),dutyType:'OD',dutyPeriod:'WHOLE_DAY'})}><DutyRecords columns={['Date', 'Name', 'Duty', 'Period', 'Remarks', 'Actions']}
+      rows={data.logs.items.map((x: any) => ({ id: x.id, cells: [
+        <>{x.dutyDate}</>,
+        <>{x.name}</>,
+        <>{formatType(x.dutyType)}</>,
+        <>{formatType(x.dutyPeriod || 'WHOLE_DAY')}</>,
+        <>{x.remarks}</>,
+        <>{x.canModify ? <ActionButtons edit={()=>open('log',x)} remove={()=>requestDelete('log',x)} /> : <Typography variant="caption" color="text.secondary">Application log — read only</Typography>}</>
+      ] }))} empty="No duty log entries found." /><TablePagination component="div" count={data.logs.total} page={logsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setLogsPage(value)} /></Section>}
+    {tab === 'exceptions' && <Section title="Notes & Exceptions" add={() => open('exception',{exceptionDate:TODAY(),type:'travel_order'})}><DutyRecords columns={['Date', 'Name', 'Type', 'Remarks', 'Actions']}
+      rows={data.exceptions.items.map((x: any) => ({ id: x.id, cells: [
+        <>{x.exceptionDate}</>,
+        <>{userName(users,x.userId)}</>,
+        <>{formatType(x.type)}</>,
+        <>{x.remarks}</>,
+        <><ActionButtons edit={()=>open('exception',x)} remove={()=>requestDelete('exception',x)} /></>
+      ] }))} empty="No duty exceptions found." /><TablePagination component="div" count={data.exceptions.total} page={exceptionsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setExceptionsPage(value)} /></Section>}
+    {tab === 'meetings' && <Section title="Meeting Schedule" add={() => open('reservation',{meetingDate:TODAY(),venueType:'ROC',slot:'AM',status:'confirmed'})}><DutyRecords columns={['Date', 'Duty Area', 'Period', 'Purpose', 'Immediate Relievers', 'Status', 'Actions']}
+      rows={data.reservations.items.map((x: any) => ({ id: x.id, cells: [
+        <>{x.meetingDate}</>,
+        <>{x.venueType}</>,
+        <>{meetingSlot(x)}</>,
+        <>{x.purpose||'Meeting'}</>,
+        <>{x.relievers?.length ? <Stack spacing={0.5}>{x.relievers.map((reliever:any)=><Chip key={reliever.id} size="small" label={reliever.name} />)}<Typography variant="caption" color="text.secondary">{x.relievers[0].reason}</Typography></Stack> : <Typography variant="body2" color="text.secondary">Normal rotation</Typography>}</>,
+        <>{formatType(x.status)}{x.status === 'cancelled' && x.remarks && <Box component="details" sx={{mt:0.5,maxWidth:360}}><Typography component="summary" variant="caption" sx={{cursor:'pointer'}}>Cancellation details</Typography><Typography variant="caption" sx={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{x.remarks}</Typography></Box>}</>,
+        <><Stack direction="row">{access?.admin && x.meetingDate >= TODAY() && !['cancelled','completed'].includes(x.status) && <IconButton color="secondary" size="small" aria-label="Assign immediate relievers" onClick={()=>open('relievers',{id:x.id,venueType:x.venueType,meetingDate:x.meetingDate,userIds:(x.relievers||[]).map((reliever:any)=>reliever.userId),reason:x.relievers?.[0]?.reason||''})}><GroupAdd fontSize="small" /></IconButton>}{(access?.admin || (access?.currentOd && x.meetingDate >= TODAY())) && <IconButton color="primary" size="small" aria-label="Edit meeting" onClick={()=>open('reservation',{...x,slot:meetingSlot(x).toUpperCase().replace(' ','_')})}><Edit fontSize="small" /></IconButton>}{access?.canSchedule && (access.admin || x.meetingDate >= TODAY()) && x.restrictions?.canCancel && <Button size="small" color="error" onClick={()=>requestMeetingCancellation(x)}>Cancel Meeting</Button>}{access?.admin && x.restrictions?.canDelete && <IconButton color="error" size="small" aria-label="Delete meeting" onClick={()=>requestDelete('reservation',x)}><Delete fontSize="small" /></IconButton>}</Stack></>
+      ] }))} empty="No meeting schedules found." /><TablePagination component="div" count={data.reservations.total} page={reservationsPage} rowsPerPage={PAGE_SIZE} rowsPerPageOptions={[PAGE_SIZE]} onPageChange={(_,value)=>setReservationsPage(value)} /></Section>}
     {tab === 'roster' && <Card variant="outlined" sx={{ maxWidth: 720 }}><CardContent><Stack direction={{xs:'column',sm:'row'}} justifyContent="space-between" gap={1} mb={1}><Box><Typography variant="h6">Duty Roster</Typography><Typography variant="body2" color="text.secondary">One ordered roster is used by OD, ROC, CONFERENCE, and OPCEN.</Typography></Box><Chip color={data.rosterConfig.odOverrideEnabled ? 'warning' : 'default'} label={`OD Override ${data.rosterConfig.odOverrideEnabled ? 'On' : 'Off'}`} /></Stack><Typography variant="body2" color="text.secondary" mb={2}>{data.rosterConfig.odOverrideEnabled ? 'OD-only members rotate for OD; all other members rotate for meeting venues.' : 'All members remain available to every duty rotation.'}</Typography><Stack spacing={1} mb={2}>{data.roster.length ? data.roster.map((x:any,index:number)=><Stack key={x.id} direction="row" spacing={1.5} alignItems="center"><Chip size="small" label={index + 1} /><Typography variant="body2">{x.name}</Typography>{x.odOnly && <Chip size="small" color="warning" variant="outlined" label="OD only" />}</Stack>) : <Typography variant="body2" color="text.secondary">No eligible duty roster members.</Typography>}</Stack><Button variant="contained" onClick={()=>open('roster',{userIds:data.roster.map((x:any)=>x.userId),odOnlyUserIds:data.roster.filter((x:any)=>x.odOnly).map((x:any)=>x.userId),odOverrideEnabled:!!data.rosterConfig.odOverrideEnabled})}>Manage Roster</Button></CardContent></Card>}
     </CardContent></Card>
 </WorkspaceLayout>

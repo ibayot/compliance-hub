@@ -6,19 +6,42 @@
 
 html {
   scrollbar-gutter: stable;
+  overflow-x: clip;
 }
 
 body {
   max-width: 100%;
   min-width: 320px;
+  width: 100%;
+  overflow-x: clip;
+}
+
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+
+@supports (height: 100dvh) {
+  #root { min-height: 100dvh; }
+}
+
+.app-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .app-main {
   min-width: 0;
+  max-width: 100%;
 }
 
 .app-page-content {
   min-width: 0;
+  max-width: 100%;
 }
 
 .app-page-content[data-app-color-theme='clean-blue'] {
@@ -99,6 +122,15 @@ body {
 
 .app-page-content .recharts-tooltip-item {
   color: var(--app-layout-muted, #596a7e) !important;
+}
+
+.app-page-content .recharts-sector:focus {
+  outline: none;
+}
+
+.app-page-content .recharts-sector:focus-visible {
+  stroke: var(--app-layout-primary, #1976d2);
+  stroke-width: 3px;
 }
 
 .app-page-content[data-app-layout-preset='operations-grid'] .MuiGrid-container {
@@ -214,9 +246,9 @@ body {
 }
 
 .app-page-content[data-app-layout-preset='sectioned-workspace'] .ticket-list-table-container[data-has-ticket-rows='true'] {
-  height: min(66vh, 680px);
-  max-height: calc(100vh - 360px);
-  min-height: 240px;
+  height: auto;
+  max-height: min(66vh, 680px);
+  min-height: 0;
   overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -225,8 +257,7 @@ body {
 
 @media (max-height: 640px) {
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .ticket-list-table-container[data-has-ticket-rows='true'] {
-    height: calc(100vh - 360px);
-    min-height: 180px;
+    max-height: max(180px, calc(100vh - 360px));
   }
 }
 
@@ -281,6 +312,225 @@ body {
 
 .app-page-content[data-app-page-family='settings'] .MuiCardHeader-root {
   align-items: flex-start;
+}
+
+/* Mobile layout mode is also available on desktop-sized screens for preview and preference use. */
+.app-shell[data-app-layout-mode='mobile'] .app-page-content {
+  width: min(calc(100% - 24px), 760px) !important;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.app-shell[data-app-layout-mode='mobile'] .workspace-layout {
+  gap: 16px;
+}
+
+.app-shell[data-app-layout-mode='mobile'] .workspace-context,
+.app-shell[data-app-layout-mode='mobile'] .workspace-content {
+  gap: 14px;
+}
+
+.app-shell[data-app-layout-mode='mobile'] .MuiInputBase-input,
+.app-shell[data-app-layout-mode='mobile'] .MuiSelect-select {
+  font-size: 16px;
+  scroll-margin-top: calc(64px + env(safe-area-inset-top));
+  scroll-margin-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+
+.app-shell[data-app-layout-mode='mobile'] .MuiIconButton-root {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.app-shell[data-app-layout-mode='mobile'] .MuiFormControlLabel-root {
+  min-height: 44px;
+}
+
+@media (max-width: 899px) {
+  html,
+  body,
+  #root,
+  .app-shell,
+  .app-main {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .app-main-toolbar-spacer {
+    padding: 0 !important;
+  }
+
+  .app-page-content {
+    width: calc(100% - max(12px, env(safe-area-inset-left) + 8px) - max(12px, env(safe-area-inset-right) + 8px)) !important;
+    max-width: 760px;
+    margin-inline: auto !important;
+  }
+
+  .app-page-content > *,
+  .app-page-content .workspace-layout,
+  .app-page-content .workspace-context,
+  .app-page-content .workspace-content,
+  .app-page-content .MuiGrid-container,
+  .app-page-content .MuiGrid-item,
+  .app-page-content .MuiCard-root,
+  .app-page-content .MuiPaper-root,
+  .app-page-content .MuiCardContent-root {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-page-content .MuiCard-root {
+    height: auto;
+  }
+
+  .app-page-content .MuiCardContent-root {
+    padding: 14px;
+  }
+
+  .app-page-content .MuiCardContent-root:last-child {
+    padding-bottom: 14px;
+  }
+
+  .app-page-content .MuiTypography-h4 {
+    font-size: clamp(1.45rem, 5.4vw, 1.8rem);
+    line-height: 1.2;
+  }
+
+  .app-page-content .MuiTypography-h3 {
+    font-size: clamp(1.35rem, 5vw, 1.65rem);
+    line-height: 1.22;
+  }
+
+  .app-page-content .MuiCardHeader-root {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .app-page-content .MuiCardHeader-action {
+    margin: 0;
+    align-self: center;
+  }
+
+  .app-page-content .MuiFormControl-root,
+  .app-page-content .MuiTextField-root,
+  .app-page-content .MuiAutocomplete-root {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-page-content .MuiInputBase-input,
+  .app-page-content .MuiSelect-select {
+    font-size: 16px;
+    scroll-margin-top: calc(64px + env(safe-area-inset-top));
+    scroll-margin-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .app-page-content .MuiButton-root {
+    min-height: 44px;
+  }
+
+  .app-page-content .MuiIconButton-root {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .app-page-content .MuiFormControlLabel-root {
+    min-height: 44px;
+    margin-inline-start: 0;
+  }
+
+  .app-page-content .MuiTableContainer-root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-layout {
+    gap: 16px;
+  }
+
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-context {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-context,
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-content {
+    gap: 14px;
+  }
+
+  .app-page-content[data-app-page-family='ticket-list'] .ticket-list-table-container {
+    max-height: min(62dvh, 620px);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-page-content[data-app-page-family='ticket-list'] .ticket-mobile-card {
+    overflow: visible;
+  }
+
+  .app-page-content[data-app-page-family='ticket-list'] .ticket-mobile-card .ticket-mobile-subject {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .app-page-content[data-app-page-family='ticket-list'] .ticket-mobile-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .app-page-content .recharts-responsive-container {
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  .app-page-content img,
+  .app-page-content video,
+  .app-page-content iframe {
+    max-width: 100%;
+  }
+
+  .app-page-content :where(pre, code, .MuiTypography-root) {
+    overflow-wrap: anywhere;
+  }
+
+  .MuiDialog-paper {
+    width: calc(100% - 16px) !important;
+    max-width: calc(100% - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+    margin: 8px !important;
+  }
+
+  .MuiDialogTitle-root {
+    padding: 16px !important;
+  }
+
+  .MuiDialogContent-root {
+    padding-inline: 16px !important;
+    overflow-x: hidden;
+  }
+
+  .MuiDialogActions-root {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 16px 16px !important;
+  }
+
+  .MuiPopover-paper,
+  .MuiMenu-paper {
+    max-width: calc(100vw - 16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
 }
 
 @media (max-width: 899px) {

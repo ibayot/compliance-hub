@@ -23,7 +23,9 @@ Recheck all source paths, commands, runtime versions, security assumptions, rele
 
 On 2026-10-27 this project received a reviewed guidance-only merge from shared library 0.5.0, including its earlier discovery, debugging, UI-quality, data, dependency and provider improvements plus newly generalized report/runtime lessons. Local MASTER links select the relevant documents. The current application profile, domain overlays, ADRs, implementation inventory, history, read-only validator and no-committed-test/evidence policy are retained.
 
-Pack manifests, machine routing receipts, integrity/export/adoption tools and their library test harness remain in the separate reusable repository. They are not part of this merge. This is not a complete managed library adoption; later updates still require reviewed comparison. Shared context validation is not evidence that the application was rebuilt, its database was migrated, a user signed in successfully, or every UI conforms. Context-only work does not run those application operations.
+On 2026-11-13, a selective merge from 0.6.0 added versioned file and review integrity, deployed preview checks, sign-in return paths, schema enforcement, responsive validation, correction-sensitive metrics, and notification/MFA safeguards. Compliance Hub continues to use its existing local installation and browser push patterns. Its workspace preferences, distribution options, permission choices and code bindings belong to the local overlays.
+
+Pack manifests, machine routing receipts, integrity/export/adoption tools and the library test harness are maintained by the separate reusable repository. Apply later changes through a reviewed comparison. Context validation covers routing and document structure. Application acceptance requires its own runtime checks.
 
 ## Audit expectations
 

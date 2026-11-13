@@ -42,6 +42,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   AdminPanelSettings as RoleIcon,
@@ -678,6 +680,11 @@ function GlobalSettingsCard() {
 // --- Role Capabilities Card ------------------------------------------------
 
 function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, canEdit }: { category: any, caps: any[], saving: string | null, handleToggle: (role: string, field: any, val: boolean) => void, canEdit: boolean }) {
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  const roles = caps.filter((cap) => cap.roleValue !== 'user' && cap.roleValue !== 'super_admin');
+  const [selectedRole, setSelectedRole] = useState('');
+  const activeRole = roles.find((cap) => cap.roleValue === selectedRole) ?? roles[0];
   return (
     <Accordion
       disableGutters
@@ -690,6 +697,21 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
         </Typography>
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0 }}>
+        {compact ? (activeRole ? (
+          <Stack spacing={1.5} sx={{ p: 1.5 }}>
+            <TextField select fullWidth label="Role" value={activeRole.roleValue} onChange={(event) => setSelectedRole(event.target.value)}>
+              {roles.map((cap) => <MenuItem key={cap.roleValue} value={cap.roleValue}>{cap.roleValue}</MenuItem>)}
+            </TextField>
+            {category.columns.map((col: { key: keyof RoleCapabilityRecord; label: string; description?: string }) => (
+              <Box key={col.key} sx={{ borderBottom: 1, borderColor: 'divider', pb: 1 }}>
+                <FormControlLabel label={col.label} sx={{ minHeight: 44, overflowWrap: 'anywhere' }}
+                  control={<Switch checked={Boolean(activeRole[col.key])} disabled={!canEdit || saving === activeRole.roleValue}
+                    onChange={(event) => handleToggle(activeRole.roleValue, col.key, event.target.checked)} />} />
+                {col.description && <Typography variant="caption" color="text.secondary" display="block">{col.description}</Typography>}
+              </Box>
+            ))}
+          </Stack>
+        ) : <Typography sx={{ p: 1.5 }} color="text.secondary">No roles available.</Typography>) :
         <ResponsiveTable minWidth={620} testId={`capability-category-${category.name}`}>
           <Table size="small">
             <TableHead>
@@ -700,8 +722,8 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
                     width: 160,
                     minWidth: 160,
                     maxWidth: 160,
-                    position: 'sticky',
-                    left: 0,
+                    position: { xs: 'static', sm: 'sticky' },
+                    left: { sm: 0 },
                     zIndex: 101,
                     bgcolor: 'background.paper',
                     borderRight: '1px solid',
@@ -748,6 +770,7 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
                       <Chip
                         label={cap.roleValue}
                         size="small"
+                        sx={{ maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', overflowWrap: 'anywhere' } }}
                         color={cap.roleValue === 'super_admin' ? 'error' : 'default'}
                       />
                     </TableCell>
@@ -772,7 +795,7 @@ function CapabilityCategoryAccordion({ category, caps, saving, handleToggle, can
                 ))}
             </TableBody>
           </Table>
-        </ResponsiveTable>
+        </ResponsiveTable>}
       </AccordionDetails>
     </Accordion>
   );
@@ -2741,6 +2764,8 @@ export default function SettingsPage() {
                       maxWidth: '100%',
                       height: 'auto',
                       alignItems: 'flex-start',
+                      color: 'text.primary',
+                      borderColor: 'secondary.main',
                       '& .MuiChip-label': {
                         display: 'block',
                         whiteSpace: 'normal',

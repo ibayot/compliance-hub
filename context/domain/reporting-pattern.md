@@ -38,5 +38,7 @@ DOMAIN-REPORT-005 MUST define effective event time, cohort membership, interval 
 DOMAIN-REPORT-006 MUST preserve unknown-versus-zero and estimate/coverage distinctions, disclose eligible denominators and avoid fabricating missing historical intervals or presenting incomplete totals as exact.
 DOMAIN-REPORT-007 MUST distinguish operational elapsed, business and credited/capped durations where they differ and prevent one metric from silently substituting for another.
 
+DOMAIN-REPORT-008 MUST define how each correction changes each dependent cohort, numerator, and denominator. Preserve unrelated measures and the audit history. A superseded response can leave satisfaction measures while its underlying work remains counted; reclassification of the work itself can change completion measures independently.
+
 ## Validation
-Boundary dates, empty period, null inputs, known fixtures, duplicate records, and cross-view totals.
+Boundary dates, empty period, null inputs, known fixtures, duplicate records, and cross-view totals. After a correction, reconcile the details, aggregate, export and any materialized result. Verify that superseded responses are excluded where required and unrelated metrics still reconcile.

@@ -46,6 +46,7 @@ RUN npm install --omit=dev
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/assets/compliance-hub-webclip-icon.png ./assets/compliance-hub-webclip-icon.png
 
 # The default command runs the gateway, but docker-compose will override this
 # for users-service, ticketing-service, and compliance-service

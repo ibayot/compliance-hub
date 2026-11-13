@@ -58,13 +58,12 @@ export class StorageService {
   ): Promise<string> {
     await this.ensureSubDirectoryExists(subDir);
 
-    const timestamp = Date.now();
     const sanitizedName = this.sanitizeFileName(fileName);
-    const uniqueName = `${timestamp}-${sanitizedName}`;
+    const uniqueName = `${crypto.randomUUID()}-${sanitizedName}`;
     const relativePath = `${subDir}/${uniqueName}`;
     const fullPath = this.resolveWithinStorage(relativePath);
 
-    await fs.writeFile(fullPath, buffer);
+    await fs.writeFile(fullPath, buffer, { flag: 'wx' });
     this.logger.log(`File saved: ${relativePath}`);
 
     return relativePath;
@@ -107,6 +106,14 @@ export class StorageService {
       this.logger.log(`File deleted: ${filePath}`);
     } catch (error) {
       this.logger.error(`Failed to delete file: ${filePath}`, error);
+    }
+  }
+
+  async discardUnreferencedUpload(filePath: string, isReferenced: () => Promise<boolean>): Promise<void> {
+    try {
+      if (!(await isReferenced())) await this.deleteFile(filePath);
+    } catch {
+      this.logger.warn('Could not verify whether a failed upload is still referenced. Retaining the file.');
     }
   }
 

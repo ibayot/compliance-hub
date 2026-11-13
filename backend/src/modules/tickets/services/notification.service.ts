@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
@@ -9,6 +9,7 @@ import {
 import { User } from '../../shared/entities';
 import { TicketNotification } from '../entities/ticket-notification.entity';
 import { SseService } from './sse.service';
+import { WebPushService } from './web-push.service';
 
 export interface CreateAppNotificationInput {
   ticketId?: string | null;
@@ -28,6 +29,7 @@ export class NotificationService implements OnModuleInit {
     private readonly userRepo: Repository<User>,
     private readonly sseService: SseService,
     private readonly eventBus: EventBusService,
+    @Optional() private readonly webPushService?: WebPushService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -79,6 +81,12 @@ export class NotificationService implements OnModuleInit {
     notifications.forEach((notification) =>
       this.sseService.emitNotificationCreated(notification.userId),
     );
+    // Push is best-effort: never delay or fail the in-app notification/SSE path.
+    if (this.webPushService) {
+      void Promise.all(notifications.map((notification) =>
+        this.webPushService!.sendForNotification(notification),
+      )).catch(() => this.logger.warn('One or more browser push alerts could not be sent.'));
+    }
     this.logger.log(`Created ${notifications.length} app notification(s).`);
   }
 

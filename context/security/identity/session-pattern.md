@@ -38,11 +38,13 @@ Keep session truth with the selected server or token mechanism. Use secure platf
 - **SEC-SESSION-004** — MUST, when recovery is enabled, distinguish temporary transport/service failures from authoritative rejection, keep initial unverified access blocked, and coordinate competing renewals before accepting results; a retained UI state is not fresh authorization.
 - **SEC-SESSION-005** — MUST preserve explicit sign-out, idle-lock and current-account intent across restart/recovery races; stale in-flight work cannot restore a signed-out account or a different account. Define the permitted recovery surfaces rather than silently restoring accounts on public login pages.
 
+- **SEC-SESSION-006** — A return destination carried through sign-in, additional authentication steps, or session-expiry recovery MUST be a validated internal application destination. Recheck authorization after authentication. Reject ambiguous, external, and looping destinations and keep credentials out of the destination. Scope retained intent to the current journey and clear it at completion or explicit sign-out.
+
 Use the [client update pattern](../../api-and-integrations/client-update-pattern.md) when builds trigger refresh. Metadata discovery, readiness and session verification remain separate contracts; recovery does not require every application to adopt automatic renewal.
 
 ## Validation
 
-Test expired sessions, logout followed by credential reuse, permission change, and switching users with cached data. Record any intentionally bounded token-revocation delay.
+Test expired sessions, logout followed by credential reuse, permission change, and switching users with cached data. Start from a protected deep link, complete all configured authentication steps, and verify the permitted destination or a safe fallback. Probe external, encoded and nested destinations, direct entry, and revoked access. Record any intentionally bounded token-revocation delay.
 
 ## Exceptions
 

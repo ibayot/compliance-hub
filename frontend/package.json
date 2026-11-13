@@ -1,6 +1,6 @@
 {
   "name": "rictms-frontend",
-  "version": "1.1.1",
+  "version": "1.1.3",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "test:e2e:visible": "playwright test --config=playwright.visible.config.ts",
     "test:e2e:loop": "node scripts/run-e2e-loop.mjs",
     "preview": "vite preview",
+    "preview:phone": "node scripts/preview-phone.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "android:sync": "npm run build && npx cap sync android",
     "android:debug": "node scripts/build-android.mjs debug",

@@ -10,6 +10,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -37,6 +38,8 @@ import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
 import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
 import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, recoveryGeneration } from '@/lib/auth/session-recovery';
+import { notificationsApi } from '@/app/api/references';
+import { clearExpiredDestination, signInDestination } from '@/lib/auth/sign-in-destination';
 
 export { tokenStore } from '@/lib/api/client';
 
@@ -86,6 +89,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,12 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authenticatedUserId]);
 
   
-  const saveTokensToPreferences = async (accessToken: string, refreshToken: string) => {
+  useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      await Preferences.set({ key: 'accessToken', value: accessToken });
-      await Preferences.set({ key: 'refreshToken', value: refreshToken });
+      // Older native builds wrote duplicate tokens here and never restored them.
+      void Promise.all([Preferences.remove({ key: 'accessToken' }), Preferences.remove({ key: 'refreshToken' })]).catch(() => undefined);
     }
-  };
+  }, []);
 
   const clearInactivityTimer = useCallback(() => {
     if (inactivityTimerRef.current) {
@@ -213,6 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.remove('refreshToken');
       sessionStorage.removeItem('isSessionLocked');
       sessionStorage.removeItem('changelog-prompt-checked');
+      sessionStorage.removeItem('mfaTempToken');
+      sessionStorage.removeItem('mfaTestModeCode');
+      sessionStorage.removeItem('mfaResendAvailableAt');
+      clearExpiredDestination();
+      queryClient.clear();
       setUser(null);
       setMyCap(null);
       setIsSessionLocked(false);
@@ -225,9 +234,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void Promise.all([Preferences.remove({ key: 'accessToken' }), Preferences.remove({ key: 'refreshToken' })]).catch(() => undefined);
       }
       navigate(reason ? `/login?reason=${reason}` : '/login');
-  }, [clearInactivityTimer, navigate]);
+  }, [clearInactivityTimer, navigate, queryClient]);
 
   const logout = useCallback(async (reason?: string) => {
+    if (!Capacitor.isNativePlatform()) {
+      await Promise.race([
+        notificationsApi.unsubscribeCurrentPushSubscription().catch(() => undefined),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
+      ]);
+    }
     markSessionSignedOut();
     const request = authApi.logout();
     clearLocalSession(reason);
@@ -387,16 +402,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.testModeCode) {
         sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
       } else sessionStorage.removeItem('mfaTestModeCode');
-      navigate('/mfa-verify');
+      navigate('/mfa-verify', { replace: true, state: { returnTo: signInDestination(redirectTo) } });
       return;
     }
 
     if (response.accessToken && response.refreshToken) {
       tokenStore.set('accessToken', response.accessToken);
       tokenStore.set('refreshToken', response.refreshToken);
-      saveTokensToPreferences(response.accessToken, response.refreshToken);
     }
     completeInteractiveSignIn();
+    clearExpiredDestination();
+    queryClient.clear();
     // Set user from login response first (includes units now)
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
@@ -414,7 +430,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(setMyCap)
       .catch(() => { setMyCap(null); });
 
-    navigate(redirectTo ?? '/dashboard');
+    navigate(signInDestination(redirectTo) ?? '/dashboard', { replace: true });
   };
 
   const loginWithGoogle = async (idToken: string, redirectTo?: string) => {
@@ -425,15 +441,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem('mfaResendAvailableAt');
       if (response.testModeCode) sessionStorage.setItem('mfaTestModeCode', response.testModeCode);
       else sessionStorage.removeItem('mfaTestModeCode');
-      navigate('/mfa-verify');
+      navigate('/mfa-verify', { replace: true, state: { returnTo: signInDestination(redirectTo) } });
       return;
     }
     if (response.accessToken && response.refreshToken) {
       tokenStore.set('accessToken', response.accessToken);
       tokenStore.set('refreshToken', response.refreshToken);
-      saveTokensToPreferences(response.accessToken, response.refreshToken);
     }
-    if (!response.requiresMfa) completeInteractiveSignIn();
+    if (!response.requiresMfa) {
+      completeInteractiveSignIn();
+      clearExpiredDestination();
+      queryClient.clear();
+    }
     setUser(response.user as any);
     if (response.requiresPasswordChange) {
       setRequiresPasswordChange(true);
@@ -451,9 +470,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => { setMyCap(null); });
 
     if (response.requiresMfa) {
-      navigate('/mfa-verify');
+      navigate('/mfa-verify', { replace: true, state: { returnTo: signInDestination(redirectTo) } });
     } else {
-      navigate(redirectTo ?? '/dashboard');
+      navigate(signInDestination(redirectTo) ?? '/dashboard', { replace: true });
     }
   };
 

@@ -3,6 +3,18 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const variant = (process.argv[2] || 'debug').toLowerCase();
+if (variant !== 'debug' && variant !== 'release') {
+  throw new Error('Specify debug or release for the Android build.');
+}
+if (variant === 'release') {
+  let api;
+  try { api = new URL(process.env.VITE_API_URL || ''); } catch { /* report below */ }
+  if (!api || api.protocol !== 'https:' || api.username || api.password ||
+      api.search || api.hash || api.pathname === '/' ||
+      /^(localhost|127\.|0\.0\.0\.0$|\[::1\]$|10\.0\.2\.2$)/i.test(api.hostname)) {
+    throw new Error('Set VITE_API_URL to the approved HTTPS office API URL before building a release.');
+  }
+}
 const gradleTask = variant === 'release' ? 'assembleRelease' : 'assembleDebug';
 const programFiles = process.env.ProgramFiles || 'C:/Program Files';
 const javaCandidates = [
@@ -17,7 +29,12 @@ if (!javaHome) {
   process.exit(1);
 }
 
-const env = { ...process.env, JAVA_HOME: javaHome };
+const env = {
+  ...process.env,
+  JAVA_HOME: javaHome,
+  CAPACITOR_ANDROID_DEBUG_NETWORK: variant === 'debug' ? '1' : '0',
+  VITE_NATIVE_DEV_NETWORK: variant === 'debug' ? '1' : '0',
+};
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const gradleCommand = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
 

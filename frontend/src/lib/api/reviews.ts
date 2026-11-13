@@ -27,6 +27,7 @@ export interface ManualReview {
 
 export interface SubmitReviewDto {
   decision: ReviewDecision;
+  expectedVersionNumber?: number;
   remarks?: string;
   findings?: Array<{
     category: string;

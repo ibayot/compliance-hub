@@ -1,5 +1,6 @@
 import {
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
@@ -10,6 +11,7 @@ import { Document } from './document.entity';
 import { UserRef } from '../../../shared/contracts/user-ref';
 
 @Entity('document_versions')
+@Index('uq_document_version_number', ['document_id', 'version_number'], { unique: true })
 export class DocumentVersion {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -35,7 +37,7 @@ export class DocumentVersion {
   @Column({ type: 'longblob', nullable: true, select: false })
   file_blob?: Buffer;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 127 })
   mime_type: string;
 
   @Column({ type: 'bigint' })

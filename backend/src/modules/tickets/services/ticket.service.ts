@@ -249,6 +249,15 @@ export class CorrectTicketRequesterDto {
   expectedUpdatedAt: string;
 }
 
+export class CorrectRatedTicketRequesterDto extends CorrectTicketRequesterDto {
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(500)
+  @Matches(/\S/, { message: 'Justification must include at least one non-space character.' })
+  @ApiProperty({ maxLength: 500 })
+  justification: string;
+}
+
 export class CorrectTicketAssigneeDto {
   @IsNotEmpty()
   @IsNumber()
@@ -2435,6 +2444,146 @@ export class TicketService implements OnModuleInit {
         saved.id,
         'requester_corrected',
         `The requester for ticket ${saved.ticketNumber} was corrected.`,
+      ).catch(() => undefined);
+    }
+    this.sseService.emitTicketUpdated(saved.id);
+    return this.getTicketById(saved.id, actorRole, actorId);
+  }
+
+  async correctRatedTicketRequester(
+    ticketId: string,
+    dto: CorrectRatedTicketRequesterDto,
+    actorId: number,
+    actorRole: UserRole,
+  ): Promise<Ticket> {
+    if (!this.roleCapSvc.isTicketRequesterCorrection(actorRole as string)) {
+      throw new ForbiddenException('Ticket Requester Correction capability is required.');
+    }
+    const justification = dto.justification?.trim();
+    if (!justification) throw new BadRequestException('A correction justification is required.');
+    if (justification.length > 500) {
+      throw new BadRequestException('Correction justification cannot exceed 500 characters.');
+    }
+
+    this.staffDirectory?.validateFields(dto.requesterId, dto.pendingStaffId, dto.requesterEmail);
+    if (!dto.pendingStaffId && (!dto.requesterId || dto.requesterId < 1)) {
+      throw new BadRequestException('A requester is required.');
+    }
+    if (dto.pendingStaffId && !this.staffDirectory) {
+      throw new BadRequestException('Staff requester completion is unavailable.');
+    }
+    let requester = dto.pendingStaffId
+      ? await this.staffDirectory!.preview(dto.pendingStaffId, dto.requesterEmail!, actorId, 'correct')
+      : await this.usersHttpClient.getUserById(dto.requesterId!);
+    if (!requester || requester.active === false) {
+      throw new BadRequestException('The selected requester does not exist or is inactive.');
+    }
+    if (requester.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Super Admin accounts cannot be selected as ticket requesters.');
+    }
+    await this.assertProxyRequesterAllowed(actorId, actorRole, requester);
+
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const ticketRepository = manager.getRepository(Ticket);
+      const locked = await ticketRepository.findOne({
+        where: { id: ticketId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) throw new NotFoundException('Ticket not found');
+      if (new Date(dto.expectedUpdatedAt).getTime() !== new Date(locked.updatedAt).getTime()) {
+        throw new ConflictException(
+          'This ticket changed after you opened the correction window. Refresh it and try again.',
+        );
+      }
+      if (locked.status !== TicketStatus.CLOSED || !locked.satisfactionSubmittedAt) {
+        throw new BadRequestException(
+          'This correction is only available for closed tickets with a submitted rating.',
+        );
+      }
+
+      await this.assertTicketReadAccess(locked, actorId, actorRole);
+      const previousRequester = await this.usersHttpClient.getUserById(Number(locked.requesterId));
+      if (!previousRequester || previousRequester.role === UserRole.USER) {
+        throw new BadRequestException(
+          'Rating correction is only available when the current requester is a non-user account.',
+        );
+      }
+      if (Number(locked.requesterId) === Number(requester.id)) {
+        throw new BadRequestException('The selected person is already the ticket requester.');
+      }
+
+      if (dto.pendingStaffId) {
+        requester = await this.staffDirectory!.complete(
+          manager,
+          dto.pendingStaffId,
+          dto.requesterEmail!,
+          actorId,
+          'correct',
+        );
+      }
+      if (!requester || requester.active === false || requester.role === UserRole.SUPER_ADMIN) {
+        throw new BadRequestException('The selected requester cannot be used for this correction.');
+      }
+      await this.assertProxyRequesterAllowed(actorId, actorRole, requester);
+      if (Number(locked.requesterId) === Number(requester.id)) {
+        throw new BadRequestException('The selected person is already the ticket requester.');
+      }
+      if (locked.assignedToId) {
+        this.assertRequesterAssignmentSeparation(locked.ticketType, locked.assignedToId, requester.id);
+      }
+
+      const event = manager.getRepository(TicketEvent).create({
+        ticketId: locked.id,
+        actorId,
+        eventType: 'rated_requester_corrected',
+        meta: JSON.stringify({
+          previousRequesterId: locked.requesterId,
+          previousRequesterName: formatPersonName(previousRequester, previousRequester.email),
+          previousRequesterRole: previousRequester.role,
+          requesterId: requester.id,
+          requesterName: formatPersonName(requester, requester.email),
+          previousRating: locked.satisfactionRating,
+          previousRatingSubmittedAt: locked.satisfactionSubmittedAt,
+          justification,
+        }),
+      });
+
+      locked.requesterId = Number(requester.id);
+      locked.requesterUnitSnapshot = captureTicketUnit(requester, 'requester_correction');
+      locked.satisfactionRating = null;
+      locked.satisfactionComment = null;
+      locked.satisfactionSubmittedAt = null;
+      locked.satisfactionFormData = null;
+      // The requester and feedback record are corrected; the completed service stays closed.
+      locked.status = TicketStatus.CLOSED;
+
+      const updated = await ticketRepository.save(locked);
+      await manager.getRepository(TicketEvent).save(event);
+      return updated;
+    });
+
+    if (dto.pendingStaffId) this.emitRequesterDirectoryUpdated(requester.id);
+    this.sendNotification(
+      [requester.id],
+      saved.id,
+      'requester_corrected',
+      `You are now the requester for ticket ${saved.ticketNumber}. Its previous rating was reset so you can provide the correct feedback.`,
+    ).catch(() => undefined);
+    this.emailService
+      .sendTicketRequesterCorrectedEmail({
+        ticketId: saved.id,
+        ticketNumber: saved.ticketNumber,
+        subject: saved.subject,
+        requesterName: formatPersonName(requester, requester.email),
+        requesterEmail: requester.email,
+      })
+      .catch(() => undefined);
+    if (saved.assignedToId && Number(saved.assignedToId) !== Number(actorId)) {
+      this.sendNotification(
+        [saved.assignedToId],
+        saved.id,
+        'requester_corrected',
+        `The requester and satisfaction record for ticket ${saved.ticketNumber} were corrected.`,
       ).catch(() => undefined);
     }
     this.sseService.emitTicketUpdated(saved.id);
@@ -4808,9 +4957,29 @@ export class TicketService implements OnModuleInit {
       ticket.satisfactionComment = dto.comment ?? null;
     }
 
-    ticket.satisfactionSubmittedAt = new Date();
-    ticket.status = TicketStatus.CLOSED;
-    const saved = await this.ticketRepo.save(ticket);
+    const satisfactionSubmittedAt = new Date();
+    const updateResult = await this.ticketRepo.update(
+      {
+        id,
+        requesterId,
+        satisfactionSubmittedAt: IsNull(),
+        status: In([TicketStatus.RESOLVED, TicketStatus.CLOSED]),
+      },
+      {
+        satisfactionRating: ticket.satisfactionRating,
+        satisfactionComment: ticket.satisfactionComment,
+        satisfactionFormData: ticket.satisfactionFormData ?? null,
+        satisfactionSubmittedAt,
+        status: TicketStatus.CLOSED,
+      },
+    );
+    if (!updateResult.affected) {
+      throw new ConflictException(
+        'The ticket changed while the rating was being submitted. Refresh the ticket and try again.',
+      );
+    }
+    const saved = await this.ticketRepo.findOne({ where: { id } });
+    if (!saved) throw new NotFoundException('Ticket not found');
     // Rating changes the ticket shown on every open ticket page.
     this.sseService.emitTicketUpdated(saved.id);
     this.logEvent(saved.id, 'closed', requesterId, undefined, false).catch(() => {});

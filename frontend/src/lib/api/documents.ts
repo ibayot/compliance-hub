@@ -1,6 +1,5 @@
-import { apiClient } from './client';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiClient, apiUrl } from './client';
+import { boundedGet, type ReadOptions } from './bounded-read';
 
 export interface Document {
   id: string;
@@ -139,6 +138,7 @@ export interface ListDocumentsParams {
   limit?: number;
   /** Focal only: return soft-deleted (archived) documents */
   archived?: boolean;
+  review_queue?: boolean;
 }
 
 export interface ListDocumentsResponse {
@@ -195,25 +195,27 @@ export const documentsApi = {
   /**
    * List documents with filters
    */
-  listDocuments: async (params?: ListDocumentsParams): Promise<ListDocumentsResponse> => {
-    const response = await apiClient.get('/documents', { params });
-    return response.data;
+  listDocuments: async (params?: ListDocumentsParams, options?: ReadOptions): Promise<ListDocumentsResponse> => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value != null) search.set(key, String(value));
+    }
+    const query = search.toString();
+    return boundedGet(`/documents${query ? `?${query}` : ''}`, options);
   },
 
   /**
    * Get document by ID
    */
-  getDocument: async (id: string): Promise<Document> => {
-    const response = await apiClient.get(`/documents/${id}`);
-    return response.data;
+  getDocument: async (id: string, options?: ReadOptions): Promise<Document> => {
+    return boundedGet(`/documents/${encodeURIComponent(id)}`, options);
   },
 
   /**
    * Get version history
    */
-  getVersionHistory: async (documentId: string): Promise<DocumentVersion[]> => {
-    const response = await apiClient.get(`/documents/${documentId}/versions`);
-    return response.data;
+  getVersionHistory: async (documentId: string, options?: ReadOptions): Promise<DocumentVersion[]> => {
+    return boundedGet(`/documents/${encodeURIComponent(documentId)}/versions`, options);
   },
 
   /**
@@ -239,7 +241,7 @@ export const documentsApi = {
    * Get download URL for a version
    */
   getDownloadUrl: (documentId: string, versionId: string): string => {
-    return `${API_URL}/documents/${documentId}/versions/${versionId}/download`;
+    return apiUrl(`/documents/${documentId}/versions/${versionId}/download`);
   },
 
   downloadVersionBlob: async (
@@ -263,24 +265,26 @@ export const documentsApi = {
    * Get preview URL for a version
    */
   getPreviewUrl: (documentId: string, versionId: string): string => {
-    return `${API_URL}/documents/${documentId}/versions/${versionId}/preview`;
+    return apiUrl(`/documents/${documentId}/versions/${versionId}/preview`);
   },
 
   /**
-   * Get preview as authenticated blob URL for inline viewers.
-   * Returns the blob URL and the content MIME type so viewers can render correctly.
+   * Fetch authenticated preview bytes for the inline viewer.
    */
-  getPreviewBlobUrl: async (
+  getPreviewBlob: async (
     documentId: string,
     versionId: string,
-  ): Promise<{ blobUrl: string; mimeType: string }> => {
-    const response = await apiClient.get(`/documents/${documentId}/versions/${versionId}/preview`, {
+    signal?: AbortSignal,
+  ): Promise<{ blob: Blob; mimeType: string }> => {
+    const response = await apiClient.get(`/documents/${encodeURIComponent(documentId)}/versions/${encodeURIComponent(versionId)}/preview`, {
       responseType: 'blob',
+      signal,
+      timeout: 30_000,
     });
     const mimeType: string =
       (response.headers['content-type'] as string | undefined)?.split(';')[0]?.trim() ||
       'application/pdf';
-    return { blobUrl: URL.createObjectURL(response.data as Blob), mimeType };
+    return { blob: response.data as Blob, mimeType };
   },
 
   /**

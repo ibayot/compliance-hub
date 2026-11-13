@@ -5,7 +5,6 @@ import {
   Param,
   Body,
   UseGuards,
-  Request,
   HttpStatus,
   HttpCode,
   Logger,
@@ -16,6 +15,8 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { ReviewService, SubmitReviewDto } from '../services/review.service';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { DocumentActor } from '../../documents/services/document-access';
 
 @ApiTags('reviews')
 @Controller('documents/:documentId/reviews')
@@ -35,19 +36,14 @@ export class ReviewController {
   @HttpCode(HttpStatus.CREATED)
   async submitReview(
     @Param('documentId') documentId: string,
-    @Body() dto: Omit<SubmitReviewDto, 'reviewer_id'>,
-    @Request() req: any,
+    @Body() dto: SubmitReviewDto,
+    @CurrentUser() actor: DocumentActor,
   ) {
-    const reviewDto: SubmitReviewDto = {
-      ...dto,
-      reviewer_id: req.user.id ?? req.user.userId,
-    };
-
-    const review = await this.reviewService.submitReview(documentId, reviewDto);
+    const review = await this.reviewService.submitReview(documentId, dto, actor);
     this.logger.log(
       JSON.stringify({
         action: 'review.submit',
-        actorId: req.user?.id ?? req.user?.userId,
+        actorId: actor.id,
         documentId,
         reviewId: review.id,
         decision: review.decision,
@@ -64,8 +60,8 @@ export class ReviewController {
   @Get('latest')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isReviewsAccess')
-  async getLatestReview(@Param('documentId') documentId: string) {
-    return this.reviewService.getLatestReview(documentId);
+  async getLatestReview(@Param('documentId') documentId: string, @CurrentUser() actor: DocumentActor) {
+    return this.reviewService.getLatestReview(documentId, actor);
   }
 
   /**
@@ -75,8 +71,8 @@ export class ReviewController {
   @Get()
   @UseGuards(CapabilityGuard)
   @RequireCapability('isReviewsAccess')
-  async getReviewHistory(@Param('documentId') documentId: string) {
-    return this.reviewService.getReviewHistory(documentId);
+  async getReviewHistory(@Param('documentId') documentId: string, @CurrentUser() actor: DocumentActor) {
+    return this.reviewService.getReviewHistory(documentId, actor);
   }
 
   /**
@@ -86,7 +82,7 @@ export class ReviewController {
   @Get('evidence-report')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isReviewsAccess')
-  async getEvidenceReport(@Param('documentId') documentId: string) {
-    return this.reviewService.getEvidenceReport(documentId);
+  async getEvidenceReport(@Param('documentId') documentId: string, @CurrentUser() actor: DocumentActor) {
+    return this.reviewService.getEvidenceReport(documentId, actor);
   }
 }

@@ -3,6 +3,7 @@ import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useState } from 'react';
 import {
+  Alert,
   Box,
   Container,
   Typography,
@@ -17,6 +18,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -24,12 +26,14 @@ import {
   Archive as ArchiveIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsApi, Document, ListDocumentsParams } from '@/lib/api/documents';
 import { unitsApi } from '@/lib/api/units';
 import DocumentList from '@/components/documents/DocumentList';
 import { useAuth } from '@/contexts/AuthContext';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 
 const documentTypes = ['Policy', 'Procedure', 'Guidelines', 'Manual', 'Report', 'Other'];
 const statusOptions = [
@@ -42,11 +46,13 @@ const statusOptions = [
 
 export default function DocumentsPage() {
   const { user, myCap } = useAuth();
+  const isPhone = useMediaQuery('(max-width:599.95px)');
   const router = useRouter();
   const queryClient = useQueryClient();
 
   const isFocal = !!myCap?.isFocal;
   const canAccessDocuments = !!myCap?.isDocumentsAccess;
+  const uploadButtonRef = useMobilePageAction('Upload Document');
 
   const [filters, setFilters] = useState<ListDocumentsParams>({
     page: 1,
@@ -60,7 +66,7 @@ export default function DocumentsPage() {
   });
 
   const [showFilters, setShowFilters] = useState(false);
-  const [documentsTab, setDocumentsTab] = useState<'active' | 'archived'>('active');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -68,19 +74,14 @@ export default function DocumentsPage() {
   const [targetDocument, setTargetDocument] = useState<Document | null>(null);
 
   // Fetch documents
-  const isArchivedTab = isFocal && documentsTab === 'archived';
+  const isArchivedTab = isFocal && searchParams.get('tab') === 'archived';
+  const documentsTab = isArchivedTab ? 'archived' : 'active';
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['documents', filters, documentsTab],
     staleTime: isArchivedTab ? 30_000 : 0,
-    placeholderData: (previousData) =>
-      previousData ?? {
-        data: [],
-        total: 0,
-        page: filters.page || 1,
-        limit: filters.limit || 20,
-      },
-    queryFn: () => {
+    retry: false,
+    queryFn: ({ signal }) => {
       const cleanFilters = { ...filters };
       // Remove empty filters
       Object.keys(cleanFilters).forEach((key) => {
@@ -89,7 +90,7 @@ export default function DocumentsPage() {
         }
       });
       cleanFilters.archived = isArchivedTab;
-      return documentsApi.listDocuments(cleanFilters);
+      return documentsApi.listDocuments(cleanFilters, { signal });
     },
   });
 
@@ -306,7 +307,7 @@ export default function DocumentsPage() {
             mb: 3,
           }}
         >
-          <Typography variant="h4">Documents</Typography>
+          <Typography component="h1" variant="h4">Documents</Typography>
           <Box
             sx={{
               display: 'flex',
@@ -326,6 +327,7 @@ export default function DocumentsPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
+              ref={uploadButtonRef}
               onClick={() => router.push('/governance/documents/upload')}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
@@ -423,8 +425,30 @@ export default function DocumentsPage() {
           <Paper elevation={1} sx={{ mb: 3 }}>
             <Tabs
               value={documentsTab}
-              onChange={(_, value) => setDocumentsTab(value)}
+              onChange={(_, value) => {
+                setFilters((current) => ({ ...current, page: 1 }));
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current);
+                  if (value === 'archived') next.set('tab', 'archived');
+                  else next.delete('tab');
+                  return next;
+                });
+              }}
+              variant={isPhone ? 'fullWidth' : 'standard'}
               aria-label="Documents tabs"
+              sx={{
+                width: '100%',
+                minHeight: { xs: 56, sm: 48 },
+                '& .MuiTab-root': {
+                  minWidth: 0,
+                  minHeight: { xs: 56, sm: 48 },
+                  maxWidth: '100%',
+                  px: { xs: 0.5, sm: 2 },
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                  whiteSpace: { xs: 'normal', sm: 'nowrap' },
+                  lineHeight: 1.2,
+                },
+              }}
             >
               <Tab label="Active Documents" value="active" />
               <Tab label="Archived Documents" value="archived" />
@@ -433,12 +457,16 @@ export default function DocumentsPage() {
         )}
 {/* Filters */}
 {/* Document List */}
-<DocumentList
+{isError ? <Alert severity="error" action={<Button color="inherit" disabled={isFetching} onClick={() => void refetch()}>Retry</Button>}>
+  {(error as { response?: { status?: number } })?.response?.status === 403
+    ? 'Your account no longer has access to this document list.'
+    : `Could not load ${isArchivedTab ? 'archived' : 'active'} documents.`}
+</Alert> : <DocumentList
           documents={data?.data || []}
           total={data?.total || 0}
           page={filters.page || 1}
           limit={filters.limit || 20}
-          loading={isLoading && !isArchivedTab}
+          loading={isLoading}
           onPageChange={handlePageChange}
           onLimitChange={handleLimitChange}
           onReturn={isFocal ? undefined : openReturnDialog}
@@ -451,7 +479,7 @@ export default function DocumentsPage() {
           hideUnitColumn={isFocal}
           hideUploaderColumn={isFocal}
           archivedMode={isArchivedTab}
-        />
+        />}
 </WorkspaceLayout>
 
 </Box>

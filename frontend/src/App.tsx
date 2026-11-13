@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -67,7 +67,7 @@ function ProtectedDashboard({
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search + location.hash }} />;
   }
 
   // Deep linking allowed
@@ -81,15 +81,13 @@ function ProtectedDashboard({
     capabilityKeys.length === 0 || capabilityKeys.some((key) => Boolean(myCap?.[key]));
   const isAllowed = hasCapability;
 
-  if (!isAllowed) {
-    return <Navigate to="/dashboard" replace state={{ deniedPath: location.pathname }} />;
-  }
-
   return (
     <DashboardLayout>
-      <Suspense fallback={<PageLoadingFallback />}>
-        {children}
-      </Suspense>
+      <RouteLoadErrorBoundary key={location.pathname}>
+        <Suspense fallback={<PageLoadingFallback />}>
+          {isAllowed ? children : <RouteNotice denied />}
+        </Suspense>
+      </RouteLoadErrorBoundary>
     </DashboardLayout>
   );
 }
@@ -159,12 +157,25 @@ function TicketListEntry() {
     : <TicketsPage />;
 }
 
-function UnknownRouteRedirect() {
+function RouteNotice({ denied = false }: { denied?: boolean }) {
+  const { isAuthenticated } = useAuth();
+  return (
+    <Box display="flex" flexDirection="column" gap={1.5} alignItems="center" justifyContent="center" minHeight="45vh" px={2} textAlign="center">
+      <Typography component="h1" variant="h5">{denied ? 'Page unavailable for your account' : 'Page not found'}</Typography>
+      <Typography color="text.secondary" maxWidth={440}>
+        {denied ? 'Your account doesn’t have access to this page. Contact your administrator if you need access.' : 'Check the link or choose another page.'}
+      </Typography>
+      <Button component={Link} to={isAuthenticated ? '/dashboard' : '/login'} variant="contained" replace>
+        {isAuthenticated ? 'Go to Dashboard' : 'Go to Sign In'}
+      </Button>
+    </Box>
+  );
+}
+
+function UnknownRoute() {
   const { isAuthenticated, loading } = useAuth();
-  if (loading) {
-    return <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh"><CircularProgress /></Box>;
-  }
-  return <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />;
+  if (loading) return <PageLoadingFallback />;
+  return isAuthenticated ? <ProtectedDashboard><RouteNotice /></ProtectedDashboard> : <RouteNotice />;
 }
 
 function AppearancePreferenceLoader() {
@@ -206,10 +217,11 @@ function AppearancePreferenceLoader() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <>
     <AppearancePreferenceLoader />
-    <RouteLoadErrorBoundary>
+    <RouteLoadErrorBoundary key={pathname.startsWith('/admin/') || pathname.startsWith('/governance/') || pathname.startsWith('/operations/') || pathname === '/dashboard' ? 'application' : pathname}>
     <Suspense fallback={<PageLoadingFallback />}>
     <Routes>
       <Route path="/" element={<HomePage />} />
@@ -245,6 +257,10 @@ export default function App() {
             <DocumentUploadPage />
           </ProtectedDashboard>
         }
+      />
+      <Route
+        path="/governance/documents/archived"
+        element={<ProtectedDashboard requiredCapability="isDocumentsAccess"><Navigate to="/governance/documents?tab=archived" replace /></ProtectedDashboard>}
       />
       <Route
         path="/governance/documents/:id"
@@ -426,7 +442,7 @@ export default function App() {
         }
       />
 
-      <Route path="*" element={<UnknownRouteRedirect />} />
+      <Route path="*" element={<UnknownRoute />} />
     </Routes>
     </Suspense>
     </RouteLoadErrorBoundary>

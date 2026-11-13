@@ -35,12 +35,17 @@ Preview(fileId, safeMetadata)
 
 The server owns attachment identity/access; the preview owner manages fetch/render state and temporary resources.
 
+Key loading, errors, and resources to the selected record and version. On selection change, cancel or discard the old response and clean up resources. If the authenticated request already returns bytes, prefer passing them directly to the renderer when supported. Isolate generated markup from the application's scripts, storage, and navigation authority. Select an appropriate viewport fit and keep navigation, zoom and recovery reachable.
+
 ## Rules
 
 - **DS-PREVIEW-001** — Preview access MUST be authorized independently of the presence of a file link.
 - **DS-PREVIEW-002** — Unsupported and failed previews MUST provide truthful explanation and an allowed alternative.
 - **DS-PREVIEW-003** — Temporary URLs/resources MUST be revoked or expired according to their lifecycle.
 - **DS-PREVIEW-004** — Preview rendering MUST use an approved safe-content boundary and supported format policy.
+
+- **DS-PREVIEW-005** — The visible preview MUST remain bound to the active selection. A delayed render or response MUST NOT replace a newer selection.
+- **DS-PREVIEW-006** — When the renderer depends on a packaged asset or worker, verification MUST confirm that the deployed route serves the expected bytes and MIME type under the deployed browser security policy.
 
 ## Accessibility
 
@@ -52,7 +57,7 @@ Follow file security guidance for content isolation, short-lived access, safe re
 
 ## Validation
 
-Test supported/unsupported files, denied/expired access, malformed content, cleanup, keyboard controls, and large files.
+Test supported/unsupported files, denied/expired access, malformed content, cleanup, keyboard controls, and large files. Open a real authorized fixture through the deployed frontend, verify rendered content at narrow and wide widths, switch versions during a pending load, and test the fallback. Distinguish API fetch, packaged asset response, browser policy, renderer startup, and visible rendering when diagnosing failures.
 
 ## Related Patterns
 

@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { apiClient } from '@/lib/api/client';
 
 export enum ReviewDecision {
   COMPLIANT = 'compliant',
@@ -81,19 +79,14 @@ export const reviewsApi = {
   submitReview: async (
     documentId: string,
     data: SubmitReviewDto,
-    token: string,
   ): Promise<ManualReview> => {
-    const response = await axios.post(`${API_URL}/documents/${documentId}/reviews`, data, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await apiClient.post(`/documents/${documentId}/reviews`, data);
     return response.data;
   },
 
-  getLatestReview: async (documentId: string, token: string): Promise<ManualReview | null> => {
+  getLatestReview: async (documentId: string): Promise<ManualReview | null> => {
     try {
-      const response = await axios.get(`${API_URL}/documents/${documentId}/reviews/latest`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiClient.get(`/documents/${documentId}/reviews/latest`);
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 404) {
@@ -103,44 +96,33 @@ export const reviewsApi = {
     }
   },
 
-  getReviewHistory: async (documentId: string, token: string): Promise<ManualReview[]> => {
-    const response = await axios.get(`${API_URL}/documents/${documentId}/reviews`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  getReviewHistory: async (documentId: string): Promise<ManualReview[]> => {
+    const response = await apiClient.get(`/documents/${documentId}/reviews`);
     return response.data;
   },
 
-  getEvidenceReport: async (documentId: string, token: string): Promise<EvidenceReport> => {
-    const response = await axios.get(`${API_URL}/documents/${documentId}/reviews/evidence-report`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  getEvidenceReport: async (documentId: string): Promise<EvidenceReport> => {
+    const response = await apiClient.get(`/documents/${documentId}/reviews/evidence-report`);
     return response.data;
   },
 };
 
 // Comparisons API
 export const comparisonsApi = {
-  compareVersions: async (data: CompareVersionsDto, token: string): Promise<VersionComparison> => {
-    const response = await axios.post(`${API_URL}/comparisons`, data, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  compareVersions: async (data: CompareVersionsDto): Promise<VersionComparison> => {
+    const response = await apiClient.post(`/comparisons`, data);
     return response.data;
   },
 
-  getComparison: async (comparisonId: string, token: string): Promise<VersionComparison> => {
-    const response = await axios.get(`${API_URL}/comparisons/${comparisonId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  getComparison: async (comparisonId: string): Promise<VersionComparison> => {
+    const response = await apiClient.get(`/comparisons/${comparisonId}`);
     return response.data;
   },
 
   getDocumentComparisons: async (
     documentId: string,
-    token: string,
   ): Promise<VersionComparison[]> => {
-    const response = await axios.get(`${API_URL}/comparisons/document/${documentId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await apiClient.get(`/comparisons/document/${documentId}`);
     return response.data;
   },
 };

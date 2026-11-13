@@ -9,6 +9,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import * as mammoth from 'mammoth';
 import * as path from 'path';
+import { DocumentActor, isDocumentInScope } from './document-access';
 
 export interface CreateVersionDto {
   document_id: string;
@@ -44,29 +45,24 @@ export class VersionService {
     private readonly roleCapSvc: RoleCapabilitiesService,
   ) {}
 
-  private async getVersionWithBlobs(id: string, actor?: any): Promise<DocumentVersion> {
+  private async getVersionWithBlobs(documentId: string, id: string, actor: DocumentActor): Promise<DocumentVersion> {
     const version = await this.versionRepo
       .createQueryBuilder('version')
       .leftJoinAndSelect('version.document', 'document')
       .addSelect(['version.file_blob', 'version.preview_blob'])
       .where('version.id = :id', { id })
+      .andWhere('version.document_id = :documentId', { documentId })
       .getOne();
 
-    if (!version) {
-      throw new NotFoundException(`Version with ID ${id} not found`);
+    const isFocal = this.roleCapSvc.isFocal(actor.role);
+    if (!version || version.document_id !== documentId || !isDocumentInScope(version.document, actor, isFocal)) {
+      throw new NotFoundException('Document version not found');
     }
 
-    if (actor) {
-      const role = String(actor.role || '');
-      const privileged = this.roleCapSvc.isDocumentsAccess(role);
-      const unitIds = Array.isArray(actor.units)
-        ? actor.units.map((unit: any) => Number(typeof unit === 'object' ? unit.id : unit))
-        : [];
-      const canAccess = privileged ||
-        Number(version.document?.uploaded_by) === Number(actor.id) ||
-        unitIds.includes(Number(version.document?.unit_id));
-      if (!canAccess) throw new ForbiddenException('You are not authorized to access this document.');
-    }
+    const unitIds = (actor.units ?? []).map((unit) => Number(typeof unit === 'object' ? unit.id : unit));
+    const canAccess = this.roleCapSvc.isDocumentsAccess(actor.role) ||
+      Number(version.document.uploaded_by) === Number(actor.id) || unitIds.includes(Number(version.document.unit_id));
+    if (!canAccess) throw new ForbiddenException('You are not authorized to access this document.');
 
     return version;
   }
@@ -74,16 +70,17 @@ export class VersionService {
   /**
    * Create a new version of an existing document
    */
-  async createVersion(dto: CreateVersionDto): Promise<DocumentVersion> {
+  async createVersion(dto: CreateVersionDto, actor: DocumentActor): Promise<DocumentVersion> {
     const { document_id, uploaded_by, change_notes, file } = dto;
+    if (!file?.buffer?.length) throw new BadRequestException('Choose a document to upload.');
 
     // Validate document exists
     const document = await this.documentRepo.findOne({
       where: { id: document_id, is_deleted: false },
     });
 
-    if (!document) {
-      throw new NotFoundException(`Document with ID ${document_id} not found`);
+    if (!document || !isDocumentInScope(document, actor, this.roleCapSvc.isFocal(actor.role))) {
+      throw new NotFoundException('Document not found');
     }
 
     // Validate file type
@@ -97,34 +94,15 @@ export class VersionService {
       throw new BadRequestException('Only valid DOCX and PDF files are allowed');
     }
 
-    // Get current version number
-    const latestVersion = await this.versionRepo.findOne({
-      where: { document_id },
-      order: { version_number: 'DESC' },
-    });
-
-    const nextVersionNumber = latestVersion ? latestVersion.version_number + 1 : 1;
-
-    // Calculate checksum
     const checksum = this.storageService.calculateChecksum(file.buffer);
-
-    // Check if file content is different from latest version
-    if (latestVersion && latestVersion.checksum === checksum) {
-      throw new BadRequestException('File content is identical to the latest version');
-    }
-
-    // Save file to storage
+    const extractedText = await this.extractInitialText(file);
     const filePath = await this.storageService.saveFile(
       file.buffer,
       safeName,
       'documents',
     );
 
-    // Create version entity
-    const extractedText = await this.extractInitialText(file);
-    const version = await this.versionRepo.save({
-      document_id,
-      version_number: nextVersionNumber,
+    const versionData = {
       file_name: safeName,
       file_path: filePath,
       file_blob: file.buffer,
@@ -132,18 +110,42 @@ export class VersionService {
       file_size: file.size,
       checksum,
       preview_path: isPdf ? filePath : null,
-      preview_blob: isPdf ? file.buffer : null,
+      preview_blob: isPdf ? file.buffer : undefined,
       extracted_text: extractedText,
       change_notes,
       uploaded_by,
-    } as any);
+    };
 
-    // Update document's current version and reset status
-    document.current_version = nextVersionNumber;
-    document.status = DocumentStatus.READY;
-    document.extracted_text = extractedText;
-    document.file_blob = file.buffer;
-    await this.documentRepo.save(document);
+    let version: DocumentVersion;
+    try {
+      version = await this.documentRepo.manager.transaction(async (manager) => {
+        const documents = manager.getRepository(Document);
+        const versions = manager.getRepository(DocumentVersion);
+        const parent = await documents.findOne({
+          where: { id: document_id, is_deleted: false },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!parent || !isDocumentInScope(parent, actor, this.roleCapSvc.isFocal(actor.role))) {
+          throw new NotFoundException('Document not found');
+        }
+        const latest = await versions.findOne({ where: { document_id }, order: { version_number: 'DESC' } });
+        if (latest?.checksum === checksum) {
+          throw new BadRequestException('File content is identical to the latest version');
+        }
+        const versionNumber = Math.max(latest?.version_number ?? 0, parent.current_version) + 1;
+        const saved = await versions.save({ ...versionData, document_id, version_number: versionNumber });
+        await documents.update(document_id, {
+          current_version: versionNumber,
+          status: DocumentStatus.PENDING,
+          extracted_text: extractedText,
+          file_blob: file.buffer,
+        });
+        return saved;
+      });
+    } catch (error) {
+      await this.storageService.discardUnreferencedUpload(filePath, () => this.versionRepo.existsBy({ file_path: filePath }));
+      throw error;
+    }
 
     // Queue document processing job
     void this.documentQueue
@@ -151,13 +153,17 @@ export class VersionService {
         documentId: document_id,
         versionId: version.id,
       })
-      .catch((error) => {
+      .catch(async (error) => {
         this.logger.warn(
           `Background processing queue unavailable for version ${version.id}: ${error?.message || 'unknown error'}`,
         );
+        await this.documentRepo.update(
+          { id: document_id, current_version: version.version_number, status: DocumentStatus.PENDING },
+          { status: DocumentStatus.FAILED },
+        ).catch(() => this.logger.warn('Could not record the version processing failure.'));
       });
 
-    this.logger.log(`New version created: ${version.id} (v${nextVersionNumber})`);
+    this.logger.log(`New version created: ${version.id} (v${version.version_number})`);
 
     return version;
   }
@@ -181,12 +187,12 @@ export class VersionService {
   /**
    * Get file buffer for download
    */
-  async downloadVersion(id: string, actor?: any): Promise<{
+  async downloadVersion(documentId: string, id: string, actor: DocumentActor): Promise<{
     buffer: Buffer;
     fileName: string;
     mimeType: string;
   }> {
-    const version = await this.getVersionWithBlobs(id, actor);
+    const version = await this.getVersionWithBlobs(documentId, id, actor);
 
     const buffer = version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
@@ -200,11 +206,11 @@ export class VersionService {
   /**
    * Get preview for a version (PDF or HTML fallback)
    */
-  async getPreview(id: string, actor?: any): Promise<{
+  async getPreview(documentId: string, id: string, actor: DocumentActor): Promise<{
     buffer: Buffer;
     mimeType: string;
   }> {
-    const version = await this.getVersionWithBlobs(id, actor);
+    const version = await this.getVersionWithBlobs(documentId, id, actor);
 
     // Priority 1: explicit preview blob (HTML or PDF generated by processor)
     if (version.preview_blob) {

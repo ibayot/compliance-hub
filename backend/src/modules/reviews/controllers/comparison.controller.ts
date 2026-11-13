@@ -5,7 +5,6 @@ import {
   Param,
   Body,
   UseGuards,
-  Request,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
@@ -15,6 +14,8 @@ import { RolesGuard } from '../../../common/guards/roles.guard';
 import { CapabilityGuard } from '../../../common/guards/capability.guard';
 import { RequireCapability } from '../../../common/decorators/require-capability.decorator';
 import { ComparisonService, CompareVersionsDto } from '../services/comparison.service';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import type { DocumentActor } from '../../documents/services/document-access';
 
 @ApiTags('reviews')
 @Controller('comparisons')
@@ -31,15 +32,10 @@ export class ComparisonController {
   @RequireCapability('isReviewsManage')
   @HttpCode(HttpStatus.CREATED)
   async compareVersions(
-    @Body() dto: Omit<CompareVersionsDto, 'compared_by_id'>,
-    @Request() req: any,
+    @Body() dto: CompareVersionsDto,
+    @CurrentUser() actor: DocumentActor,
   ) {
-    const compareDto: CompareVersionsDto = {
-      ...dto,
-      compared_by_id: req.user.userId,
-    };
-
-    return this.comparisonService.compareVersions(compareDto);
+    return this.comparisonService.compareVersions(dto, actor);
   }
 
   /**
@@ -49,8 +45,8 @@ export class ComparisonController {
   @Get(':id')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isReviewsAccess')
-  async getComparison(@Param('id') id: string) {
-    return this.comparisonService.getComparison(id);
+  async getComparison(@Param('id') id: string, @CurrentUser() actor: DocumentActor) {
+    return this.comparisonService.getComparison(id, actor);
   }
 
   /**
@@ -60,7 +56,7 @@ export class ComparisonController {
   @Get('document/:documentId')
   @UseGuards(CapabilityGuard)
   @RequireCapability('isReviewsAccess')
-  async getDocumentComparisons(@Param('documentId') documentId: string) {
-    return this.comparisonService.getDocumentComparisons(documentId);
+  async getDocumentComparisons(@Param('documentId') documentId: string, @CurrentUser() actor: DocumentActor) {
+    return this.comparisonService.getDocumentComparisons(documentId, actor);
   }
 }

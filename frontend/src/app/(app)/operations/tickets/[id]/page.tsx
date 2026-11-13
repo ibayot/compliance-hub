@@ -53,6 +53,7 @@ import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
 import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 import {
   ticketsApi,
   ticketSettingsApi,
@@ -259,6 +260,7 @@ export default function TicketDetailPage() {
   const [imageHistory, setImageHistory] = useState<{oldPath: string; newPath: string} | null>(null);
   // Status/resolution update (staff)
   const [editingStatus, setEditingStatus] = useState(false);
+  const statusEditorRef = useRef<HTMLDivElement | null>(null);
   const [claimingOvertime, setClaimingOvertime] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [newPriority, setNewPriority] = useState('');
@@ -287,6 +289,8 @@ export default function TicketDetailPage() {
   const [pendingRequesterEmail, setPendingRequesterEmail] = useState('');
   const [correctedRequesterId, setCorrectedRequesterId] = useState<number | ''>('');
   const [requesterSnapshotUpdatedAt, setRequesterSnapshotUpdatedAt] = useState('');
+  const [requesterCorrectionMode, setRequesterCorrectionMode] = useState<'standard' | 'rated'>('standard');
+  const [requesterCorrectionJustification, setRequesterCorrectionJustification] = useState('');
   const [savingRequesterCorrection, setSavingRequesterCorrection] = useState(false);
 
   const [assigneeCorrectionDialogOpen, setAssigneeCorrectionDialogOpen] = useState(false);
@@ -386,6 +390,13 @@ export default function TicketDetailPage() {
     !!myCap?.isTicketRequesterCorrection &&
     !!ticket &&
     ['assigned', 'in_progress', 'resolved'].includes(ticket.status);
+  const canCorrectRatedRequester =
+    !!myCap?.isTicketRequesterCorrection &&
+    !!ticket &&
+    ticket.status === 'closed' &&
+    !!ticket.satisfactionSubmittedAt &&
+    !!ticket.requester?.role &&
+    ticket.requester.role !== 'user';
   const canCorrectAssignee =
     !!myCap?.isTicketRequesterCorrection &&
     !!ticket &&
@@ -949,6 +960,33 @@ export default function TicketDetailPage() {
     }
   };
 
+  const handleClaimOvertime = async () => {
+    if (!ticket || claimingOvertime) return;
+    setClaimingOvertime(true);
+    try {
+      setTicket(await ticketsApi.claimOvertime(ticket.id));
+      await fetchTicket();
+      await fetchEvents();
+      enqueueSnackbar('Ticket acquired and assigned to you.', { variant: 'success' });
+    } catch (error: any) {
+      enqueueSnackbar(error.response?.data?.message || 'Unable to acquire ticket.', { variant: 'error' });
+      if ([403, 409].includes(error.response?.status)) {
+        setTicket(null);
+        router.push('/operations/my-tickets');
+      }
+    } finally {
+      setClaimingOvertime(false);
+    }
+  };
+
+  const updateStatusButtonRef = useMobilePageAction('Update Status', 'edit');
+  useEffect(() => {
+    if (!editingStatus) return;
+    const editor = statusEditorRef.current;
+    editor?.focus({ preventScroll: true });
+    editor?.scrollIntoView({ block: 'nearest' });
+  }, [editingStatus]);
+
   const handleConfirmDuplicate = async () => {
     // Step 2: After confirmation, load the requester's open tickets for the picker
     try {
@@ -990,11 +1028,13 @@ export default function TicketDetailPage() {
     }
   };
 
-  const openRequesterCorrection = async () => {
+  const openRequesterCorrection = async (mode: 'standard' | 'rated' = 'standard') => {
     if (!ticket) return;
     setRequesterSnapshotUpdatedAt(ticket.updatedAt);
     setCorrectedRequesterId('');
     setPendingRequesterEmail('');
+    setRequesterCorrectionMode(mode);
+    setRequesterCorrectionJustification('');
     try {
       const users = await usersApi.listTicketRequesters();
       setRequesterOptions(
@@ -1010,6 +1050,10 @@ export default function TicketDetailPage() {
 
   const handleRequesterCorrection = async () => {
     if (!correctedRequesterId || !requesterSnapshotUpdatedAt) return;
+    if (requesterCorrectionMode === 'rated' && !requesterCorrectionJustification.trim()) {
+      enqueueSnackbar('Enter a justification for resetting this rating.', { variant: 'warning' });
+      return;
+    }
     const pending = requesterOptions.find((option) => option.id === correctedRequesterId && option.pendingStaffId);
     if (Number(correctedRequesterId) < 0 && !pending) {
       enqueueSnackbar('The requester list changed. Please reopen the correction window.', { variant: 'warning' });
@@ -1021,16 +1065,32 @@ export default function TicketDetailPage() {
     }
     setSavingRequesterCorrection(true);
     try {
-      const updated = await ticketsApi.correctRequester(
-        ticketId,
-        Number(correctedRequesterId),
-        requesterSnapshotUpdatedAt,
-        pending ? {pendingStaffId: pending.pendingStaffId!, requesterEmail: pendingRequesterEmail.trim()} : undefined,
-      );
+      const pendingRequester = pending
+        ? { pendingStaffId: pending.pendingStaffId!, requesterEmail: pendingRequesterEmail.trim() }
+        : undefined;
+      const updated = requesterCorrectionMode === 'rated'
+        ? await ticketsApi.correctRatedRequester(
+            ticketId,
+            Number(correctedRequesterId),
+            requesterSnapshotUpdatedAt,
+            requesterCorrectionJustification.trim(),
+            pendingRequester,
+          )
+        : await ticketsApi.correctRequester(
+            ticketId,
+            Number(correctedRequesterId),
+            requesterSnapshotUpdatedAt,
+            pendingRequester,
+          );
       setTicket(updated);
       setRequesterDialogOpen(false);
       await fetchEvents();
-      enqueueSnackbar('Requested For was corrected.', { variant: 'success' });
+      enqueueSnackbar(
+        requesterCorrectionMode === 'rated'
+          ? 'Requester corrected and previous rating reset.'
+          : 'Requested For was corrected.',
+        { variant: 'success' },
+      );
     } catch (err: any) {
       enqueueSnackbar(err?.response?.data?.message || 'Failed to correct Requested For.', {
         variant: 'error',
@@ -1265,7 +1325,7 @@ export default function TicketDetailPage() {
         <Button
           startIcon={<BackIcon />}
           onClick={() => router.push(ticketListPath)}
-          sx={{ mt: 2 }}
+          sx={{ mt: 2, display: { xs: 'none', md: 'inline-flex' } }}
         >
           Back to Tickets
         </Button>
@@ -1305,7 +1365,8 @@ export default function TicketDetailPage() {
       setSatDialogOpen(true);
     } },
     resolutionTime: { label: 'Correct Resolution Time', icon: <ResolutionTimeIcon fontSize="small" />, onClick: openResolutionOverrideDialog },
-    requester: { label: `Correct ${requesterLabel}`, icon: <CorrectionIcon fontSize="small" />, onClick: openRequesterCorrection },
+    requester: { label: `Correct ${requesterLabel}`, icon: <CorrectionIcon fontSize="small" />, onClick: () => openRequesterCorrection('standard') },
+    ratedRequester: { label: 'Correct Requester & Reset Rating', icon: <CorrectionIcon fontSize="small" />, onClick: () => openRequesterCorrection('rated') },
     assignee: { label: 'Correct Assigned To', icon: <CorrectionIcon fontSize="small" />, onClick: openAssigneeCorrection },
   };
   const detailActionKeys = getTicketDetailActionKeys({
@@ -1313,7 +1374,8 @@ export default function TicketDetailPage() {
     isDisposal: !!ticket.category?.name?.toLowerCase().includes('disposal'), isTechnician,
     hideTopActionButtons, hasAcceptedEscalation: !!hasAcceptedEscalation, isAcceptedEscalationFocal: !!isAcceptedEscalationFocal,
     canReassign: !!canReassign, canEscalateNow: !!canEscalateNow, isRegularUser, isRequester,
-    canSatisfaction, canOverrideResolutionTime, canCorrectTicketRecord, canCorrectAssignee: canCorrectAssignee && !!ticket.assignedToId,
+    canSatisfaction, canOverrideResolutionTime, canCorrectTicketRecord, canCorrectRatedRequester,
+    canCorrectAssignee: canCorrectAssignee && !!ticket.assignedToId,
   });
 
   return (
@@ -1321,7 +1383,7 @@ export default function TicketDetailPage() {
 <Button
         startIcon={<BackIcon />}
         onClick={() => router.push(ticketListPath)}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2, display: { xs: 'none', md: 'inline-flex' } }}
       >
         Back to Tickets
       </Button>
@@ -1526,14 +1588,9 @@ export default function TicketDetailPage() {
 
             {/* Keep the main action visible; secondary actions retain the same guards. */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
-              {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={async () => {
-                setClaimingOvertime(true);
-                try { setTicket(await ticketsApi.claimOvertime(ticket.id)); await fetchTicket(); await fetchEvents(); enqueueSnackbar('Ticket acquired and assigned to you.', { variant: 'success' }); }
-                catch (e: any) { enqueueSnackbar(e.response?.data?.message || 'Unable to acquire ticket.', { variant: 'error' }); if ([403, 409].includes(e.response?.status)) { setTicket(null); router.push('/operations/my-tickets'); } }
-                finally { setClaimingOvertime(false); }
-              }}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
+              {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={handleClaimOvertime}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
               {detailActionKeys.includes('updateStatus') && (
-                <Button variant="contained" size="small" startIcon={<EditIcon />}
+                <Button ref={updateStatusButtonRef} variant="contained" size="small" startIcon={<EditIcon />}
                   onClick={detailActions.updateStatus.onClick} sx={{ whiteSpace: 'nowrap' }}>
                   Update Status
                 </Button>
@@ -1551,7 +1608,8 @@ export default function TicketDetailPage() {
           </Alert>}
 
           {editingStatus && !hideTopActionButtons && canUpdateStatusNow && (
-            <Box mt={3} p={2} bgcolor="action.hover" borderRadius={1}>
+            <Box ref={statusEditorRef} tabIndex={-1} role="region" aria-label="Update Ticket"
+              mt={3} p={2} bgcolor="action.hover" borderRadius={1} sx={{ scrollMarginBlock: '80px' }}>
               <Typography variant="subtitle2" gutterBottom>
                 Update Ticket
               </Typography>
@@ -2542,6 +2600,7 @@ export default function TicketDetailPage() {
                   sla_schedule_resumed: 'SLA Resumed for Work Time',
                   resolution_time_overridden: 'Resolution Time Corrected',
                   requester_corrected: 'Requested For Corrected',
+                  rated_requester_corrected: 'Requester Corrected & Rating Reset',
                   assignee_corrected: 'Assigned To Corrected',
                   attachment_replaced: 'Image Replaced',
                 };
@@ -2645,6 +2704,12 @@ export default function TicketDetailPage() {
                       {ev.eventType === 'requester_corrected' && ev.meta?.requesterName && (
                         <Typography variant="caption" color="text.secondary" display="block">
                           → {String(ev.meta.requesterName)}
+                        </Typography>
+                      )}
+                      {ev.eventType === 'rated_requester_corrected' && ev.meta?.requesterName && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {ev.meta.previousRequesterName ? `${String(ev.meta.previousRequesterName)} → ` : ''}
+                          {String(ev.meta.requesterName)} · previous rating reset
                         </Typography>
                       )}
                       {ev.eventType === 'assignee_corrected' && ev.meta?.assigneeName && (
@@ -2772,10 +2837,16 @@ export default function TicketDetailPage() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Correct Requested For</DialogTitle>
+        <DialogTitle>
+          {requesterCorrectionMode === 'rated'
+            ? 'Correct Requester and Reset Rating'
+            : 'Correct Requested For'}
+        </DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2, mt: 0.5 }}>
-            This changes the ticket owner. The original staff member remains recorded as Filed By.
+            {requesterCorrectionMode === 'rated'
+              ? 'Use this when a closed ticket was rated under an incorrectly selected non-user account. The ticket stays closed; its current rating is cleared so the corrected requester can rate it. The previous rating and this correction remain in the history.'
+              : 'This changes the ticket owner. The original staff member remains recorded as Filed By.'}
           </Alert>
           <Autocomplete
             options={requesterOptions}
@@ -2791,6 +2862,20 @@ export default function TicketDetailPage() {
               value={pendingRequesterEmail} onChange={(event) => setPendingRequesterEmail(event.target.value)}
               inputProps={{ maxLength: 100 }} helperText="A valid, allowed email is required to save this requester correction." />
           )}
+          {requesterCorrectionMode === 'rated' && (
+            <TextField
+              label="Justification"
+              required
+              fullWidth
+              multiline
+              minRows={3}
+              sx={{ mt: 2 }}
+              value={requesterCorrectionJustification}
+              onChange={(event) => setRequesterCorrectionJustification(event.target.value)}
+              inputProps={{ maxLength: 500 }}
+              helperText={`${requesterCorrectionJustification.length}/500 · Recorded in ticket history.`}
+            />
+          )}
         </DialogContent>
         <DialogActions>
           <Button
@@ -2802,9 +2887,17 @@ export default function TicketDetailPage() {
           <Button
             variant="contained"
             onClick={handleRequesterCorrection}
-            disabled={!correctedRequesterId || savingRequesterCorrection}
+            disabled={
+              !correctedRequesterId ||
+              savingRequesterCorrection ||
+              (requesterCorrectionMode === 'rated' && !requesterCorrectionJustification.trim())
+            }
           >
-            {savingRequesterCorrection ? 'Saving…' : 'Save Correction'}
+            {savingRequesterCorrection
+              ? 'Saving…'
+              : requesterCorrectionMode === 'rated'
+                ? 'Correct Requester & Reset Rating'
+                : 'Save Correction'}
           </Button>
         </DialogActions>
       </Dialog>

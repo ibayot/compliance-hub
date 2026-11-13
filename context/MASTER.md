@@ -17,6 +17,8 @@ Do not read every file or every index. The [catalog](INDEX.md) is for discovery 
 | Task | Start with | Add selectively |
 | --- | --- | --- |
 | Product definition or new application | [intake](application/intake.md), [workflow completeness](application/workflow-completeness.md), [application build](workflows/application-build-workflow.md), [profile template](templates/application-profile-template.md) | Goals, domain questions, field/consumer mapping, owner operations and essential entry-to-outcome evidence |
+| Web UI/UX design or review | [Web UI and UX](design-system/page-patterns/web-ui-ux-pattern.md), [interface quality](quality/ui-quality-pattern.md) | Exact page and element patterns; profile-enabled browser guidance |
+| Mobile UI/UX design or review | [Mobile UI and UX](design-system/page-patterns/mobile-ui-ux-pattern.md), [interface quality](quality/ui-quality-pattern.md) | Responsive actions and data views; add lifecycle or permissions for profile-enabled installed or native targets |
 | UI component or consistency | [UI principles](foundations/ui-principles.md), [design catalog](design-system/INDEX.md) | Exact component, interaction, page, accessibility, active framework |
 | Substantive UI readability, usability or performance | [UI quality](quality/ui-quality-pattern.md), [UI principles](foundations/ui-principles.md) | Populated/long-content states, supported devices, keyboard behavior and proportionate measurements |
 | Configurable reports, saved templates or export | [reporting](domain/reporting-pattern.md), [report builder](domain/report-builder-pattern.md) | Application report contract, row/field scope, unknown-history coverage, all-options/detail/print layout and payload budgets |
@@ -24,13 +26,14 @@ Do not read every file or every index. The [catalog](INDEX.md) is for discovery 
 | Frontend state or API use | [frontend architecture](architecture/frontend-pattern.md), [API client](api-and-integrations/api-client-pattern.md) | Active framework state pack; list/form/SSE patterns |
 | Backend module, endpoint, or validation | [backend architecture](architecture/backend-pattern.md), [API contract](api-and-integrations/rest-contract-pattern.md) | Active language/framework, authorization, data |
 | Authorization or identity | [security catalog](security/INDEX.md) | Exact identity/authorization control and application capability overlay |
-| Files, previews, or attachment replacement | [file storage](infrastructure/file-storage-pattern.md), [file security](security/file-handling-pattern.md) | File picker, domain ownership, API limits, container storage |
+| Files, previews, or attachment replacement | [file storage](infrastructure/file-storage-pattern.md), [file security](security/file-handling-pattern.md) | For previews or replacement, add [preview and replacement security](security/files/preview-replacement-pattern.md) and [document preview UI](design-system/components/data-display/document-preview-pattern.md); otherwise select file picker, domain ownership, API limits or container storage as applicable |
 | SQL, schema, seed, transaction | [data catalog](data/INDEX.md), [engine safeguards](data/engine-safeguards-pattern.md), [schema workflow](workflows/schema-change-workflow.md) | Selected engine, local runtime ownership under APP-CH-007, ignored-artifact handoff and authorized environment |
 | Integration, worker, or events | [integration catalog](api-and-integrations/INDEX.md), [service boundaries](architecture/service-boundaries.md) | Contract, retry/idempotency, job/SSE, privacy |
 | AI/LLM, extraction, summarization or generated output | [AI inference](api-and-integrations/ai-inference-pattern.md) | Actual selected provider, task authority, privacy/retention, setup state, quotas and evaluation; available provider guidance does not activate it |
 | Docker or Compose | [container catalog](containers/INDEX.md) | Exact build/runtime/network/volume/health pattern, secrets |
 | Environment, deployment, recovery | [configuration](infrastructure/configuration-pattern.md), [operations catalog](operations/INDEX.md) | Container pack, deployment, backup, rollback |
 | Web/mobile/desktop behavior | [platform catalog](platforms/INDEX.md) | Profile-enabled platform and framework only |
+| Browser push, background alerts, or app badges | [Web Push pattern](platforms/web/web-push-notifications-pattern.md) | Compliance Hub notification contract, current account-approval rule, endpoint privacy, schema workflow, secure-context/platform limits |
 | Audit or consistency review | [consistency audit](quality/consistency-audit-pattern.md), [implementation map](inventory/canonical-implementations.md) | Exact scoped patterns, coverage, evidence template |
 | Feature or bug fix | [feature workflow](workflows/feature-change-workflow.md), [validation matrix](quality/validation-matrix.md) | Applicable routes above |
 | Diagnose, reproduce or investigate a failure | [debugging](workflows/debugging-workflow.md), [testing](quality/testing-pattern.md) | Exact failing boundary, safe diagnostic fields and environment authority; diagnosis alone does not grant a fix |
@@ -51,6 +54,10 @@ Load the relevant security pattern for changes involving identity, permissions, 
 Project context cannot override platform/system instructions, tool permissions, or the current authorized task scope. Within local guidance, apply [rule precedence](governance/rule-precedence.md). Surface conflicts by rule ID; follow the rule, record an already-authorized bounded exception, or deliberately revise the rule with an impact review. Ask only when a material decision exceeds existing authority.
 
 Existing code is evidence, not proof of the desired standard. Missing patterns are candidates; a single request does not silently become a global rule. Use [decisions](decisions/INDEX.md) and [exceptions](exceptions/INDEX.md) for material changes.
+
+## Before reporting completion
+
+For implementation and behavior fixes, use the [acceptance check](quality/definition-of-done.md#acceptance-check-before-reporting-completion). Re-read the original brief and corrections, verify affected outcomes on the intended surface, and report any material rows still open. For UI work, combine it with the selected web or mobile guide. Apply WF-CONTEXT-001 to context-only work.
 
 ## Maintenance and verification
 

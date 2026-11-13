@@ -11,10 +11,11 @@ const config: CapacitorConfig = {
       forceCodeForRefreshToken: true,
     },
   },
-  server: {
+  // Set only by the Android debug build script for the emulator connection.
+  server: process.env.CAPACITOR_ANDROID_DEBUG_NETWORK === '1' ? {
     cleartext: true,
-    allowNavigation: ['10.0.2.2']
-  }
+    androidScheme: 'http',
+  } : { cleartext: false }
 };
 
 export default config;

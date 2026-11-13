@@ -23,6 +23,13 @@ Include the [workflow completeness matrix](workflow-completeness-template.md) fo
 
 Map each acceptance criterion to its owning task, test/check, actual result and unresolved gap. A plan is not a passing test. Use [testing](../quality/testing-pattern.md), [debugging](../workflows/debugging-workflow.md), and [validation](../quality/validation-matrix.md) without repeating their rule declarations.
 
+For changed UI or workflows, record the smallest set of acceptance rows that covers the user's brief.
+
+| Requirement or reference trait | Entry, role, surface and state | Expected UI and outcome | Actual observation and status |
+| --- | --- | --- | --- |
+| Return from details preserves a filtered view | Authorized user opens a record from populated filtered results | Return shows the same filters and meaningful focus | Pending until the running route is exercised |
+| Correct an existing record | Authorized user starts from the normal detail page | New value is visible after reopening and reaches any changed report | Pending until the durable outcome and report are observed |
+
 For a new runnable application, instantiate these applicable rows before handoff:
 
 | Acceptance boundary | Expected observation | Actual evidence / remaining gap |

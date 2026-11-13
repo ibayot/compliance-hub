@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as diff_match_patch from 'diff-match-patch';
 import { VersionComparison } from '../entities/version-comparison.entity';
 import { DocumentVersion } from '../../documents/entities/document-version.entity';
+import { Document } from '../../documents/entities/document.entity';
+import { DocumentActor, isDocumentInScope } from '../../documents/services/document-access';
+import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 
 export interface CompareVersionsDto {
   version_a_id: string;
   version_b_id: string;
-  compared_by_id: number;
 }
 
 @Injectable()
@@ -21,21 +24,33 @@ export class ComparisonService {
     private comparisonRepo: Repository<VersionComparison>,
     @InjectRepository(DocumentVersion)
     private versionRepo: Repository<DocumentVersion>,
+    @InjectRepository(Document)
+    private documentRepo: Repository<Document>,
+    private readonly capabilities: RoleCapabilitiesService,
   ) {}
+
+  private isVisible(document: Document | null, actor: DocumentActor) {
+    return isDocumentInScope(document, actor, this.capabilities.isFocal(actor.role));
+  }
 
   /**
    * Compare two document versions and generate diff
    */
-  async compareVersions(dto: CompareVersionsDto): Promise<VersionComparison> {
+  async compareVersions(dto: CompareVersionsDto, actor: DocumentActor): Promise<VersionComparison> {
+    if (!isUUID(dto?.version_a_id) || !isUUID(dto?.version_b_id) ||
+        dto.version_a_id.toLowerCase() === dto.version_b_id.toLowerCase()) {
+      throw new BadRequestException('Choose two different document versions.');
+    }
     // Get both versions
     const versionA = await this.versionRepo.findOne({
       where: { id: dto.version_a_id },
+      relations: ['document'],
     });
     const versionB = await this.versionRepo.findOne({
       where: { id: dto.version_b_id },
     });
 
-    if (!versionA || !versionB) {
+    if (!versionA || !versionB || !this.isVisible(versionA.document, actor)) {
       throw new NotFoundException('One or both versions not found');
     }
 
@@ -63,7 +78,7 @@ export class ComparisonService {
       document_id: versionA.document_id,
       version_a_id: dto.version_a_id,
       version_b_id: dto.version_b_id,
-      compared_by_id: dto.compared_by_id,
+      compared_by_id: actor.id,
       diff_output: {
         diffs,
         stats,
@@ -83,13 +98,15 @@ export class ComparisonService {
   /**
    * Get comparison by ID
    */
-  async getComparison(comparisonId: string): Promise<VersionComparison> {
+  async getComparison(comparisonId: string, actor: DocumentActor): Promise<VersionComparison> {
     const comparison = await this.comparisonRepo.findOne({
       where: { id: comparisonId },
       relations: ['version_a', 'version_b', 'document'],
     });
 
-    if (!comparison) {
+    if (!comparison || !this.isVisible(comparison.document, actor) ||
+        comparison.version_a?.document_id !== comparison.document_id ||
+        comparison.version_b?.document_id !== comparison.document_id) {
       throw new NotFoundException('Comparison not found');
     }
 
@@ -99,9 +116,11 @@ export class ComparisonService {
   /**
    * Get all comparisons for a document
    */
-  async getDocumentComparisons(documentId: string): Promise<VersionComparison[]> {
+  async getDocumentComparisons(documentId: string, actor: DocumentActor): Promise<VersionComparison[]> {
+    const document = await this.documentRepo.findOneBy({ id: documentId });
+    if (!document || !this.isVisible(document, actor)) throw new NotFoundException('Document not found');
     return this.comparisonRepo.find({
-      where: { document_id: documentId },
+      where: { document_id: documentId, version_a: { document_id: documentId }, version_b: { document_id: documentId } },
       relations: ['version_a', 'version_b'],
       order: { compared_at: 'DESC' },
     });

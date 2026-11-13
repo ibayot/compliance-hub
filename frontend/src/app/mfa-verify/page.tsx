@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -18,9 +18,12 @@ import { authApi } from '@/lib/api/auth';
 import { enqueueSnackbar, closeSnackbar } from 'notistack';
 import { tokenStore } from '@/lib/api/client';
 import { completeInteractiveSignIn } from '@/lib/auth/session-recovery';
+import { clearExpiredDestination, signInDestination } from '@/lib/auth/sign-in-destination';
 
 export default function MfaVerifyPage() {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const returnTo = signInDestination(state?.returnTo);
   const [code, setCode] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +41,7 @@ export default function MfaVerifyPage() {
   useEffect(() => {
     const token = sessionStorage.getItem('mfaTempToken');
     if (!token) {
-      navigate('/login');
+      navigate('/login', { replace: true, state: { returnTo } });
     } else {
       setTempToken(token);
       
@@ -49,7 +52,7 @@ export default function MfaVerifyPage() {
       sessionStorage.setItem('mfaResendAvailableAt', String(deadline));
       setResendAvailableAt(deadline);
     }
-  }, [navigate]);
+  }, [navigate, returnTo]);
 
   useEffect(() => {
     if (!temporaryCode) return;
@@ -93,7 +96,7 @@ export default function MfaVerifyPage() {
       setTempToken(null);
       setTemporaryCode('');
       setCode('');
-      window.location.replace(`/login?reason=${failureCode === 'UNIT_ACCESS_NOT_APPROVED' ? 'unit_not_approved' : accountLocked ? 'mfa_locked' : attemptsExhausted ? 'mfa_failed' : 'mfa_restart'}`);
+      navigate(`/login?reason=${failureCode === 'UNIT_ACCESS_NOT_APPROVED' ? 'unit_not_approved' : accountLocked ? 'mfa_locked' : attemptsExhausted ? 'mfa_failed' : 'mfa_restart'}`, { replace: true, state: { returnTo } });
       return;
     }
     if (err.response?.status === 429) {
@@ -156,9 +159,10 @@ export default function MfaVerifyPage() {
       sessionStorage.removeItem('mfaTestModeCode');
       sessionStorage.removeItem('mfaResendAvailableAt');
       sessionStorage.removeItem('isSessionLocked');
+      clearExpiredDestination();
       
       // Force reload to let AuthContext pick up the tokens
-      window.location.href = '/dashboard';
+      window.location.replace(returnTo ?? '/dashboard');
     } catch (err: any) {
       handleChallengeError(err);
     } finally {

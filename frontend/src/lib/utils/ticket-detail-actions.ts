@@ -1,5 +1,5 @@
 export type TicketDetailActionKey = 'updateStatus' | 'duplicate' | 'printDisposal' | 'printInspection' |
-  'assign' | 'escalate' | 'close' | 'rate' | 'resolutionTime' | 'requester' | 'assignee';
+  'assign' | 'escalate' | 'close' | 'rate' | 'resolutionTime' | 'requester' | 'ratedRequester' | 'assignee';
 
 export interface TicketDetailActionContext {
   status: string;
@@ -17,6 +17,7 @@ export interface TicketDetailActionContext {
   canSatisfaction: boolean;
   canOverrideResolutionTime: boolean;
   canCorrectTicketRecord: boolean;
+  canCorrectRatedRequester: boolean;
   canCorrectAssignee: boolean;
 }
 
@@ -42,6 +43,7 @@ export function getTicketDetailActionKeys(context: TicketDetailActionContext): T
   if (!c.hideTopActionButtons && c.canSatisfaction) actions.push('rate');
   if (c.canOverrideResolutionTime && resolved) actions.push('resolutionTime');
   if (c.canCorrectTicketRecord) actions.push('requester');
+  if (c.canCorrectRatedRequester) actions.push('ratedRequester');
   if (c.canCorrectAssignee) actions.push('assignee');
   return actions;
 }

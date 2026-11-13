@@ -31,7 +31,7 @@ MainRegion(routeContent)
 
 ## Store Implementation
 
-The router owns location; shell-local state owns expanded groups/drawer visibility; capabilities determine allowed destinations.
+The router owns location and in-app history; shell-local state owns expanded groups/drawer visibility; capabilities determine allowed destinations. A route-aware Back control uses known in-app history first and a valid parent destination when a nested route is opened directly.
 
 ## Rules
 
@@ -39,6 +39,8 @@ The router owns location; shell-local state owns expanded groups/drawer visibili
 - **DS-APPNAV-002** — Visibility MUST follow current capabilities without acting as backend authorization.
 - **DS-APPNAV-003** — Responsive navigation MUST preserve access to the same permitted destinations.
 - **DS-APPNAV-004** — Route changes SHOULD close temporary navigation and establish meaningful page focus/title.
+- **DS-APPNAV-005** — A persistent Back control MUST stay within the authenticated application; use known in-app history when available and a valid parent route for direct entry.
+- **DS-APPNAV-006** — Nested authenticated views MUST retain an available Back action on narrow screens even when breadcrumbs are collapsed or hidden.
 
 ## Accessibility
 
@@ -50,7 +52,9 @@ Recheck destination authorization on route/data access, including direct URLs.
 
 ## Validation
 
-Test deep links, refresh, history, capability changes, nested routes, and narrow navigation.
+Test direct deep links, refresh, known in-app history, parent-route fallback, capability changes, nested routes, and narrow navigation.
+
+Check separate recovery paths for a missing route, denied access and service failure without disclosing whether a protected record exists.
 
 ## Related Patterns
 

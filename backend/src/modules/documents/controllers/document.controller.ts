@@ -1,5 +1,6 @@
 import {
   Controller,
+  BadRequestException,
   Post,
   Get,
   Patch,
@@ -31,6 +32,7 @@ import { Document, DocumentStatus } from '../entities/document.entity';
 import { SubmissionFrequency } from '../entities/document-assignment.entity';
 import { UploadBulkheadInterceptor } from '../../../common/interceptors/upload-bulkhead.interceptor';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import type { DocumentActor } from '../services/document-access';
 
 @ApiTags('documents')
 @Controller('documents')
@@ -111,8 +113,15 @@ export class DocumentController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('archived') archived?: string,
+    @Query('review_queue') reviewQueue?: string,
     @CurrentUser() user?: any,
   ) {
+    const pageNumber = page === undefined ? 1 : Number(page);
+    const pageSize = limit === undefined ? 20 : Number(limit);
+    if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > 100_000 ||
+        !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 1000) {
+      throw new BadRequestException('Use a valid document page and page size.');
+    }
     return this.documentService.listDocuments({
       title,
       unit_id,
@@ -120,9 +129,10 @@ export class DocumentController {
       period,
       year,
       status,
-      page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 20,
+      page: pageNumber,
+      limit: pageSize,
       archived: archived === 'true',
+      review_queue: reviewQueue === 'true',
       actor_role: user?.role,
       actor_id: user?.id,
     });
@@ -219,8 +229,8 @@ export class DocumentController {
    */
   @Get(':id')
   @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
-  async getDocument(@Param('id') id: string): Promise<Document> {
-    return this.documentService.getDocumentById(id);
+  async getDocument(@Param('id') id: string, @CurrentUser() user: DocumentActor): Promise<Document> {
+    return this.documentService.getDocumentById(id, user);
   }
 
   /**
@@ -229,14 +239,14 @@ export class DocumentController {
    */
   @Get(':id/versions')
   @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
-  async getVersionHistory(@Param('id') id: string) {
-    return this.documentService.getVersionHistory(id);
+  async getVersionHistory(@Param('id') id: string, @CurrentUser() user: DocumentActor) {
+    return this.documentService.getVersionHistory(id, user);
   }
 
   @Get(':id/references')
   @RequireCapability('isDocumentsAccess')
-  async getDocumentReferences(@Param('id') id: string) {
-    return this.documentService.listDocumentReferences(id);
+  async getDocumentReferences(@Param('id') id: string, @CurrentUser() user: DocumentActor) {
+    return this.documentService.listDocumentReferences(id, user);
   }
 
   @Post(':id/references')
@@ -248,14 +258,13 @@ export class DocumentController {
       target_document_id: string;
       relationship_type?: string;
     },
-    @CurrentUser() user: any,
+    @CurrentUser() user: DocumentActor,
   ) {
     return this.documentService.linkDocumentReference({
       source_document_id: sourceDocumentId,
       target_document_id: body.target_document_id,
       relationship_type: body.relationship_type,
-      created_by: user.id,
-    });
+    }, user);
   }
 
   @Delete(':id/references/:targetId')
@@ -263,8 +272,9 @@ export class DocumentController {
   async unlinkDocumentReference(
     @Param('id') sourceDocumentId: string,
     @Param('targetId') targetDocumentId: string,
+    @CurrentUser() user: DocumentActor,
   ) {
-    await this.documentService.unlinkDocumentReference(sourceDocumentId, targetDocumentId);
+    await this.documentService.unlinkDocumentReference(sourceDocumentId, targetDocumentId, user);
     return { message: 'Document reference removed successfully' };
   }
 
@@ -275,6 +285,7 @@ export class DocumentController {
   @Post(':id/versions')
   @RequireCapability('isDocumentsManage')
   @UseInterceptors(
+    UploadBulkheadInterceptor,
     FileInterceptor('file', {
       limits: {
         fileSize: 50 * 1024 * 1024, // 50MB limit
@@ -294,7 +305,7 @@ export class DocumentController {
       uploaded_by: user.id,
     };
 
-    return this.versionService.createVersion(dto);
+    return this.versionService.createVersion(dto, user);
   }
 
   /**
@@ -304,16 +315,18 @@ export class DocumentController {
   @Get(':id/versions/:vid/download')
   @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async downloadVersion(
+    @Param('id') documentId: string,
     @Param('vid') versionId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: DocumentActor,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, fileName, mimeType } = await this.versionService.downloadVersion(versionId, user);
+    const { buffer, fileName, mimeType } = await this.versionService.downloadVersion(documentId, versionId, user);
 
     res.set({
       'Content-Type': mimeType,
       'Content-Disposition': `attachment; filename="${String(fileName).replace(/[\r\n"\\/]/g, '_')}"`,
       'Content-Length': buffer.length,
+      'Cache-Control': 'private, no-store',
     });
 
     return new StreamableFile(buffer);
@@ -326,16 +339,22 @@ export class DocumentController {
   @Get(':id/versions/:vid/preview')
   @RequireCapability(['isDocumentsAccess', 'isDocumentsManage'])
   async getPreview(
+    @Param('id') documentId: string,
     @Param('vid') versionId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: DocumentActor,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const { buffer, mimeType } = await this.versionService.getPreview(versionId, user);
+    const { buffer, mimeType } = await this.versionService.getPreview(documentId, versionId, user);
 
+    if (mimeType.toLowerCase().startsWith('text/html')) {
+      res.set('Content-Security-Policy', "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+    }
     res.set({
       'Content-Type': mimeType,
       'Content-Disposition': 'inline',
       'Content-Length': buffer.length,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
     });
 
     return new StreamableFile(buffer);

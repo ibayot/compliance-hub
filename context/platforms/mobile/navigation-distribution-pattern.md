@@ -36,6 +36,7 @@ Use platform link-association configuration and installed framework/router contr
 - `PLAT-MOB-DIST-001` MUST apply normal authorization to records opened by links or notifications.
 - `PLAT-MOB-DIST-002` MUST verify signing, target environment, and installed-artifact behavior before distribution.
 - `PLAT-MOB-DIST-003` MUST define upgrade behavior for persisted app data affected by a release.
+- `PLAT-MOB-DIST-004` MUST keep a direct native download hidden until its deployment has an approved release artifact URL. Expose only the applicable device's download and do not point users to debug builds or embed signing material in the frontend.
 
 ## Validation
 

@@ -114,6 +114,11 @@ services:
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       # Read only from the project-root environment; do not share this integration key with other services.
       - SERVER_ADMIN_TICKETS_API_KEY=${SERVER_ADMIN_TICKETS_API_KEY:-}
+      # Browser push signing and at-rest encryption keys are supplied to Ticketing only.
+      - WEB_PUSH_PUBLIC_KEY=${WEB_PUSH_PUBLIC_KEY:-}
+      - WEB_PUSH_PRIVATE_KEY=${WEB_PUSH_PRIVATE_KEY:-}
+      - WEB_PUSH_SUBJECT=${WEB_PUSH_SUBJECT:-}
+      - WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY=${WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY:-}
       - ESCALATION_STORAGE_ROOT=/app/uploads/escalations
       - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
       - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
@@ -155,6 +160,8 @@ services:
       - USERS_SERVICE_URL=http://users-service:4101
       - SWAGGER_USERNAME=REPLACE_WITH_YOUR_SWAGGER_USERNAME
       - SWAGGER_PASSWORD=REPLACE_WITH_YOUR_SWAGGER_PASSWORD
+    volumes:
+      - compliance_storage:/app/storage
     ports:
       - "4103:4103"
     healthcheck:
@@ -186,6 +193,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - FRONTEND_URL=http://localhost
       - TZ=Asia/Manila
       - DB_HOST=db
       - DB_PASSWORD=admin
@@ -215,6 +223,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-907503372813-5393jo7p27hhbq0ih49tjm0gknr01it4.apps.googleusercontent.com}
+        - VITE_ANDROID_APK_URL=${VITE_ANDROID_APK_URL:-}
         - VITE_PROFILE_IMAGE_URL=${VITE_PROFILE_IMAGE_URL}
         - VITE_APP_ENV=${VITE_APP_ENV:-local}
     container_name: rictms_frontend
@@ -239,6 +248,7 @@ volumes:
   db_data:
   redis_data:
   ticketing_uploads:
+  compliance_storage:
 
 networks:
   app_network:

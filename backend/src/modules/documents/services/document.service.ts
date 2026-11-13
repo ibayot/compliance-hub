@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
   ConflictException,
   OnModuleInit,
@@ -27,6 +28,7 @@ import { ReportorialDocTypeService } from './reportorial-doc-type.service';
 import { MetricsService } from '../../metrics/services/metrics.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
+import { DocumentActor, isDocumentInScope } from './document-access';
 
 export interface UploadDocumentDto {
   title: string;
@@ -67,6 +69,7 @@ export interface ListDocumentsDto {
   actor_id?: number;
   /** When true, return soft-deleted (archived) documents owned by actor_id (focal only) */
   archived?: boolean;
+  review_queue?: boolean;
 }
 
 @Injectable()
@@ -198,19 +201,18 @@ export class DocumentService implements OnModuleInit {
   }
 
   private async processDocumentInline(documentId: string, versionId: string): Promise<void> {
-    await this.documentRepo.update(documentId, {
-      status: DocumentStatus.PROCESSING,
-    });
-
     const version = await this.versionRepo
       .createQueryBuilder('version')
       .addSelect('version.file_blob')
       .where('version.id = :versionId', { versionId })
+      .andWhere('version.document_id = :documentId', { documentId })
       .getOne();
 
     if (!version) {
       throw new NotFoundException('Version not found for inline processing');
     }
+    const activeVersion = { id: documentId, current_version: version.version_number, is_deleted: false };
+    await this.documentRepo.update(activeVersion, { status: DocumentStatus.PROCESSING });
 
     const fileBuffer = version.file_blob ?? (await this.storageService.readFile(version.file_path));
 
@@ -237,13 +239,12 @@ export class DocumentService implements OnModuleInit {
       );
     }
 
-    await this.documentRepo.update(documentId, {
-      extracted_text: extractedText,
-      status: DocumentStatus.READY,
-    });
-
     await this.versionRepo.update(versionId, {
       extracted_text: extractedText,
+    });
+    await this.documentRepo.update(activeVersion, {
+      extracted_text: extractedText,
+      status: DocumentStatus.READY,
     });
 
     try {
@@ -287,7 +288,13 @@ export class DocumentService implements OnModuleInit {
       this.logger.error(
         `${source}: background processing failed for document ${documentId}: ${error?.message || 'unknown error'}`,
       );
-      await this.documentRepo.update(documentId, { status: DocumentStatus.FAILED });
+      const version = await this.versionRepo.findOneBy({ id: versionId, document_id: documentId });
+      if (version) await this.documentRepo.update(
+        { id: documentId, current_version: version.version_number, is_deleted: false },
+        { status: DocumentStatus.FAILED },
+      );
+    }).catch(() => {
+      this.logger.warn('Could not record a background document processing failure.');
     });
   }
 
@@ -431,9 +438,12 @@ export class DocumentService implements OnModuleInit {
 
     const reviews = await this.reviewRepo
       .createQueryBuilder('review')
+      .innerJoin(DocumentVersion, 'reviewVersion', 'reviewVersion.id = review.version_id AND reviewVersion.document_id = review.document_id')
+      .innerJoin(Document, 'reviewDocument', 'reviewDocument.id = review.document_id AND reviewDocument.current_version = reviewVersion.version_number')
       .where('review.document_id IN (:...documentIds)', { documentIds })
       .orderBy('review.document_id', 'ASC')
       .addOrderBy('review.reviewed_at', 'DESC')
+      .addOrderBy('review.id', 'DESC')
       .getMany();
 
     const latestMap = new Map<
@@ -603,37 +613,6 @@ export class DocumentService implements OnModuleInit {
       );
     }
 
-    const existingSubmission = await this.documentRepo.findOne({
-      where: {
-        unit_id: Number(dto.unit_id),
-        document_type: normalizedType,
-        period: dto.period,
-        year: dto.year,
-        uploaded_by: dto.uploaded_by,
-        is_deleted: false,
-      },
-    });
-
-    if (existingSubmission) {
-      // Allow re-upload if the document was returned for revision
-      const latestReview = await this.reviewRepo.findOne({
-        where: { document_id: existingSubmission.id },
-        order: { reviewed_at: 'DESC' },
-      });
-
-      if (
-        latestReview?.decision === ReviewDecision.NEEDS_REVISION ||
-        latestReview?.decision === ReviewDecision.NON_COMPLIANT
-      ) {
-        // Soft-delete the returned document so re-upload can proceed
-        await this.documentRepo.update(existingSubmission.id, { is_deleted: true });
-      } else {
-        throw new ConflictException(
-          'This report type was already submitted for the selected cycle.',
-        );
-      }
-    }
-
     const expectedBase = this.buildExpectedFileBase(assignment, dto.period, dto.year);
 
     if (expectedBase) {
@@ -652,6 +631,12 @@ export class DocumentService implements OnModuleInit {
   async uploadDocument(dto: UploadDocumentDto): Promise<Document> {
     const { file, ...metadata } = dto;
     const { user_role, ...persistedMetadata } = metadata;
+    if (!file?.buffer?.length) throw new BadRequestException('Choose a document to upload.');
+    if (typeof metadata.document_type !== 'string' || !metadata.document_type.trim() ||
+        typeof metadata.title !== 'string' || !metadata.title.trim() ||
+        !Number.isSafeInteger(Number(metadata.unit_id)) || Number(metadata.unit_id) < 1) {
+      throw new BadRequestException('Enter a document title, type, and valid unit.');
+    }
 
     // Validate file type
     const safeName = path.basename(file.originalname).replace(/[\r\n"\\/]/g, '_').slice(0, 180);
@@ -722,39 +707,6 @@ export class DocumentService implements OnModuleInit {
       finalYear = metadata.year || String(new Date().getFullYear());
     }
 
-    // For focal users on the reportorial path, check for duplicate submissions
-    if (this.roleCapSvc.isFocal(dto.user_role as string) && metadata.reportorial_doc_type_id) {
-      const existingReportorial = await this.documentRepo.findOne({
-        where: {
-          unit_id: Number(dto.unit_id),
-          reportorial_doc_type_id: Number(metadata.reportorial_doc_type_id),
-          period: finalPeriod || metadata.period,
-          year: finalYear || metadata.year,
-          uploaded_by: metadata.uploaded_by,
-          is_deleted: false,
-        },
-      });
-
-      if (existingReportorial) {
-        const latestReview = await this.reviewRepo.findOne({
-          where: { document_id: existingReportorial.id },
-          order: { reviewed_at: 'DESC' },
-        });
-
-        if (
-          latestReview?.decision === ReviewDecision.NEEDS_REVISION ||
-          latestReview?.decision === ReviewDecision.NON_COMPLIANT
-        ) {
-          // Soft-delete the returned document so re-upload can proceed
-          await this.documentRepo.update(existingReportorial.id, { is_deleted: true });
-        } else {
-          throw new ConflictException(
-            'This report type was already submitted for the selected cycle.',
-          );
-        }
-      }
-    }
-
     // Calculate checksum
     const checksum = this.storageService.calculateChecksum(file.buffer);
 
@@ -772,7 +724,8 @@ export class DocumentService implements OnModuleInit {
         : persistedMetadata.title;
 
     const extractedText = await this.extractInitialText(file);
-    const document: Document = this.documentRepo.create({
+    const status = extractedText.trim() ? DocumentStatus.READY : DocumentStatus.PENDING;
+    const documentData = {
       ...persistedMetadata,
       title: finalTitle,
       document_type: finalDocumentType,
@@ -780,17 +733,13 @@ export class DocumentService implements OnModuleInit {
       year: finalYear || persistedMetadata.year,
       reportorial_doc_type_id: metadata.reportorial_doc_type_id
         ? Number(metadata.reportorial_doc_type_id)
-        : null,
-      status: DocumentStatus.PENDING,
+        : undefined,
+      status,
       current_version: 1,
       extracted_text: extractedText,
       file_blob: file.buffer,
-    } as any) as unknown as Document;
-    await this.documentRepo.save(document);
-
-    // Create version entity
-    const version = await this.versionRepo.save({
-      document_id: document.id,
+    };
+    const versionData = {
       version_number: 1,
       file_name: safeName,
       file_path: filePath,
@@ -799,14 +748,53 @@ export class DocumentService implements OnModuleInit {
       file_size: file.size,
       checksum,
       preview_path: isPdf ? filePath : null,
-      preview_blob: isPdf ? file.buffer : null,
+      preview_blob: isPdf ? file.buffer : undefined,
       extracted_text: extractedText,
       uploaded_by: metadata.uploaded_by,
-    } as any);
+    };
 
-    if ((extractedText || '').trim().length > 0) {
+    let committed: { document: Document; version: DocumentVersion };
+    try {
+      committed = await this.documentRepo.manager.transaction(async (manager) => {
+        const documents = manager.getRepository(Document);
+        if (this.roleCapSvc.isFocal(user_role as string)) {
+          const existing = await documents.findOne({
+            where: {
+              unit_id: Number(dto.unit_id),
+              ...(metadata.reportorial_doc_type_id
+                ? { reportorial_doc_type_id: Number(metadata.reportorial_doc_type_id) }
+                : { document_type: normalizedDocumentType }),
+              period: documentData.period,
+              year: documentData.year,
+              uploaded_by: metadata.uploaded_by,
+              is_deleted: false,
+            },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (existing) {
+            const latest = await manager.getRepository(ManualReview).findOne({
+              where: { document_id: existing.id, version: { document_id: existing.id, version_number: existing.current_version } },
+              order: { reviewed_at: 'DESC', id: 'DESC' },
+            });
+            if (latest?.decision !== ReviewDecision.NEEDS_REVISION && latest?.decision !== ReviewDecision.NON_COMPLIANT) {
+              throw new ConflictException('This report type was already submitted for the selected cycle.');
+            }
+            await documents.update(existing.id, { is_deleted: true });
+          }
+        }
+
+        const document = await documents.save(documents.create(documentData));
+        const version = await manager.getRepository(DocumentVersion).save({ ...versionData, document_id: document.id });
+        return { document, version };
+      });
+    } catch (error) {
+      await this.storageService.discardUnreferencedUpload(filePath, () => this.versionRepo.existsBy({ file_path: filePath }));
+      throw error;
+    }
+    const { document, version } = committed;
+
+    if (status === DocumentStatus.READY) {
       // DOCX path already has extracted text from upload; skip full process queue.
-      await this.documentRepo.update(document.id, { status: DocumentStatus.READY });
       this.kickOffMetricsOrFallback(version.id, `Upload document=${document.id}`);
     } else {
       // Queue document processing job in background so upload response is not blocked
@@ -897,7 +885,7 @@ export class DocumentService implements OnModuleInit {
   /**
    * Get document by ID with relations
    */
-  async getDocumentById(id: string): Promise<Document> {
+  async getDocumentById(id: string, actor: DocumentActor): Promise<Document> {
     const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
     // Allow fetching archived (is_deleted=true) docs so focal can view detail on archived page
     const document = await this.documentRepo.findOne({
@@ -905,8 +893,8 @@ export class DocumentService implements OnModuleInit {
       relations: canUseIssuanceLinks ? ['versions', 'issuances'] : ['versions'],
     });
 
-    if (!document) {
-      throw new NotFoundException(`Document with ID ${id} not found`);
+    if (!document || !isDocumentInScope(document, actor, this.roleCapSvc.isFocal(actor.role))) {
+      throw new NotFoundException('Document not found');
     }
 
     if (!canUseIssuanceLinks) {
@@ -938,7 +926,16 @@ export class DocumentService implements OnModuleInit {
       actor_role,
       actor_id,
       archived = false,
+      review_queue = false,
     } = dto;
+
+    const isFocal = this.roleCapSvc.isFocal(actor_role as string);
+    if ((archived && !isFocal) || (isFocal && !actor_id)) {
+      throw new ForbiddenException('This document list is not available to your account.');
+    }
+    if (review_queue && (archived || !this.roleCapSvc.isReviewsAccess(actor_role as string))) {
+      throw new ForbiddenException('This review queue is not available to your account.');
+    }
 
     const canUseIssuanceLinks = await this.canUseDocumentIssuanceLinks();
 
@@ -967,33 +964,36 @@ export class DocumentService implements OnModuleInit {
     if (year) {
       query.andWhere('doc.year = :year', { year });
     }
-    if (status) {
-      query.andWhere('doc.status = :status', { status });
+    if (review_queue || status) {
+      query.andWhere('doc.status = :status', { status: review_queue ? DocumentStatus.READY : status });
     }
 
-    if (this.roleCapSvc.isFocal(actor_role as string) && actor_id) {
+    if (isFocal) {
       query.andWhere('doc.uploaded_by = :actorId', { actorId: actor_id });
     }
 
     // Admin/reviewer list excludes already-resolved documents (compliant, returned) so only
     // pending submissions needing attention appear. Explicit status filters bypass this.
-    if (
+    if (review_queue || (
       !archived &&
       !status &&
       this.roleCapSvc.isDocumentsDelete(actor_role as string)
-    ) {
+    )) {
       query.andWhere(`
         COALESCE((
           SELECT mr.decision
           FROM manual_reviews mr
-          WHERE mr.document_id = doc.id
-          ORDER BY mr.reviewed_at DESC
+          JOIN document_versions rv ON rv.id = mr.version_id AND rv.document_id = mr.document_id
+          WHERE mr.document_id = doc.id AND rv.version_number = doc.current_version
+          ORDER BY mr.reviewed_at DESC, mr.id DESC
           LIMIT 1
-        ), 'pending') NOT IN ('compliant', 'needs_revision', 'non_compliant')
-      `);
+        ), 'pending') NOT IN (:...excludedDecisions)
+      `, { excludedDecisions: review_queue
+        ? [ReviewDecision.COMPLIANT]
+        : [ReviewDecision.COMPLIANT, ReviewDecision.NEEDS_REVISION, ReviewDecision.NON_COMPLIANT] });
     }
 
-    query.orderBy('doc.created_at', 'DESC');
+    query.orderBy('doc.created_at', 'DESC').addOrderBy('doc.id', 'DESC');
     query.distinct(true);
     query.skip((page - 1) * limit).take(limit);
 
@@ -1008,7 +1008,7 @@ export class DocumentService implements OnModuleInit {
     return { data: enriched, total, page, limit };
   }
 
-  async listDocumentReferences(documentId: string): Promise<{
+  async listDocumentReferences(documentId: string, actor: DocumentActor): Promise<{
     outgoing: DocumentReference[];
     incoming: DocumentReference[];
   }> {
@@ -1016,7 +1016,8 @@ export class DocumentService implements OnModuleInit {
       where: { id: documentId, is_deleted: false },
     });
 
-    if (!document) {
+    const isFocal = this.roleCapSvc.isFocal(actor.role);
+    if (!isDocumentInScope(document, actor, isFocal)) {
       throw new NotFoundException('Document not found');
     }
 
@@ -1034,8 +1035,8 @@ export class DocumentService implements OnModuleInit {
     ]);
 
     const [enrichedOutgoing, enrichedIncoming] = await Promise.all([
-      this.enrichReferenceCreators(outgoing),
-      this.enrichReferenceCreators(incoming),
+      this.enrichReferenceCreators(outgoing.filter((reference) => !reference.target_document?.is_deleted && isDocumentInScope(reference.target_document, actor, isFocal))),
+      this.enrichReferenceCreators(incoming.filter((reference) => !reference.source_document?.is_deleted && isDocumentInScope(reference.source_document, actor, isFocal))),
     ]);
 
     return { outgoing: enrichedOutgoing, incoming: enrichedIncoming };
@@ -1044,9 +1045,8 @@ export class DocumentService implements OnModuleInit {
   async linkDocumentReference(payload: {
     source_document_id: string;
     target_document_id: string;
-    created_by?: number;
     relationship_type?: string;
-  }): Promise<DocumentReference> {
+  }, actor: DocumentActor): Promise<DocumentReference> {
     if (payload.source_document_id === payload.target_document_id) {
       throw new BadRequestException('A document cannot reference itself.');
     }
@@ -1056,7 +1056,8 @@ export class DocumentService implements OnModuleInit {
       this.documentRepo.findOne({ where: { id: payload.target_document_id, is_deleted: false } }),
     ]);
 
-    if (!sourceDocument || !targetDocument) {
+    const isFocal = this.roleCapSvc.isFocal(actor.role);
+    if (!sourceDocument || !targetDocument || !isDocumentInScope(sourceDocument, actor, isFocal) || !isDocumentInScope(targetDocument, actor, isFocal)) {
       throw new NotFoundException('Source or target document not found');
     }
 
@@ -1082,13 +1083,21 @@ export class DocumentService implements OnModuleInit {
       source_document_id: payload.source_document_id,
       target_document_id: payload.target_document_id,
       relationship_type: payload.relationship_type?.trim() || 'references',
-      created_by: payload.created_by || null,
+      created_by: actor.id,
     });
 
     return this.referenceRepo.save(reference);
   }
 
-  async unlinkDocumentReference(sourceDocumentId: string, targetDocumentId: string): Promise<void> {
+  async unlinkDocumentReference(sourceDocumentId: string, targetDocumentId: string, actor: DocumentActor): Promise<void> {
+    const [source, target] = await Promise.all([
+      this.documentRepo.findOneBy({ id: sourceDocumentId, is_deleted: false }),
+      this.documentRepo.findOneBy({ id: targetDocumentId, is_deleted: false }),
+    ]);
+    const isFocal = this.roleCapSvc.isFocal(actor.role);
+    if (!isDocumentInScope(source, actor, isFocal) || !isDocumentInScope(target, actor, isFocal)) {
+      throw new NotFoundException('Document reference not found');
+    }
     const result = await this.referenceRepo.delete({
       source_document_id: sourceDocumentId,
       target_document_id: targetDocumentId,
@@ -1290,13 +1299,13 @@ export class DocumentService implements OnModuleInit {
   /**
    * Get version history for a document
    */
-  async getVersionHistory(documentId: string): Promise<DocumentVersion[]> {
+  async getVersionHistory(documentId: string, actor: DocumentActor): Promise<DocumentVersion[]> {
     const document = await this.documentRepo.findOne({
-      where: { id: documentId, is_deleted: false },
+      where: { id: documentId },
     });
 
-    if (!document) {
-      throw new NotFoundException(`Document with ID ${documentId} not found`);
+    if (!isDocumentInScope(document, actor, this.roleCapSvc.isFocal(actor.role))) {
+      throw new NotFoundException('Document not found');
     }
 
     return this.versionRepo.find({
@@ -1458,8 +1467,8 @@ export class DocumentService implements OnModuleInit {
 
     // Check latest review to confirm it is actually a returned document
     const latestReview = await this.reviewRepo.findOne({
-      where: { document_id: documentId },
-      order: { reviewed_at: 'DESC' },
+      where: { document_id: documentId, version: { document_id: documentId, version_number: document.current_version } },
+      order: { reviewed_at: 'DESC', id: 'DESC' },
     });
 
     const isReturned =

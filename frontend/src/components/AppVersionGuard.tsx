@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { apiClient } from '@/lib/api/client';
 import { isApplicationPath } from '@/lib/auth/session-recovery';
 
@@ -38,6 +39,9 @@ const writeReloadGuard = (buildId: string) => {
 
 export default function AppVersionGuard() {
   useEffect(() => {
+    // An installed APK owns its bundled assets and is updated by installing a
+    // newer signed APK. Web deployment polling cannot update that bundle.
+    if (Capacitor.isNativePlatform()) return;
     let disposed = false;
     let checking = false;
 

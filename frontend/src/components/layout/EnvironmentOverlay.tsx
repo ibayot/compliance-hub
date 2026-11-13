@@ -11,7 +11,7 @@ function getVisibleEnvironment(): VisibleEnvironment | null {
   return null;
 }
 
-export default function EnvironmentOverlay() {
+export default function EnvironmentOverlay({ compact = false }: { compact?: boolean }) {
   const environment = getVisibleEnvironment();
   const theme = useTheme();
   if (!environment) return null;
@@ -25,10 +25,40 @@ export default function EnvironmentOverlay() {
     ? isDarkMode ? 'rgba(13, 71, 161, 0.42)' : 'rgba(227, 242, 253, 0.96)'
     : isDarkMode ? 'rgba(230, 81, 0, 0.42)' : 'rgba(255, 243, 224, 0.96)';
 
+  if (compact) {
+    return (
+      <Box
+        component="span"
+        aria-label={`${environment} environment`}
+        sx={{
+          display: { xs: 'inline-flex', md: 'none' },
+          alignItems: 'center',
+          flexShrink: 0,
+          px: 0.8,
+          py: 0.35,
+          border: '1px solid',
+          borderColor: foregroundColor,
+          borderRadius: 999,
+          color: foregroundColor,
+          bgcolor: backgroundColor,
+          fontSize: '0.58rem',
+          fontWeight: 800,
+          letterSpacing: '0.08em',
+          lineHeight: 1.2,
+          whiteSpace: 'nowrap',
+          userSelect: 'none',
+        }}
+      >
+        {environment}
+      </Box>
+    );
+  }
+
   return (
     <Box
       aria-label={`${environment} environment`}
       sx={{
+        display: { xs: 'none', md: 'block' },
         position: 'fixed',
         left: '50%',
         bottom: 10,

@@ -9,6 +9,7 @@ Operating rules:
 - For medium or large work, produce a mini-plan before changing files.
 - Do not introduce architectural changes silently.
 - Always define validation steps.
+- Before reporting an implementation or fix complete, apply `context/quality/definition-of-done.md` (QA-DONE-005/006/007). Recheck the user's full brief against observed UI and workflow outcomes and identify any material checks still open.
 - Include the running local Docker database in implementation readiness under `APP-CH-007`; disposable test databases do not replace local application updates. Staging and production database updates remain user-managed unless explicitly authorized.
 - For new applications and multi-step features, follow `context/application/workflow-completeness.md`: map required inputs to consumers/correction paths and verify the essential entry-to-outcome journey. Preserve the local evidence/Git policy in `APP-CH-008`.
 - Before substantive analysis, architecture, implementation, review, or QA, read `context/MASTER.md`, classify the request with its routing table, and load only the context documents selected by that route. Do not preload the entire `context/` tree.

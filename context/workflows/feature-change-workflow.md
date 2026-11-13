@@ -3,10 +3,10 @@
 1. Classify the task and confirm request/acceptance scope from available evidence.
 2. Read MASTER/profile and exact patterns; add domain/security/accessibility overlays.
 3. Inspect existing consumers and user changes.
-4. Produce the smallest sufficient plan, with rule IDs and validation; name affected high-consequence invariants and the checks that prove them.
+4. Produce the smallest sufficient plan, with rule IDs and validation. Derive acceptance checks from the request, its clarifications and relevant references. Name the affected pages or workflows and the outcomes that prove the change under QA-DONE-005.
 5. For a defect, use [evidence-led debugging](debugging-workflow.md) and establish a controlled reproduction. Implement only the authorized behavior and focused checks, including [targeted red–green proof](../quality/testing-pattern.md) where applicable.
 6. Update reusable context only when a standard or contract changes.
-7. Validate and report delivered behavior, evidence, and limitations against the [completion gate](../quality/definition-of-done.md).
+7. Reconcile each material requirement with direct evidence from the [completion gate](../quality/definition-of-done.md). Repair recoverable mismatches and retest. Report verified results and outstanding scope using the evidence actually obtained.
 
 WF-FEATURE-001 MUST separate observed defects from proposed architecture changes. WF-FEATURE-002 MUST avoid broad refactors or release/deployment actions without corresponding scope.
 

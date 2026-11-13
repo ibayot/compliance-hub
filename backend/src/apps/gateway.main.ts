@@ -4,6 +4,8 @@ import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import * as mysql from 'mysql2/promise';
 import { GatewayAppModule } from './gateway.module';
 import { GlobalExceptionFilter } from '../shared/filters/global-exception.filter';
@@ -11,6 +13,7 @@ import * as swaggerUi from 'swagger-ui-express';
 import axios from 'axios';
 import { docsAuthMiddleware } from '../common/middleware/docs-auth.middleware';
 import { getAppVersion } from '../common/app-version';
+import { buildIosWebClipProfile, resolveIosWebClipUrl } from './ios-webclip-profile';
 
 const vaptConfigPollingEnabled = String(process.env.VAPT_CONFIG_POLLING_ENABLED || '').trim().toLowerCase() === 'true';
 let vaptModeCache = vaptConfigPollingEnabled && process.env.VAPT_MODE === 'true';
@@ -302,6 +305,31 @@ async function bootstrap() {
       },
     }),
   );
+
+  const iosWebClipProfileHandler = (req: Request, res: Response) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return res.status(405).end();
+    }
+
+    try {
+      const targetUrl = resolveIosWebClipUrl();
+      const icon = readFileSync(resolve(process.cwd(), 'assets/compliance-hub-webclip-icon.png'));
+      const profile = buildIosWebClipProfile(targetUrl, icon);
+      res.status(200);
+      res.setHeader('Content-Type', 'application/x-apple-aspen-config');
+      res.setHeader('Content-Disposition', 'attachment; filename="Compliance-Hub.mobileconfig"');
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return req.method === 'HEAD' ? res.end() : res.send(profile);
+    } catch {
+      console.warn('[GATEWAY] The iOS Web Clip profile could not be generated.');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(503).json({ message: 'The iOS installation profile is not available for this environment.' });
+    }
+  };
+
+  app.use('/api/ios-profile.mobileconfig', iosWebClipProfileHandler);
+  app.use('/api/v1/ios-profile.mobileconfig', iosWebClipProfileHandler);
 
   const registerServiceRoutes = (prefix: '/api' | '/api/v1') => {
     app.use(`${prefix}/auth`, createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));

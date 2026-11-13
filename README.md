@@ -92,7 +92,7 @@ From the `frontend/` directory:
 npm run android:debug
 ```
 
-The installable debug APK is generated at `frontend/android/app/build/outputs/apk/debug/app-debug.apk`. With the local Docker stack, the native API client targets the Android emulator host alias `10.0.2.2`.
+The installable debug APK is generated at `frontend/android/app/build/outputs/apk/debug/app-debug.apk`. In Android Studio's emulator it connects directly to the local Docker gateway at `http://10.0.2.2:4000/api`. This emulator address does not work on a physical phone. The HTTP origin and exception are debug-only.
 
 For a staging or production build, provide the deployed API base URL before building:
 
@@ -101,6 +101,14 @@ VITE_API_URL=https://your-deployed-host/api npm run android:release
 ```
 
 The release APK must be signed with the organization’s Android keystore before distribution. Do not distribute the debug APK to end users. iOS packaging is intentionally deferred until the Android hybrid flow is accepted.
+
+For an internal rollout, verify the release signature, install and update it on an approved Android device over the office VPN, and host the signed `.apk` on the office HTTPS download server. Set `VITE_ANDROID_APK_URL` to that file's absolute HTTPS URL in the deployment environment and rebuild the frontend. Android browsers then show **Download Android app** in the signed-in profile menu. Leave the variable unset until the file is ready. Use the same organization signing key and an increasing Android version code for updates.
+
+The release build requires an explicit HTTPS `VITE_API_URL`. Verify internal DNS, certificate trust, API CORS for the packaged app, and reconnect after VPN loss on a physical phone. Native sign-in tokens are scoped to the WebView session; an app process restart can require signing in again.
+
+On iPhone or iPad, Safari users can choose **Install on iPhone/iPad** from the profile menu to download the removable Web Clip configuration. Use the deployment's real `FRONTEND_URL` (or `APP_URL` fallback) so the icon opens the office site rather than a loopback address. Safari's **Add to Home Screen → Open as Web App** is also available. Check Web Push separately on the installed Home Screen app.
+
+To preview the shared interface from an iPhone on the same trusted Wi-Fi, start the local Docker backend and run `npm run preview:phone -- <your-computers-private-wifi-ip>` from `frontend/`. The command prints the Safari URL and serves the built UI through the selected interface on port 4173, with the API proxied to the local gateway. If 4173 is busy, add a port such as `4183` after the IP. Use test data and stop the preview with Ctrl+C. This HTTP preview is for layout and workflow checks; it hides the iOS profile that would otherwise point to the computer's loopback address. Use a trusted HTTPS test deployment for profile installation and push acceptance.
 
 ## Ticket SLA and Assignment Behavior
 

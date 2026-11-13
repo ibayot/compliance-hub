@@ -50,6 +50,7 @@ import {
 } from '@/lib/api/document-types';
 import { useAuth } from '@/contexts/AuthContext';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 
 const apiErrorMessage = (error: any, fallback: string) => {
   const message = error?.response?.data?.message;
@@ -388,6 +389,7 @@ export default function UnitsPage() {
     setHasReportorialRequirements(false);
     setOpen(true);
   };
+  const addUnitButtonRef = useMobilePageAction('Add Unit');
 
   const handleEdit = (unit: Unit) => {
     setEditingUnit(unit);
@@ -459,7 +461,7 @@ export default function UnitsPage() {
       Manage organizational units and their reportorial document types
     </Typography>
   </Box>
-  {canManageUnits && <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
+  {canManageUnits && <Button ref={addUnitButtonRef} variant="contained" startIcon={<AddIcon />} onClick={handleCreate} sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
     Add Unit
   </Button>}
 </Stack>

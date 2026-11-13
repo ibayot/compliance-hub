@@ -33,23 +33,22 @@ export class DocumentProcessor {
     const { documentId, versionId } = job.data;
 
     this.logger.log(`Processing document: ${documentId}, version: ${versionId}`);
-
+    let versionNumber: number | undefined;
     try {
-      // Update status to processing
-      await this.documentRepo.update(documentId, {
-        status: DocumentStatus.PROCESSING,
-      });
-
       // Get version to access file path
       const version = await this.versionRepo
         .createQueryBuilder('version')
         .addSelect('version.file_blob')
         .where('version.id = :versionId', { versionId })
+        .andWhere('version.document_id = :documentId', { documentId })
         .getOne();
 
       if (!version) {
         throw new Error('Version not found');
       }
+      versionNumber = version.version_number;
+      const activeVersion = { id: documentId, current_version: versionNumber, is_deleted: false };
+      await this.documentRepo.update(activeVersion, { status: DocumentStatus.PROCESSING });
 
       // Read file from blob first, then fallback to filesystem for backward compatibility
       const fileBuffer =
@@ -84,36 +83,34 @@ export class DocumentProcessor {
       }
 
       // Update document with extracted text
-      await this.documentRepo.update(documentId, {
-        extracted_text: extractedText,
-        status: DocumentStatus.READY,
-      });
-
       // Keep extracted text on the processed version as well
       await this.versionRepo.update(versionId, {
         extracted_text: extractedText,
       });
+      await this.documentRepo.update(activeVersion, {
+        extracted_text: extractedText,
+        status: DocumentStatus.READY,
+      });
 
       this.logger.log(`Document processed successfully: ${documentId}`);
 
-      // Queue preview generation
-      await this.documentQueue.add('generate-preview', {
-        versionId,
-      });
-
-      // Queue metrics computation
-      await this.documentQueue.add('compute-metrics', {
-        versionId,
-      });
-
-      this.logger.log(`Queued metrics computation for version: ${versionId}`);
+      const queued = await Promise.allSettled([
+        this.documentQueue.add('generate-preview', { versionId }),
+        this.documentQueue.add('compute-metrics', { versionId }),
+      ]);
+      if (queued.some((result) => result.status === 'rejected')) {
+        this.logger.warn(`Could not enqueue every preview/metrics job for version ${versionId}`);
+      }
     } catch (error) {
       this.logger.error(`Failed to process document: ${documentId}`, error.stack);
 
       // Update status to failed
-      await this.documentRepo.update(documentId, {
-        status: DocumentStatus.FAILED,
-      });
+      if (versionNumber !== undefined) {
+        await this.documentRepo.update(
+          { id: documentId, current_version: versionNumber, is_deleted: false },
+          { status: DocumentStatus.FAILED },
+        );
+      }
 
       throw error;
     }

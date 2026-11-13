@@ -4,6 +4,8 @@ Load only the document selected by the active profile.
 
 - [System map](system-map.md)
 - [Ticketing](ticketing.md)
+- [Workspace and mobile](workspace-and-mobile.md)
+- [Notifications](notifications.md)
 - [Monthly ticket report builder](ticket-report-builder.md)
 - [Account request integration API](server-admin-api.md)
 - [Compliance documents and reporting](compliance.md)

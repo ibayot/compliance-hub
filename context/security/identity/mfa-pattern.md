@@ -34,9 +34,11 @@ Document allowed authenticators and fallback channels. Treat recovery codes as c
 - **SEC-MFA-002** — MUST apply explicit verification and audit requirements to factor removal, replacement, and recovery.
 - **SEC-MFA-003** — MUST NOT silently downgrade a required factor through an alternate login, API, or recovery route.
 
+- **SEC-MFA-004** — Verification and resend MUST enforce server-side challenge expiry and attempt limits under concurrent requests. A resend must honor cooldown, invalidate any replaced code and preserve the applicable failure budget. Use the authoritative lock or expiry outcome to guide the user back to an eligible sign-in or authorized recovery flow.
+
 ## Validation
 
-Test unverified enrollment, replayed challenge, wrong factor, replacement, recovery-code reuse, and all alternate login paths.
+Test unverified enrollment, replayed challenge, wrong factor, replacement, recovery-code reuse, and all alternate login paths. Exercise repeated clicks, concurrent verification and resend, old codes after resend, lock expiry, and authorized unlock. Verify policy combinations for each configured delivery mode and confirm an unavailable required factor does not silently sign the user in.
 
 ## Exceptions
 

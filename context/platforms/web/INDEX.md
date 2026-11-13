@@ -23,6 +23,8 @@ Focused platform context avoids importing unrelated language, framework, or runt
 - [Web Semantics and Navigation](semantic-navigation-pattern.md) — `PLAT-WEB-NAV`
 - [Browser Storage and Session State](storage-session-pattern.md) — `PLAT-WEB-STORAGE`
 - [Responsive Layout and Web Assets](responsive-asset-pattern.md) — `PLAT-WEB-RESP`
+- [Progressive Web App Installability](pwa-installability-pattern.md) — `PLAT-WEB-PWA`
+- [Web Push Notifications](web-push-notifications-pattern.md) — `PLAT-WEB-PUSH`
 
 ## Implementation
 

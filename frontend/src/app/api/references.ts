@@ -321,6 +321,7 @@ export interface Ticket {
   requester?: {
     id: number;
     email: string;
+    role?: string;
     firstName?: string;
     middleName?: string;
     lastName?: string;
@@ -1316,6 +1317,21 @@ export const ticketsApi = {
     return response.data;
   },
 
+  correctRatedRequester: async (
+    id: string,
+    requesterId: number,
+    expectedUpdatedAt: string,
+    justification: string,
+    pending?: { pendingStaffId: string; requesterEmail: string },
+  ): Promise<Ticket> => {
+    const response = await apiClient.patch(`/tickets/${id}/requester-rating-correction`, {
+      ...(pending ? pending : { requesterId }),
+      expectedUpdatedAt,
+      justification,
+    });
+    return response.data;
+  },
+
   getAssigneeCorrectionOptions: async (ticketId: string): Promise<TechnicianOption[]> => {
     const response = await apiClient.get(
       `/tickets/assignee-correction-options?ticketId=${encodeURIComponent(ticketId)}`,
@@ -1467,15 +1483,14 @@ export const ticketsApi = {
     month?: number;
     quarter?: number;
     semester?: number;
-  }): Promise<any[]> => {
+  }, options?: TicketReadOptions): Promise<any[]> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', filters.year.toString());
     if (filters?.month) params.append('month', filters.month.toString());
     if (filters?.quarter) params.append('quarter', filters.quarter.toString());
     if (filters?.semester) params.append('semester', filters.semester.toString());
     const qs = params.toString() ? `?${params.toString()}` : '';
-    const response = await apiClient.get(`/ticket-settings/sla-insights${qs}`);
-    return response.data;
+    return readTicketData(`/ticket-settings/sla-insights${qs}`, options);
   },
 
   /** Get ticket satisfaction reports with optional filters (QA #11) */
@@ -1498,7 +1513,7 @@ export const ticketsApi = {
     semester?: number;
     technicianId?: number;
     ticketType?: string;
-  }): Promise<TicketReportResult> => {
+  }, options?: TicketReadOptions): Promise<TicketReportResult> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
     if (filters?.month) params.append('month', String(filters.month));
@@ -1506,8 +1521,7 @@ export const ticketsApi = {
     if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
-    const response = await apiClient.get(`/tickets/reports?${params}`);
-    return response.data;
+    return readTicketData(`/tickets/reports?${params}`, options);
   },
 
   /** Get performance metrics (Resolution time, SLA compliance, Escalation rates) */
@@ -1538,7 +1552,7 @@ export const ticketsApi = {
     semester?: number;
     technicianId?: number;
     ticketType?: string;
-  }): Promise<RatingsReportResult> => {
+  }, options?: TicketReadOptions): Promise<RatingsReportResult> => {
     const params = new URLSearchParams();
     if (filters?.year) params.append('year', String(filters.year));
     if (filters?.month) params.append('month', String(filters.month));
@@ -1546,8 +1560,7 @@ export const ticketsApi = {
     if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
-    const response = await apiClient.get(`/tickets/ratings-report?${params}`);
-    return response.data;
+    return readTicketData(`/tickets/ratings-report?${params}`, options);
   },
 
   getReportTechnicians: async (filters?: {
@@ -1556,7 +1569,7 @@ export const ticketsApi = {
     quarter?: number;
     semester?: number;
     ticketType?: string;
-  }): Promise<
+  }, options?: TicketReadOptions): Promise<
     Array<{
       id: number;
       firstName: string;
@@ -1572,8 +1585,7 @@ export const ticketsApi = {
     if (filters?.quarter) params.append('quarter', String(filters.quarter));
     if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
-    const response = await apiClient.get(`/tickets/report-technicians?${params}`);
-    return response.data;
+    return readTicketData(`/tickets/report-technicians?${params}`, options);
   },
 
   /** Get specific issues breakdown */
@@ -1584,7 +1596,7 @@ export const ticketsApi = {
     semester?: number;
     technicianId?: number;
     ticketType?: string;
-  }): Promise<
+  }, options?: TicketReadOptions): Promise<
     Array<{ categoryName: string; issueName: string; count: number; status: string }>
   > => {
     const params = new URLSearchParams();
@@ -1594,8 +1606,7 @@ export const ticketsApi = {
     if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.technicianId) params.append('technicianId', String(filters.technicianId));
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
-    const response = await apiClient.get(`/tickets/reports/issue-counts?${params}`);
-    return response.data;
+    return readTicketData(`/tickets/reports/issue-counts?${params}`, options);
   },
 
   // --- Escalation ---
@@ -1944,9 +1955,8 @@ export const auditLogsApi = {
 // Attendance API
 export const attendanceApi = {
   // System Status
-  getSystemStatus: async (): Promise<{ isOnline: boolean }> => {
-    const response = await apiClient.get('/attendance/system-status');
-    return response.data;
+  getSystemStatus: async (options?: TicketReadOptions): Promise<{ isOnline: boolean }> => {
+    return readTicketData('/attendance/system-status', options);
   },
   // Tech attendance
   getMyShift: async (): Promise<{
@@ -1965,11 +1975,11 @@ export const attendanceApi = {
     startDate: string,
     endDate: string,
     ticketType?: string,
+    options?: TicketReadOptions,
   ): Promise<TechAttendance[]> => {
     const params = new URLSearchParams({ startDate, endDate });
     if (ticketType) params.append('ticketType', ticketType);
-    const response = await apiClient.get(`/attendance?${params}`);
-    return response.data;
+    return readTicketData(`/attendance?${params}`, options);
   },
   deleteAttendance: async (userId: number, date: string): Promise<any> => {
     const response = await apiClient.delete(`/attendance/${userId}/${date}`);
@@ -1998,10 +2008,9 @@ export const attendanceApi = {
     );
     return response.data;
   },
-  getTechnicians: async (ticketType?: string): Promise<AttendanceTechnicianRecord[]> => {
+  getTechnicians: async (ticketType?: string, options?: TicketReadOptions): Promise<AttendanceTechnicianRecord[]> => {
     const params = ticketType ? `?ticketType=${ticketType}` : '';
-    const response = await apiClient.get(`/attendance/technicians${params}`);
-    return response.data;
+    return readTicketData(`/attendance/technicians${params}`, options);
   },
   getStaffLogins: async (date?: string): Promise<StaffLoginRecord[]> => {
     const params = date ? `?date=${date}` : '';
@@ -2019,12 +2028,11 @@ export const attendanceApi = {
   },
 
   // Office days
-  getOfficeDays: async (startDate: string, endDate: string): Promise<OfficeDay[]> => {
+  getOfficeDays: async (startDate: string, endDate: string, options?: TicketReadOptions): Promise<OfficeDay[]> => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    const response = await apiClient.get(`/attendance/office-days?${params}`);
-    return response.data;
+    return readTicketData(`/attendance/office-days?${params}`, options);
   },
   setOfficeDay: async (data: {
     date: string;
@@ -2036,6 +2044,11 @@ export const attendanceApi = {
     return response.data;
   },
 };
+
+export interface BrowserPushConfig {
+  enabled: boolean;
+  publicKey: string | null;
+}
 
 export const notificationsApi = {
   getSummary: async (): Promise<{ notifications: any[]; unreadCount: number }> => {
@@ -2057,5 +2070,26 @@ export const notificationsApi = {
   markRead: async (id: number): Promise<{ success: boolean }> => {
     const response = await apiClient.post(`/notifications/${id}/mark-read`);
     return response.data;
+  },
+  getPushConfig: async (): Promise<BrowserPushConfig> => {
+    const response = await apiClient.get('/notifications/push-config');
+    return response.data;
+  },
+  savePushSubscription: async (subscription: PushSubscriptionJSON): Promise<{ enabled: true }> => {
+    const response = await apiClient.post('/notifications/push-subscription', subscription);
+    return response.data;
+  },
+  removePushSubscription: async (endpoint: string): Promise<{ removed: boolean }> => {
+    const response = await apiClient.delete('/notifications/push-subscription', { data: { endpoint } });
+    return response.data;
+  },
+  unsubscribeCurrentPushSubscription: async (): Promise<void> => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const registration = await navigator.serviceWorker.getRegistration('/').catch(() => undefined);
+    const subscription = await registration?.pushManager.getSubscription().catch(() => null);
+    if (!subscription) return;
+    const removeRequest = notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
+    await subscription.unsubscribe().catch(() => false);
+    await removeRequest;
   },
 };

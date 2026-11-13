@@ -18,6 +18,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
+import MobilePageAction from './MobilePageAction';
 import { useSnackbar } from 'notistack';
 import Sidebar from './Sidebar';
 import AppBar from './AppBar';
@@ -33,6 +34,7 @@ import ChangelogDialog from '@/components/ChangelogDialog';
 import { AppRelease, changelogApi } from '@/lib/api/changelog';
 import { useSse } from '@/lib/utils/useSse';
 import { AttendanceAssignmentAlert, ticketsApi } from '@/app/api/references';
+import { MobileNavigationProvider, useMobileNavigation } from '@/contexts/MobileNavigationContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -42,7 +44,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <PageTitleProvider>
-        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        <MobileNavigationProvider>
+          <DashboardLayoutContent>{children}</DashboardLayoutContent>
+        </MobileNavigationProvider>
       </PageTitleProvider>
     </SidebarProvider>
   );
@@ -56,6 +60,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const { enqueueSnackbar } = useSnackbar();
   const { user, myCap, isSessionLocked, requiresPasswordChange } = useAuth();
   const { layoutPreset, colorTheme, layoutMode, mode } = useThemeMode();
+  const { pageAction } = useMobileNavigation();
   const { services, loaded } = useServiceAvailability();
   const pageFamily = location.pathname === '/dashboard'
     ? 'dashboard'
@@ -232,10 +237,18 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
 
   return (
     <Box
+      className="app-shell"
       data-app-layout-preset={layoutPreset}
       data-app-color-theme={colorTheme}
       data-app-layout-mode={layoutMode}
-      sx={{ display: 'flex', minHeight: '100vh' }}
+      sx={{
+        display: 'flex',
+        width: '100%',
+        minWidth: 0,
+        minHeight: '100vh',
+        overflowX: 'clip',
+        '@supports (height: 100dvh)': { minHeight: '100dvh' },
+      }}
     >
       <Box
         component="a"
@@ -349,7 +362,11 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       />
 
       {/* Sidebar */}
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+        onMobileMenuOpen={() => setMobileOpen(true)}
+      />
 
       {/* Main Content */}
       <Box
@@ -360,8 +377,18 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         sx={{
           flexGrow: 1,
           minWidth: 0,
+          width: '100%',
+          maxWidth: '100%',
+          overflowX: 'clip',
           bgcolor: 'background.default',
           minHeight: '100vh',
+          '@supports (height: 100dvh)': { minHeight: '100dvh' },
+          pb: {
+            xs: pageAction
+              ? 'calc(136px + env(safe-area-inset-bottom))'
+              : 'calc(80px + env(safe-area-inset-bottom))',
+            md: 0,
+          },
           transition: (theme) =>
             theme.transitions.create(['margin', 'width'], {
               easing: theme.transitions.easing.sharp,
@@ -370,7 +397,21 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         }}
       >
         {/* Toolbar spacing */}
-        <Toolbar />
+        <Toolbar
+          className="app-main-toolbar-spacer"
+          sx={{
+            height: {
+              xs: 'calc(56px + env(safe-area-inset-top))',
+              sm: 'calc(64px + env(safe-area-inset-top))',
+              md: 64,
+            },
+            minHeight: {
+              xs: 'calc(56px + env(safe-area-inset-top))',
+              sm: 'calc(64px + env(safe-area-inset-top))',
+              md: 64,
+            },
+          }}
+        />
 
         {/* Shared content frame keeps every authenticated page aligned to its appearance preset. */}
         <Box
@@ -382,6 +423,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           data-app-layout-mode={layoutMode}
           sx={{
             width: 'calc(100% - 48px)',
+            minWidth: 0,
             maxWidth: APP_LAYOUT_MAX_WIDTH[layoutPreset],
             mx: 'auto',
             py: layoutPreset === 'operations-grid' ? 2.5 : 3,
@@ -393,7 +435,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
             '--app-layout-muted': (theme) => theme.palette.text.secondary,
             '@media (max-width:600px)': {
               width: 'calc(100% - 24px)',
-              py: 2,
+              py: 1,
             },
           }}
         >
@@ -415,6 +457,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           )}
         </Box>
       </Box>
+      <MobilePageAction />
     </Box>
   );
 }

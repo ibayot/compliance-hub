@@ -1,8 +1,9 @@
 'use client';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -18,158 +19,88 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
+  Tab,
+  Tabs,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { documentsApi, Document } from '@/lib/api/documents';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDocumentPreview } from '@/lib/utils/useDocumentPreview';
+import { documentsApi, type Document } from '@/lib/api/documents';
 import { reviewsApi, ReviewDecision } from '@/lib/api/reviews';
 import DocumentViewer from '@/components/documents/DocumentViewer';
 import { useAuth } from '@/contexts/AuthContext';
+
+const REVIEW_PAGE_SIZE = 20;
+const REVIEW_LABELS: Record<NonNullable<Document['compliance_status']>, string> = {
+  pending: 'Not reviewed',
+  compliant: 'Compliant',
+  non_compliant: 'Non-compliant',
+  needs_revision: 'Needs revision',
+};
+
+function ReviewStatus({ document }: { document: Document }) {
+  const status = document.compliance_status ?? 'pending';
+  return <Chip size="small" label={REVIEW_LABELS[status]}
+    color={status === 'compliant' ? 'success' : status === 'non_compliant' ? 'error' : status === 'needs_revision' ? 'warning' : 'default'} />;
+}
 
 export default function ReviewsPage() {
   const { user, myCap } = useAuth();
   const isSuperOrReviewer = !!myCap?.isReviewsAccess;
   const canManageReviews = !!myCap?.isReviewsManage;
-  const [loading, setLoading] = useState(true);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [latestReviewByDoc, setLatestReviewByDoc] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const compact = useMediaQuery(theme.breakpoints.down('sm'));
+  const [page, setPage] = useState(0);
+  const [reviewTab, setReviewTab] = useState<'preview' | 'decision'>('preview');
 
-  const [open, setOpen] = useState(false);
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string>('');
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [decision, setDecision] = useState<ReviewDecision>('needs_revision');
   const [remarks, setRemarks] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
-  const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
-  const [previewError, setPreviewError] = useState<string>('');
-  const [submitError, setSubmitError] = useState<string>('');
-
-  const selectedDocument = useMemo(
-    () => documents.find((document) => document.id === selectedDocumentId) || null,
-    [documents, selectedDocumentId],
+  const reviewsQuery = useQuery({
+    queryKey: ['documents', 'review-queue', user?.id, page],
+    queryFn: ({ signal }) => documentsApi.listDocuments({ review_queue: true, page: page + 1, limit: REVIEW_PAGE_SIZE }, { signal }),
+    enabled: isSuperOrReviewer,
+    retry: false,
+  });
+  const documents = reviewsQuery.data?.data ?? [];
+  const total = reviewsQuery.data?.total ?? 0;
+  const lastPage = Math.max(0, Math.ceil(total / REVIEW_PAGE_SIZE) - 1);
+  useEffect(() => {
+    if (reviewsQuery.isSuccess && page > lastPage) setPage(lastPage);
+  }, [lastPage, page, reviewsQuery.isSuccess]);
+  const refreshedSelection = documents.find((document) => document.id === selectedDocument?.id);
+  const isSelectedDocumentAlreadyCompliant = refreshedSelection?.compliance_status === 'compliant';
+  const [submitError, setSubmitError] = useState('');
+  const [versionConflict, setVersionConflict] = useState(false);
+  const { preview, loading: previewLoading, error: previewError, retry: retryPreview } = useDocumentPreview(
+    selectedDocument ? { documentId: selectedDocument.id, versionNumber: selectedDocument.current_version } : null,
   );
 
-  const selectedDocumentReviewStatus = selectedDocumentId
-    ? latestReviewByDoc[selectedDocumentId] || 'not_reviewed'
-    : 'not_reviewed';
-  const isSelectedDocumentAlreadyCompliant = selectedDocumentReviewStatus === 'compliant';
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const response = await documentsApi.listDocuments({ status: 'ready', limit: 200 });
-      const docs = response.data || [];
-      setDocuments(docs);
-
-      const reviewPairs = await Promise.all(
-        docs.map(async (doc) => {
-          const latest = await reviewsApi.getLatestReview(doc.id);
-          return [doc.id, latest?.decision || 'not_reviewed'] as const;
-        }),
-      );
-
-      const map: Record<string, string> = {};
-      reviewPairs.forEach(([docId, latestDecision]) => {
-        map[docId] = latestDecision;
-      });
-      setLatestReviewByDoc(map);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const pendingCount = useMemo(() => {
-    return documents.filter((document) => {
-      const reviewStatus = latestReviewByDoc[document.id];
-      return reviewStatus !== 'compliant';
-    }).length;
-  }, [documents, latestReviewByDoc]);
-
-  const releasePreviewBlob = () => {
-    setPreviewBlobUrl((previousUrl) => {
-      if (previousUrl && previousUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previousUrl);
-      }
-      return null;
-    });
-  };
-
-  const openReviewDialog = async (documentId: string) => {
-    setSelectedDocumentId(documentId);
+  const openReviewDialog = (document: Document) => {
+    setSelectedDocument(document);
     setDecision('needs_revision');
     setRemarks('');
-    setPreviewError('');
     setSubmitError('');
-    setOpen(true);
-
-    const document = documents.find((item) => item.id === documentId);
-    if (!document || (document.status !== 'ready' && document.status !== 'pending')) {
-      releasePreviewBlob();
-      setPreviewError('Preview is not available yet. The document may still be processing.');
-      enqueueSnackbar('Preview is not available yet. The document may still be processing.', {
-        variant: 'warning',
-      });
-      return;
-    }
-
-    try {
-      setPreviewLoading(true);
-      const versions = await documentsApi.getVersionHistory(documentId);
-      const currentVersion = versions.find(
-        (version) => version.version_number === document.current_version,
-      );
-
-      if (!currentVersion) {
-        releasePreviewBlob();
-        setPreviewError('Current document version was not found.');
-        enqueueSnackbar('Current document version was not found.', { variant: 'error' });
-        return;
-      }
-
-      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(
-        documentId,
-        currentVersion.id,
-      );
-      setPreviewMimeType(mimeType);
-      setPreviewBlobUrl((previousUrl) => {
-        if (previousUrl && previousUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(previousUrl);
-        }
-        return blobUrl;
-      });
-    } catch {
-      releasePreviewBlob();
-      setPreviewError('Unable to load digital preview for this document.');
-      enqueueSnackbar('Unable to load digital preview for this document.', { variant: 'error' });
-    } finally {
-      setPreviewLoading(false);
-    }
+    setVersionConflict(false);
+    setReviewTab('preview');
   };
 
   const closeDialog = () => {
-    setOpen(false);
-    releasePreviewBlob();
-    setPreviewError('');
-    setSubmitError('');
+    setSelectedDocument(null);
   };
 
-  useEffect(() => {
-    return () => {
-      releasePreviewBlob();
-    };
-  }, []);
-
   const submitReview = async () => {
-    if (!selectedDocumentId) {
+    if (!canManageReviews || !selectedDocument || saving || versionConflict) {
       return;
     }
 
@@ -181,27 +112,30 @@ export default function ReviewsPage() {
     }
 
     if ((decision === 'needs_revision' || decision === 'non_compliant') && !remarks.trim()) {
-      enqueueSnackbar(
-        'Remarks are required when tagging a document as needs revision or non-compliant.',
-        { variant: 'warning' },
-      );
+      setSubmitError('Enter review remarks before submitting this decision.');
       return;
     }
 
     try {
       setSaving(true);
       setSubmitError('');
-      await reviewsApi.submitReview(selectedDocumentId, {
+      await reviewsApi.submitReview(selectedDocument.id, {
         decision,
         remarks,
+        expectedVersionNumber: selectedDocument.current_version,
       });
       enqueueSnackbar('Review submitted successfully.', { variant: 'success' });
       closeDialog();
-      await loadData();
+      void queryClient.invalidateQueries({ queryKey: ['documents'] });
+      void queryClient.invalidateQueries({ queryKey: ['document', selectedDocument.id] });
     } catch (error: any) {
-      enqueueSnackbar(error?.response?.data?.message || 'Failed to submit review tag.', {
-        variant: 'error',
-      });
+      if (error?.response?.status === 409) {
+        setVersionConflict(true);
+        setSubmitError('A newer version is available. Copy any remarks you want to keep, then close and reopen the document to review the new version.');
+        void reviewsQuery.refetch();
+      } else {
+        setSubmitError(error?.response?.data?.message || 'Could not submit the review. Check the review queue before trying again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -217,24 +151,44 @@ export default function ReviewsPage() {
 
   return (
     <Box>
-<WorkspaceLayout kind="standard" context={<><Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+<WorkspaceLayout kind="standard" context={<><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={3}>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
             Manual Compliance Reviews
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Open each document digitally and tag compliance decision directly in the review
-            workspace
+            Open the current document version and record a compliance decision.
           </Typography>
         </Box>
-        <Chip label={`${pendingCount} Pending Reviews`} color="primary" />
-      </Box></>}>
+        {reviewsQuery.isSuccess && <Chip label={`${total} ready for review`} color="primary" />}
+      </Stack></>}>
 <Paper sx={{ p: 2 }}>
-        {loading ? (
+        {reviewsQuery.isError ? <Alert severity="error" action={<Button color="inherit" onClick={() => void reviewsQuery.refetch()}>Retry</Button>}>Could not load the review queue.</Alert> : reviewsQuery.isLoading ? (
           <Box display="flex" justifyContent="center" py={6}>
-            <CircularProgress />
+            <CircularProgress aria-label="Loading review queue" />
           </Box>
+        ) : total === 0 ? (
+          <Typography role="status" textAlign="center" color="text.secondary" py={3}>No documents available for review</Typography>
         ) : (
+          <>
+          {compact ? (
+            <Stack component="ul" spacing={1.25} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+              {documents.map((document) => (
+                <Paper component="li" variant="outlined" key={document.id} sx={{ p: 1.5, minWidth: 0 }}>
+                  <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{document.title}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                    {[document.document_type, document.period, document.year].filter(Boolean).join(' • ')} · Version {document.current_version}
+                  </Typography>
+                  <Stack direction="row" gap={1} alignItems="center" justifyContent="space-between" flexWrap="wrap" mt={1}>
+                    <ReviewStatus document={document} />
+                    <Button variant="outlined" onClick={() => openReviewDialog(document)} sx={{ minHeight: 44 }}>
+                      {canManageReviews ? 'Review' : 'View'}
+                    </Button>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          ) : (
           <TableContainer>
             <Table>
               <TableHead>
@@ -247,11 +201,7 @@ export default function ReviewsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {documents
-                  .filter((document) => latestReviewByDoc[document.id] !== 'compliant')
-                  .map((document) => {
-                    const reviewStatus = latestReviewByDoc[document.id] || 'not_reviewed';
-                    return (
+                {documents.map((document) => (
                       <TableRow key={document.id} hover>
                         <TableCell>
                           <Typography fontWeight={600}>{document.title}</Typography>
@@ -262,57 +212,47 @@ export default function ReviewsPage() {
                         <TableCell>{document.document_type}</TableCell>
                         <TableCell>{document.status}</TableCell>
                         <TableCell>
-                          <Chip
-                            size="small"
-                            color={
-                              reviewStatus === 'compliant'
-                                ? 'success'
-                                : reviewStatus === 'non_compliant'
-                                  ? 'error'
-                                  : reviewStatus === 'needs_revision'
-                                    ? 'warning'
-                                    : 'default'
-                            }
-                            label={reviewStatus.replace('_', ' ')}
-                          />
+                          <ReviewStatus document={document} />
                         </TableCell>
                         <TableCell align="right">
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => openReviewDialog(document.id)}
+                            onClick={() => openReviewDialog(document)}
                           >
                             {canManageReviews ? 'Review' : 'View'}
                           </Button>
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                {documents.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center">
-                      No documents available for review
-                    </TableCell>
-                  </TableRow>
-                )}
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>
+          )}
+          {total > REVIEW_PAGE_SIZE && <TablePagination component="div" count={total} page={Math.min(page, lastPage)}
+            rowsPerPage={REVIEW_PAGE_SIZE} rowsPerPageOptions={[]} onPageChange={(_, next) => setPage(next)} />}
+          </>
         )}
       </Paper>
 </WorkspaceLayout>
-<Dialog open={open} onClose={closeDialog} fullWidth maxWidth="xl">
-        <DialogTitle>Submit Manual Review</DialogTitle>
+<Dialog open={!!selectedDocument} onClose={saving ? undefined : closeDialog} fullScreen={compact} fullWidth maxWidth="xl">
+        <DialogTitle>{canManageReviews ? 'Manual Review' : 'View Document Review'}</DialogTitle>
+        {compact && canManageReviews && <Tabs value={reviewTab} onChange={(_, next) => setReviewTab(next)} variant="fullWidth" aria-label="Review steps">
+          <Tab value="preview" label="Document" id="review-preview-tab" aria-controls="review-preview" />
+          <Tab value="decision" label="Decision" id="review-decision-tab" aria-controls="review-decision" />
+        </Tabs>}
         <DialogContent>
-          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '2fr 1fr' }} gap={2}>
-            <Paper variant="outlined" sx={{ p: 2, minHeight: 600 }}>
+          <Box display="grid" gridTemplateColumns={{ xs: 'minmax(0, 1fr)', md: 'minmax(0, 2fr) minmax(0, 1fr)' }} gap={2}>
+            <Paper variant="outlined" id="review-preview" role={compact && canManageReviews ? 'tabpanel' : undefined}
+              aria-labelledby={compact && canManageReviews ? 'review-preview-tab' : undefined}
+              hidden={compact && canManageReviews && reviewTab !== 'preview'} sx={{ p: { xs: 1, sm: 2 }, minHeight: { sm: 600 }, minWidth: 0 }}>
               <Typography variant="subtitle1" gutterBottom>
                 Digital Document Viewer
               </Typography>
               {selectedDocument && (
                 <Typography variant="body2" color="text.secondary" mb={2}>
                   {selectedDocument.title} • {selectedDocument.document_type} •{' '}
-                  {selectedDocument.period} {selectedDocument.year}
+                  {selectedDocument.period} {selectedDocument.year} • Version {selectedDocument.current_version}
                 </Typography>
               )}
 
@@ -323,22 +263,25 @@ export default function ReviewsPage() {
               )}
 
               {!previewLoading && previewError && (
-                <Typography color="warning.main">{previewError}</Typography>
+                <Alert severity="warning" action={<Button color="inherit" onClick={retryPreview}>Retry</Button>}>Could not load the document preview.</Alert>
               )}
 
-              {!previewLoading && !previewError && previewBlobUrl && (
+              {preview && (
                 <DocumentViewer
-                  pdfUrl={previewBlobUrl}
-                  mimeType={previewMimeType}
+                  previewBlob={preview.blob}
+                  mimeType={preview.mimeType}
                   viewerTitle={selectedDocument?.title || 'Document Viewer'}
                 />
               )}
             </Paper>
 
-            <Paper variant="outlined" sx={{ p: 2 }}>
+            <Paper variant="outlined" id="review-decision" role={compact && canManageReviews ? 'tabpanel' : undefined}
+              aria-labelledby={compact && canManageReviews ? 'review-decision-tab' : undefined}
+              hidden={compact && canManageReviews && reviewTab !== 'decision'} sx={{ p: 2, minWidth: 0 }}>
               <Typography variant="subtitle1" gutterBottom>
                 Compliance Tagging
               </Typography>
+              {submitError && <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert>}
 
               {!canManageReviews ? (
                 <Typography color="text.secondary">
@@ -396,12 +339,12 @@ export default function ReviewsPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeDialog}>Cancel</Button>
-          {canManageReviews && !isSelectedDocumentAlreadyCompliant && (
+          <Button onClick={closeDialog} disabled={saving}>Close</Button>
+          {canManageReviews && !isSelectedDocumentAlreadyCompliant && (!compact || reviewTab === 'decision') && (
             <Button
               variant="contained"
               onClick={submitReview}
-              disabled={saving || !selectedDocumentId}
+              disabled={saving || !selectedDocument || versionConflict || previewLoading}
             >
               {saving ? 'Submitting...' : 'Submit Review'}
             </Button>

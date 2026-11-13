@@ -39,6 +39,8 @@ import {
   Checkbox,
   FormGroup,
   InputAdornment,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -62,6 +64,7 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import AuthenticatedImageGallery from '@/app/shared/AuthenticatedImageGallery';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 
 const TYPE_LABELS: Record<string, string> = {
   it_support: 'IT Support',
@@ -93,6 +96,37 @@ const FILTER_FIELD_SX = {
   minWidth: 0,
 } as const;
 
+function CompactSettingRecord({ name, context, active, onEdit, onDelete, children }: {
+  name: string;
+  context?: string;
+  active: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  children: React.ReactNode;
+}) {
+  const identity = context ? `${name} in ${context}` : name;
+  return (
+    <Card component="article" aria-label={identity} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
+      <Stack spacing={0.5}>
+        <Typography component="h3" variant="body1" fontWeight={700}>{name}</Typography>
+        {context && <Typography variant="body2" color="text.secondary">{context}</Typography>}
+        {children}
+        <Stack direction="row" alignItems="center" flexWrap="wrap" justifyContent="space-between" gap={0.5}>
+          <Chip label={active ? 'Active' : 'Inactive'} color={active ? 'success' : 'default'} size="small" />
+          <Stack direction="row">
+            <IconButton aria-label={`Edit ${identity}`} color="primary" onClick={onEdit} sx={{ width: 44, height: 44 }}>
+              <EditIcon />
+            </IconButton>
+            <IconButton aria-label={`Delete ${identity}`} color="error" onClick={onDelete} sx={{ width: 44, height: 44 }}>
+              <DeleteIcon />
+            </IconButton>
+          </Stack>
+        </Stack>
+      </Stack>
+    </Card>
+  );
+}
+
 interface SettingsFilterPanelProps {
   description: string;
   actionLabel: string;
@@ -110,6 +144,7 @@ function SettingsFilterPanel({
   onClear,
   children,
 }: SettingsFilterPanelProps) {
+  const actionButtonRef = useMobilePageAction(actionLabel);
   return (
     <Box
       sx={{
@@ -144,6 +179,7 @@ function SettingsFilterPanel({
             </Button>
           )}
           <Button
+            ref={actionButtonRef}
             startIcon={<AddIcon />}
             variant="contained"
             size="small"
@@ -162,6 +198,8 @@ function SettingsFilterPanel({
 }
 
 export default function TicketSettingsPage() {
+  const theme = useTheme();
+  const compactRecords = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   const userFeedbackTabIndex = 4;
 
@@ -791,7 +829,21 @@ export default function TicketSettingsPage() {
                 ))}
               </TextField>
             </SettingsFilterPanel>
-            <ResponsiveTable minWidth={680}>
+            {compactRecords ? (
+              <Stack spacing={1}>
+                {catLoading ? <CircularProgress size={24} aria-label="Loading categories" /> :
+                  searchableCategories.length === 0 ? <Typography color="text.secondary">No categories found.</Typography> :
+                  searchableCategories.slice(categoryPage * PAGE_SIZE, (categoryPage + 1) * PAGE_SIZE).map((cat) => (
+                    <CompactSettingRecord key={cat.id} name={cat.name} active={cat.isActive}
+                      onEdit={() => openCatDialog(cat)} onDelete={() => setDeleteCatId(cat.id)}>
+                      <Typography variant="body2" color="text.secondary">
+                        {[cat.isIt && 'IT Support', cat.isDesktop && 'Desktop Support', cat.isPantawid && 'Pantawid ICT Support',
+                          cat.isSpecialized && 'Specialized Concerns'].filter(Boolean).join(' · ') || 'No support types'}
+                      </Typography>
+                    </CompactSettingRecord>
+                  ))}
+              </Stack>
+            ) : <ResponsiveTable minWidth={680}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -808,7 +860,7 @@ export default function TicketSettingsPage() {
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
-                  ) : visibleCategories.length === 0 ? (
+                  ) : searchableCategories.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} align="center">
                         <Typography color="text.secondary" py={2}>
@@ -861,7 +913,7 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </ResponsiveTable>
+            </ResponsiveTable>}
             <TablePagination
               component="div"
               count={searchableCategories.length}
@@ -936,6 +988,25 @@ export default function TicketSettingsPage() {
               <Box display="flex" justifyContent="center" p={4}>
                 <CircularProgress />
               </Box>
+            ) : compactRecords ? (
+              <Stack spacing={1}>
+                {visibleIssues.length === 0 ? <Typography color="text.secondary">No issues found.</Typography> :
+                  visibleIssues.slice(issuePage * PAGE_SIZE, (issuePage + 1) * PAGE_SIZE).map((issue) => (
+                    <CompactSettingRecord key={issue.id} name={issue.name} active={issue.isActive}
+                      context={issue.category?.name || 'Unlinked category'}
+                      onEdit={() => openIssueDialog(issue)} onDelete={() => setDeleteIssueId(issue.id)}>
+                      <Box component="details">
+                        <Typography component="summary" variant="body2" sx={{ cursor: 'pointer', py: 1.25, minHeight: 44 }}>
+                          SLA and time limits
+                        </Typography>
+                        {issue.description && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{issue.description}</Typography>}
+                        <Typography variant="body2">SLA: {issue.slaHours != null ? formatSlaDuration(issue.slaHours) : '—'}</Typography>
+                        <Typography variant="body2">Max pause: {issue.allowablePauseHours ?? 48}h</Typography>
+                        <Typography variant="body2">Max freeze: {issue.maxFreezeHours != null ? `${issue.maxFreezeHours}h` : 'Unlimited'}</Typography>
+                      </Box>
+                    </CompactSettingRecord>
+                  ))}
+              </Stack>
             ) : (
               <ResponsiveTable minWidth={820}>
                 <Table size="small">

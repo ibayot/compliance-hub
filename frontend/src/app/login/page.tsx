@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -20,6 +20,7 @@ import { useSnackbar } from 'notistack';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/lib/api/auth';
+import { readExpiredDestination, signInDestination } from '@/lib/auth/sign-in-destination';
 import { Fingerprint as FingerprintIcon, Visibility, VisibilityOff } from '@mui/icons-material';
 import {
   getBiometricCredentials,
@@ -38,11 +39,13 @@ export default function LoginPage() {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricSaved, setBiometricSaved] = useState(false);
   const [googleSignInEnabled, setGoogleSignInEnabled] = useState(false);
+  const submitting = useRef(false);
   const { login, loginWithGoogle } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
-  const { search } = useLocation();
+  const { search, state } = useLocation();
   const reason = new URLSearchParams(search).get('reason');
-  const redirect = new URLSearchParams(search).get('redirect');
+  const redirect = signInDestination(state?.returnTo) ?? signInDestination(new URLSearchParams(search).get('redirect'))
+    ?? (reason === 'session_expired' ? readExpiredDestination() : undefined);
   const hasGoogleClient = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim().length > 0;
 
   useEffect(() => {
@@ -77,22 +80,22 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !/^\S+@\S+\.\S{2,}$/.test(normalizedEmail)) {
       enqueueSnackbar('Invalid email or password.', { variant: 'error' });
       return;
     }
-    if (password.length < 12) {
-      enqueueSnackbar('Password must be at least 12 characters long.', { variant: 'error' });
+    if (!password) {
+      enqueueSnackbar('Enter your password to sign in.', { variant: 'error' });
       return;
     }
+    submitting.current = true;
     setLoading(true);
 
     try {
-      await login(email, password, redirect ?? undefined);
+      await login(normalizedEmail, password, redirect);
     } catch (err: any) {
-      console.error("LOGIN ERROR:", err);
-
       const responseData = err?.response?.data;
       const rawServerMessage = typeof responseData === 'string' ? responseData : responseData?.message;
       const serverMessage = typeof rawServerMessage === 'string' && rawServerMessage.trim()
@@ -107,42 +110,48 @@ export default function LoginPage() {
           : 'Invalid email or password.');
       enqueueSnackbar(msg, { variant: 'error' });
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
 
   const handleBiometricLogin = async () => {
+    if (submitting.current) return;
     if (!biometricSaved) {
       enqueueSnackbar('Sign in with your email and password first, then enable biometric login from Mobile Settings.', { variant: 'info' });
       return;
     }
 
+    submitting.current = true;
     setBiometricLoading(true);
     try {
       const credentials = await getBiometricCredentials();
-      await login(credentials.username, credentials.password, redirect ?? undefined);
+      await login(credentials.username, credentials.password, redirect);
     } catch (err: any) {
-      console.error('BIOMETRIC LOGIN ERROR:', err);
       const message = err?.response?.data?.message || 'Biometric login failed. You can sign in with email and password instead.';
       enqueueSnackbar(message, { variant: 'error' });
     } finally {
+      submitting.current = false;
       setBiometricLoading(false);
     }
   };
 
   const handleGoogleSuccess = async (response: CredentialResponse) => {
+    if (submitting.current) return;
     const idToken = response.credential;
     if (!idToken) {
       enqueueSnackbar('Google sign-in did not return a valid token.', { variant: 'error' });
       return;
     }
 
+    submitting.current = true;
     setLoading(true);
     try {
       await loginWithGoogle(idToken, redirect ?? undefined);
     } catch (err: any) {
       enqueueSnackbar(err.response?.data?.message || 'Google sign-in failed', { variant: 'error' });
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -267,7 +276,7 @@ export default function LoginPage() {
                 sx={{ mb: 3, '& input::-ms-reveal, & input::-ms-clear': { display: 'none' } }}
               />
 
-              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading}>
+              <Button type="submit" variant="contained" fullWidth size="large" disabled={loading || biometricLoading}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
 

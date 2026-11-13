@@ -35,6 +35,7 @@ import {
   CancelTicketDto,
   AssignTicketDto,
   CorrectTicketRequesterDto,
+  CorrectRatedTicketRequesterDto,
   CorrectTicketAssigneeDto,
   AddCommentDto,
   ReplaceTicketImageDto,
@@ -524,6 +525,22 @@ export class TicketController {
     @Request() req: any,
   ) {
     return this.ticketService.correctTicketRequester(
+      id,
+      dto,
+      req.user.id ?? req.user.userId,
+      req.user.role,
+    );
+  }
+
+  /** PATCH /tickets/:id/requester-rating-correction — correct a non-user requester and reset its rating */
+  @Patch(':id/requester-rating-correction')
+  @RequireCapability('isTicketRequesterCorrection')
+  async correctRatedTicketRequester(
+    @Param('id') id: string,
+    @Body() dto: CorrectRatedTicketRequesterDto,
+    @Request() req: any,
+  ) {
+    return this.ticketService.correctRatedTicketRequester(
       id,
       dto,
       req.user.id ?? req.user.userId,

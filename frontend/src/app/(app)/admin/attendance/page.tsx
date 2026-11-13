@@ -2,8 +2,9 @@
 import WorkspaceTabs from '@/components/layout/WorkspaceTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
+  Alert,
   Box,
   Card,
   CardContent,
@@ -30,6 +31,8 @@ import {
   Button,
   TextField,
   MenuItem,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon,
@@ -41,11 +44,23 @@ import {
   Restore as RestoreDtrIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { attendanceApi, TechAttendance, OfficeDay, AttendanceStatus } from '@/app/api/references';
 import { useSse } from '@/lib/utils/useSse';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+
+const EMPTY_OFFICE_DAYS: OfficeDay[] = [];
+const EMPTY_ATTENDANCE: TechAttendance[] = [];
+const officeDateFormat = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+function getManilaDate() {
+  const parts = Object.fromEntries(officeDateFormat.formatToParts().map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 
 const STATUS_CONFIG: Record<
   AttendanceStatus,
@@ -100,154 +115,84 @@ export default function AttendancePage() {
   /** All RICTMS staff (everyone except regular users) sees their own attendance in the calendar */
   const isRICTMSStaff = user?.role !== 'user';
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const compactAttendance = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [tab, setTab] = useState(0);
-  const now = new Date();
-  const todayStr = formatDate(now);
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState('');
+  const [todayStr, setTodayStr] = useState(getManilaDate);
+  const [officeYear, officeMonth] = todayStr.split('-').map(Number);
+  const [year, setYear] = useState(officeYear);
+  const [month, setMonth] = useState(officeMonth - 1);
 
   // Office days
-  const [officeDays, setOfficeDays] = useState<OfficeDay[]>([]);
   const [officeDaySelection, setOfficeDaySelection] = useState<{ date: string; type: 'office' | 'off' | 'overtime' } | null>(null);
   const [savingOfficeDay, setSavingOfficeDay] = useState(false);
-  const [odLoading, setOdLoading] = useState(false);
 
-  const [attendance, setAttendance] = useState<TechAttendance[]>([]);
-  const [attLoading, setAttLoading] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const [timePickerData, setTimePickerData] = useState<{ userId: number; dateStr: string; status: AttendanceStatus } | null>(null);
   const [timeStr, setTimeStr] = useState('08:00');
   
   // System Status
-  const [systemStatus, setSystemStatus] = useState<{ isOnline: boolean } | null>(null);
 
   // Technicians list (all technicians, regardless of attendance records)
-  const [technicians, setTechnicians] = useState<any[]>([]);
-  const [techLoading, setTechLoading] = useState(false);
 
   const days = useMemo(() => getDaysInMonth(year, month), [year, month]);
   const startDate = formatDate(days[0]);
   const endDate = formatDate(days[days.length - 1]);
 
-  const fetchSystemStatus = useCallback(async () => {
-    try {
-      const status = await attendanceApi.getSystemStatus();
-      setSystemStatus(status);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const fetchOfficeDays = useCallback(async () => {
-    try {
-      setOdLoading(true);
-      const data = await attendanceApi.getOfficeDays(startDate, endDate);
-      setOfficeDays(data);
-    } catch {
-      enqueueSnackbar('Failed to load office days', { variant: 'error' });
-    } finally {
-      setOdLoading(false);
-    }
-  }, [startDate, endDate]);
-
-  const fetchAttendance = useCallback(async () => {
-    try {
-      setAttLoading(true);
-      const data = await attendanceApi.getAttendance(startDate, endDate);
-      setAttendance(data);
-    } catch {
-      enqueueSnackbar('Failed to load attendance', { variant: 'error' });
-    } finally {
-      setAttLoading(false);
-    }
-  }, [startDate, endDate]);
-
-  const fetchTechnicians = useCallback(async () => {
-    try {
-      setTechLoading(true);
-      const data = await attendanceApi.getTechnicians();
-      setTechnicians(data);
-    } catch {
-      enqueueSnackbar('Failed to load technicians', { variant: 'error' });
-    } finally {
-      setTechLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchOfficeDays();
-    fetchSystemStatus();
-  }, [fetchOfficeDays, fetchSystemStatus]);
-  useEffect(() => {
-    if (tab === 1) {
-      fetchTechnicians();
-      fetchAttendance();
-    } else if (isRICTMSStaff && tab === 0) {
-      // All RICTMS staff see their own presence indicator in the Office Days Calendar
-      fetchAttendance();
-    }
-  }, [tab, fetchTechnicians, fetchAttendance, isRICTMSStaff]);
-
-  // ── Silent auto-refresh: update data every 30s without showing loading spinners (avoids flicker) ──
-  const silentRefreshOfficeDays = useCallback(async () => {
-    try {
-      const data = await attendanceApi.getOfficeDays(startDate, endDate);
-      setOfficeDays(data);
-    } catch {
-      /* silent — do not show error on background poll */
-    }
-  }, [startDate, endDate]);
-
-  const silentRefreshTab1 = useCallback(async () => {
-    if (tab !== 1) return;
-    try {
-      const [techs, att] = await Promise.all([
-        attendanceApi.getTechnicians(),
-        attendanceApi.getAttendance(startDate, endDate),
-      ]);
-      setTechnicians(techs);
-      setAttendance(att);
-    } catch {
-      /* silent */
-    }
-  }, [tab, startDate, endDate]);
+  const queryClient = useQueryClient();
+  const active = !!user && !isSessionLocked && !requiresPasswordChange;
+  const mayRead = active && !!myCap?.isAttendanceAccess;
+  const scope = ['attendance-page', user?.id] as const;
+  const officeKey = [...scope, 'office-days', startDate, endDate] as const;
+  const attendanceKey = [...scope, 'records', startDate, endDate] as const;
+  const officeQuery = useQuery({
+    queryKey: officeKey,
+    queryFn: ({ signal }) => attendanceApi.getOfficeDays(startDate, endDate, { signal }),
+    enabled: mayRead,
+    retry: false,
+  });
+  const attendanceQuery = useQuery({
+    queryKey: attendanceKey,
+    queryFn: ({ signal }) => attendanceApi.getAttendance(startDate, endDate, undefined, { signal }),
+    enabled: mayRead && (tab === 1 || isRICTMSStaff),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const techniciansQuery = useQuery({
+    queryKey: [...scope, 'staff'],
+    queryFn: ({ signal }) => attendanceApi.getTechnicians(undefined, { signal }),
+    enabled: mayRead && tab === 1,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const systemQuery = useQuery({
+    queryKey: [...scope, 'dtr'],
+    queryFn: ({ signal }) => attendanceApi.getSystemStatus({ signal }),
+    enabled: mayRead,
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const officeDays = officeQuery.data ?? EMPTY_OFFICE_DAYS;
+  const attendance = attendanceQuery.data ?? EMPTY_ATTENDANCE;
+  const technicians = techniciansQuery.data ?? [];
+  const systemStatus = systemQuery.isError ? undefined : systemQuery.data;
+  const refreshAttendance = () => queryClient.invalidateQueries({ queryKey: scope }, { cancelRefetch: false });
 
   useSse(['ATTENDANCE_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
-    silentRefreshOfficeDays();
-    silentRefreshTab1();
-    silentRefreshTab0Attendance();
+    if (mayRead) void refreshAttendance();
   });
 
-  // Live refresh for attendance data in Tab 0 — so presence indicators update in real time
-  // when a manager tags a staff member as present without requiring a page reload.
-  const silentRefreshTab0Attendance = useCallback(async () => {
-    if (tab !== 0 || !isRICTMSStaff) return;
-    try {
-      const data = await attendanceApi.getAttendance(startDate, endDate);
-      setAttendance(data);
-    } catch {
-      /* silent */
-    }
-  }, [tab, isRICTMSStaff, startDate, endDate]);
-
-  // Re-read the synchronized attendance data once per minute. The backend
-  // reads the DTR VIEW on the same cadence; this keeps the visible table in
-  // sync even when no SSE event is emitted.
   useEffect(() => {
-    const refresh = window.setInterval(() => {
-      if (isSessionLocked || requiresPasswordChange) return;
-      fetchSystemStatus();
-      if (tab === 1) {
-        silentRefreshTab1();
-      } else if (isRICTMSStaff && tab === 0) {
-        silentRefreshTab0Attendance();
-      }
-    }, 60_000);
-
-    return () => window.clearInterval(refresh);
-  }, [tab, isRICTMSStaff, isSessionLocked, requiresPasswordChange, fetchSystemStatus, silentRefreshTab1, silentRefreshTab0Attendance]);
+    const refreshDate = () => setTodayStr(getManilaDate());
+    const interval = window.setInterval(refreshDate, 60_000);
+    window.addEventListener('focus', refreshDate);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshDate);
+    };
+  }, []);
 
   // Office day map: date → OfficeDay
   const odMap = useMemo(() => {
@@ -273,30 +218,12 @@ export default function AttendancePage() {
     const { date: dateStr, type } = officeDaySelection;
     setSavingOfficeDay(true);
     try {
-      const updated = await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: type !== 'off', isOvertime: type === 'overtime' });
-      // Reflect only the confirmed server result.
-      setOfficeDays((prev) => {
-        const idx = prev.findIndex((od) => od.date.slice(0, 10) === dateStr);
-        if (idx !== -1) {
-          const arr = [...prev];
-          arr[idx] = updated;
-          return arr;
-        }
-        return [...prev, updated];
-      });
+      await attendanceApi.setOfficeDay({ date: dateStr, isOfficeDay: type !== 'off', isOvertime: type === 'overtime' });
+      await queryClient.invalidateQueries({ queryKey: scope });
       setOfficeDaySelection(null);
       enqueueSnackbar('Office calendar updated.', { variant: 'success' });
-      // Silently refresh attendance presence indicators (no loading spinner)
-      attendanceApi
-        .getAttendance(startDate, endDate)
-        .then((data) => setAttendance(data))
-        .catch(() => { });
     } catch (err: any) {
-      // Rollback: re-fetch silently to restore truthful server state
-      attendanceApi
-        .getOfficeDays(startDate, endDate)
-        .then((data) => setOfficeDays(data))
-        .catch(() => { });
+      void queryClient.invalidateQueries({ queryKey: officeKey });
       enqueueSnackbar(err?.response?.data?.message || 'Failed to update office day', {
         variant: 'error',
       });
@@ -313,70 +240,30 @@ export default function AttendancePage() {
     return m;
   }, [attendance]);
 
-  const todayInViewedMonth =
-    year === now.getFullYear() && month === now.getMonth() && isWeekday(now);
-  const hasUnmarkedTodayAttendance = useMemo(() => {
-    if (tab !== 1 || !todayInViewedMonth || technicians.length === 0) return false;
-    return technicians.some((tech: any) => !attRecordsMap.get(tech.id)?.get(todayStr));
-  }, [tab, todayInViewedMonth, technicians, attRecordsMap, todayStr]);
-
-  // SSE now handles live-refreshing today's attendance even for unmarked staff.
-
-  const handleSetAttendance = async (userId: number, date: string, status: AttendanceStatus, clockInTime?: string) => {
-    // Optimistic update — immediately reflect in UI without showing loading spinner
-    setAttendance((prev) => {
-      const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
-      if (idx !== -1) {
-        const arr = [...prev];
-        arr[idx] = {
-          ...arr[idx],
-          status,
-          clockInTime: clockInTime ?? arr[idx].clockInTime,
-          isManualOverride: true,
-        };
-        return arr;
-      }
-      // No record yet: create a temporary placeholder
-      return [
-        ...prev,
-        { id: `temp-${userId}-${date}`, userId, date, status, clockInTime, isManualOverride: true, createdAt: '' } as TechAttendance,
-      ];
-    });
+  const activeRows = useRef(new Set<number>());
+  const [pendingRows, setPendingRows] = useState<number[]>([]);
+  const runAttendanceAction = async (userId: number, operation: () => Promise<unknown>, success: string, failure: string) => {
+    if (activeRows.current.has(userId)) return;
+    activeRows.current.add(userId);
+    setPendingRows((current) => [...current, userId]);
     try {
-      const updated = await attendanceApi.setAttendance({ userId, date, status, clockInTime });
-      // Replace temp record with actual server response
-      setAttendance((prev) => {
-        const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
-        if (idx !== -1) {
-          const arr = [...prev];
-          arr[idx] = updated;
-          return arr;
-        }
-        return prev;
-      });
+      await operation();
+      await queryClient.invalidateQueries({ queryKey: [...scope, 'records'] });
+      enqueueSnackbar(success, { variant: 'success' });
     } catch (err: any) {
-      // Rollback on error by refetching
-      fetchAttendance();
-      enqueueSnackbar(err?.response?.data?.message || 'Failed', { variant: 'error' });
+      void queryClient.invalidateQueries({ queryKey: [...scope, 'records'] });
+      enqueueSnackbar(err?.response?.data?.message || failure, { variant: 'error' });
+    } finally {
+      activeRows.current.delete(userId);
+      setPendingRows((current) => current.filter((id) => id !== userId));
     }
   };
 
-  const handleRestoreDtrAttendance = async (userId: number, date: string) => {
-    try {
-      const restored = await attendanceApi.restoreFromDtr(userId, date);
-      setAttendance((prev) => {
-        const idx = prev.findIndex((r) => r.userId === userId && r.date.slice(0, 10) === date);
-        if (idx === -1) return [...prev, restored];
-        const next = [...prev];
-        next[idx] = restored;
-        return next;
-      });
-      enqueueSnackbar('Attendance restored to Present from DTR.', { variant: 'success' });
-    } catch (err: any) {
-      fetchAttendance();
-      enqueueSnackbar(err?.response?.data?.message || 'Failed to restore attendance from DTR.', { variant: 'error' });
-    }
-  };
+  const handleSetAttendance = (userId: number, date: string, status: AttendanceStatus, clockInTime?: string) =>
+    runAttendanceAction(userId, () => attendanceApi.setAttendance({ userId, date, status, clockInTime }), 'Attendance updated.', 'Could not update attendance.');
+
+  const handleRestoreDtrAttendance = (userId: number, date: string) =>
+    runAttendanceAction(userId, () => attendanceApi.restoreFromDtr(userId, date), 'Attendance restored to Present from DTR.', 'Could not restore attendance from DTR.');
 
   const navMonth = (delta: number) => {
     let m = month + delta;
@@ -402,7 +289,7 @@ export default function AttendancePage() {
   if (!canAccessAttendance) {
     return (
       <Box>
-        <Typography variant="h4" fontWeight={700} mb={0.5}>
+        <Typography component="h1" variant="h4" fontWeight={700} mb={0.5}>
           Attendance Management
         </Typography>
         <Typography color="error">You do not have access to this feature.</Typography>
@@ -415,23 +302,54 @@ export default function AttendancePage() {
   // Attendance only shows declared office days. Weekdays default to office
   // days, while weekends and explicitly declared off days stay hidden here.
   const attendanceDays = days.filter(isOfficeDayForDate);
+  const availableDates = attendanceDays.map(formatDate);
+  const activeAttendanceDate = availableDates.includes(selectedAttendanceDate)
+    ? selectedAttendanceDate
+    : availableDates.filter((date) => date <= todayStr).slice(-1)[0] ?? availableDates[0] ?? '';
+
+  function getAttendanceAction(userId: number, date: string, record?: TechAttendance) {
+    if (!canManage || date !== todayStr || !systemStatus) return null;
+    const cycle: AttendanceStatus[] = systemStatus?.isOnline
+      ? ['absent', 'half_day', 'out_of_office']
+      : ['present', 'absent', 'half_day', 'out_of_office'];
+    const status = record?.status;
+    const index = status ? cycle.indexOf(status) : -1;
+    const next = !status || (status === 'present' && systemStatus?.isOnline)
+      ? cycle[0]
+      : index >= 0 ? cycle[index + 1] : undefined;
+    if (next) {
+      return {
+        label: next === 'out_of_office' ? 'Mark out of office' : `Mark ${STATUS_CONFIG[next].label.toLowerCase()}`,
+        run: () => next === 'present'
+          ? setTimePickerData({ userId, dateStr: date, status: next })
+          : void handleSetAttendance(userId, date, next),
+      };
+    }
+    if (systemStatus?.isOnline && record?.isManualOverride && record.clockInTime) {
+      return { label: 'Restore DTR present', run: () => void handleRestoreDtrAttendance(userId, date) };
+    }
+    return {
+      label: 'Clear status',
+      run: () => void runAttendanceAction(userId, () => attendanceApi.deleteAttendance(userId, date), 'Attendance status cleared.', 'Could not clear attendance status.'),
+    };
+  }
 
   return (
     <Box>
-<Typography variant="h4" fontWeight={700} mb={0.5}>
+<Typography component="h1" variant="h4" fontWeight={700} mb={0.5}>
         Attendance Management
       </Typography>
 <Typography variant="body2" color="text.secondary" mb={3}>
         Manage the office day calendar and track technician attendance by support type
       </Typography>
 <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-        <IconButton onClick={() => navMonth(-1)}>
+        <IconButton aria-label="Previous month" onClick={() => navMonth(-1)}>
           <PrevIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={600} sx={{ minWidth: 200, textAlign: 'center' }}>
           {MONTHS[month]} {year}
         </Typography>
-        <IconButton onClick={() => navMonth(1)}>
+        <IconButton aria-label="Next month" onClick={() => navMonth(1)}>
           <NextIcon />
         </IconButton>
       </Stack>
@@ -450,7 +368,7 @@ export default function AttendancePage() {
         {/* ── Office Days Calendar ── */}
         {tab === 0 && (
           <CardContent>
-            {odLoading ? (
+            {officeQuery.isError ? <Alert severity="error" action={<Button color="inherit" onClick={() => void officeQuery.refetch()}>Retry</Button>}>Could not load the office calendar.</Alert> : officeQuery.isLoading ? (
               <Box textAlign="center" py={4}>
                 <CircularProgress />
               </Box>
@@ -477,19 +395,19 @@ export default function AttendancePage() {
                     const dStr = formatDate(d);
                     const isOvertime = !!odMap.get(dStr)?.isOvertime;
                     // Past dates are not clickable; today remains editable for emergency declarations.
-                    const isPastOrToday = dStr < todayStr;
+                    const isPast = dStr < todayStr;
                     const isToday = dStr === todayStr;
                     return (
                       <Box
                         component="button"
                         type="button"
-                        disabled={!canManageOfficeDays || isPastOrToday}
+                        disabled={!canManageOfficeDays || isPast}
                         aria-label={`${dStr}: ${isOvertime ? 'Overtime' : isOffice ? 'Office' : 'Off'}`}
                         key={dStr}
                         data-testid={`office-day-${dStr}`}
                         data-office-day={isOffice ? 'true' : 'false'}
                         onClick={
-                          canManageOfficeDays && !isPastOrToday
+                          canManageOfficeDays && !isPast
                             ? () => toggleOfficeDay(d)
                             : undefined
                         }
@@ -499,9 +417,9 @@ export default function AttendancePage() {
                           borderRadius: 1,
                           bgcolor: isOvertime ? 'warning.light' : isOffice ? 'success.light' : 'action.hover',
                           color: isOvertime ? 'warning.contrastText' : isOffice ? 'success.contrastText' : 'text.disabled',
-                          cursor: canManageOfficeDays && !isPastOrToday ? 'pointer' : 'default',
-                          opacity: isPastOrToday ? 0.55 : 1,
-                          '&:hover': canManageOfficeDays && !isPastOrToday ? { opacity: 0.8 } : {},
+                          cursor: canManageOfficeDays && !isPast ? 'pointer' : 'default',
+                          opacity: isPast ? 0.55 : 1,
+                          '&:hover': canManageOfficeDays && !isPast ? { opacity: 0.8 } : {},
                           border: isToday ? '2px solid' : 'none',
                           borderColor: 'primary.main',
                           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
@@ -547,11 +465,16 @@ export default function AttendancePage() {
         {/* ── Technician Attendance ── */}
         {tab === 1 && (
           <CardContent>
+            {canManage && systemQuery.isError && (
+              <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => void systemQuery.refetch()}>Retry</Button>}>
+                Attendance can be viewed, but status changes are unavailable until the clock-in system status can be checked.
+              </Alert>
+            )}
             <Stack direction="row" spacing={2} mb={2} alignItems="center">
               <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                {canManage && (
+                {canManage && !compactAttendance && (
                   <Typography variant="body2" color="text.secondary" mr={1}>
-                    Click a cell to cycle:
+                    Use today's status buttons to cycle:
                   </Typography>
                 )}
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
@@ -577,7 +500,7 @@ export default function AttendancePage() {
               </Box>
             </Stack>
 
-            {attLoading || techLoading ? (
+            {officeQuery.isError || attendanceQuery.isError || techniciansQuery.isError ? <Alert severity="error" action={<Button color="inherit" onClick={() => void refreshAttendance()}>Retry</Button>}>Could not load attendance for this month.</Alert> : officeQuery.isLoading || attendanceQuery.isLoading || techniciansQuery.isLoading ? (
               <Box textAlign="center" py={4}>
                 <CircularProgress />
               </Box>
@@ -585,6 +508,58 @@ export default function AttendancePage() {
               <Typography color="text.secondary" py={3} textAlign="center">
                 No staff found.
               </Typography>
+            ) : !activeAttendanceDate ? (
+              <Typography color="text.secondary" py={3} textAlign="center">
+                No office or overtime days in this month.
+              </Typography>
+            ) : compactAttendance ? (
+              <Stack spacing={1.5}>
+                <TextField select fullWidth label="Attendance date" value={activeAttendanceDate}
+                  onChange={(event) => setSelectedAttendanceDate(event.target.value)}>
+                  {attendanceDays.map((date) => (
+                    <MenuItem key={formatDate(date)} value={formatDate(date)}>
+                      {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {formatDate(date) === todayStr ? ' (Today)' : ''}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Stack component="ul" spacing={1} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                  {technicians.map((tech) => {
+                    const record = attRecordsMap.get(tech.id)?.get(activeAttendanceDate);
+                    const status = record?.status && STATUS_CONFIG[record.status];
+                    const name = formatPersonName(tech) || tech.email;
+                    const action = getAttendanceAction(tech.id, activeAttendanceDate, record);
+                    const canRestore = canManage && activeAttendanceDate === todayStr &&
+                      systemStatus?.isOnline && record?.isManualOverride && record.clockInTime;
+                    return (
+                      <Card component="li" variant="outlined" key={tech.id} sx={{ p: 1.5 }}>
+                        <Stack spacing={0.75} alignItems="flex-start">
+                          <Typography fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>{name}</Typography>
+                          <Typography variant="caption" color="text.secondary">{(tech.role ?? '').replace(/_/g, ' ')}</Typography>
+                          <Stack direction="row" gap={1} useFlexGap flexWrap="wrap" alignItems="center">
+                            <Chip size="small" label={status?.label ?? 'No record'} color={status?.color ?? 'default'} />
+                            {record?.clockInTime && (
+                              <Typography variant="body2">In: {new Date(record.clockInTime).toLocaleTimeString([], { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' })}</Typography>
+                            )}
+                          </Stack>
+                          {action && (
+                            <Stack direction="row" gap={0.5} useFlexGap flexWrap="wrap">
+                              <Button size="small" aria-label={`${action.label} for ${name}`} disabled={pendingRows.includes(tech.id)} onClick={action.run} sx={{ minHeight: 44 }}>
+                                {action.label}
+                              </Button>
+                              {canRestore && action.label !== 'Restore DTR present' && (
+                                <IconButton aria-label={`Restore DTR present for ${name}`} disabled={pendingRows.includes(tech.id)} onClick={() => void handleRestoreDtrAttendance(tech.id, activeAttendanceDate)} sx={{ width: 44, height: 44 }}>
+                                  <RestoreDtrIcon />
+                                </IconButton>
+                              )}
+                            </Stack>
+                          )}
+                        </Stack>
+                      </Card>
+                    );
+                  })}
+                </Stack>
+              </Stack>
             ) : (
               <ResponsiveTable minWidth={560} maxHeight={500} testId="attendance-table">
                 <Table size="small" stickyHeader>
@@ -596,14 +571,14 @@ export default function AttendancePage() {
                           left: 0,
                           zIndex: 3,
                           bgcolor: 'background.paper',
-                          minWidth: 160,
+                          width: 180, minWidth: 160, maxWidth: 200,
                         }}
                       >
                         Staff
                       </TableCell>
                       {attendanceDays.map((d) => {
                         const isOffice = isOfficeDayForDate(d);
-                        const isToday = formatDate(d) === formatDate(new Date());
+                        const isToday = formatDate(d) === todayStr;
                         return (
                           <TableCell
                             key={formatDate(d)}
@@ -638,7 +613,7 @@ export default function AttendancePage() {
                           sx={{ '&:hover .name-cell::after': { opacity: 1 } }}
                         >
                           <TableCell
-                            className="name-cell"
+                            component="th" scope="row" className="name-cell"
                             sx={{
                               position: 'sticky',
                               left: 0,
@@ -657,11 +632,11 @@ export default function AttendancePage() {
                             }}
                           >
                             <Box sx={{ position: 'relative', zIndex: 1 }}>
-                              <Typography variant="body2" noWrap>
+                              <Typography variant="body2" sx={{ maxWidth: 180, overflowWrap: "anywhere" }}>
                                 {formatPersonName(tech) ||
                                   tech.email}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary" noWrap>
+                              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
                                 {(tech.role ?? '').replace(/_/g, ' ')}
                               </Typography>
                             </Box>
@@ -671,66 +646,10 @@ export default function AttendancePage() {
                             const rec = records.get(dateStr);
                             const status = rec?.status;
                             const cfg = status ? STATUS_CONFIG[status] : null;
-                            const todayStr = formatDate(new Date());
-                            const isPastDate = dateStr < todayStr;
-                            const isFutureDate = dateStr > todayStr;
                             const isToday = dateStr === todayStr;
-                            const canRestoreFromDtr = Boolean(
-                              canManage &&
-                              isToday &&
-                              systemStatus?.isOnline &&
-                              rec?.isManualOverride &&
-                              rec.clockInTime,
-                            );
-
-                            const cellClickHandler = () => {
-                              if (!canManage || isPastDate || isFutureDate) return;
-                              let cycle: AttendanceStatus[] = ['absent', 'half_day', 'out_of_office'];
-                              
-                              if (systemStatus?.isOnline) {
-                                // If online, present is synced automatically.
-                                // Don't allow manual present toggling.
-                              } else {
-                                // Offline fallback
-                                // Only Admins can set PRESENT fallback
-                                if (canManage) { // assuming canManage means admin here
-                                  cycle = ['present', 'absent', 'half_day', 'out_of_office'];
-                                }
-                              }
-
-                              const handleTransition = (newStatus: AttendanceStatus) => {
-                                if (newStatus === 'present') {
-                                  setTimePickerData({ userId, dateStr, status: newStatus });
-                                } else {
-                                  handleSetAttendance(userId, dateStr, newStatus);
-                                }
-                              };
-
-                              if (!status) {
-                                handleTransition(cycle[0]);
-                              } else {
-                                const currentIdx = cycle.indexOf(status);
-                                if (
-                                  currentIdx === -1 &&
-                                  status === 'present' &&
-                                  systemStatus?.isOnline
-                                ) {
-                                  // DTR Present becomes the first manual override in one click.
-                                  handleTransition(cycle[0]);
-                                } else if (currentIdx === -1 || currentIdx === cycle.length - 1) {
-                                  if (canRestoreFromDtr) {
-                                    handleRestoreDtrAttendance(userId, dateStr);
-                                    return;
-                                  }
-                                  // If it was Present and not in the cycle, or at the end of the cycle,
-                                  // remove a record that cannot be restored from a verified DTR clock-in.
-                                  setAttendance((prev) => prev.filter((r) => !(r.userId === userId && r.date.slice(0, 10) === dateStr)));
-                                  attendanceApi.deleteAttendance(userId, dateStr).catch(() => fetchAttendance());
-                                } else {
-                                  handleTransition(cycle[currentIdx + 1]);
-                                }
-                              }
-                            };
+                            const action = getAttendanceAction(userId, dateStr, rec);
+                            const canRestoreFromDtr = Boolean(canManage && isToday && systemStatus?.isOnline && rec?.isManualOverride && rec.clockInTime);
+                            const staffName = formatPersonName(tech) || tech.email;
 
                             const renderIcon = () => {
                               if (!cfg) return (
@@ -753,16 +672,7 @@ export default function AttendancePage() {
                               <TableCell
                                 key={dateStr}
                                 align="center"
-                                onClick={cellClickHandler}
-                                sx={{
-                                  p: 0,
-                                  height: '40px',
-                                  bgcolor: isToday ? 'primary.50' : 'inherit',
-                                  cursor: (canManage && !isPastDate && !isFutureDate) ? 'pointer' : 'default',
-                                  '&:hover': (canManage && !isPastDate && !isFutureDate)
-                                    ? { bgcolor: 'rgba(0, 0, 0, 0.08)' }
-                                    : (!isToday ? { bgcolor: 'rgba(0, 0, 0, 0.02)' } : {})
-                                }}
+                                sx={{ p: 0, height: 44, bgcolor: isToday ? 'primary.50' : 'inherit' }}
                               >
                                   <Box display="flex" flexDirection="column" width="100%" height="100%" justifyContent="center" alignItems="center">
                                     <Box
@@ -771,12 +681,18 @@ export default function AttendancePage() {
                                         display: 'flex'
                                       }}
                                     >
-                                      {renderIcon()}
+                                      {action ? (
+                                        <IconButton aria-label={`${action.label} for ${staffName}; current status: ${cfg?.label ?? "no record"}`}
+                                          disabled={pendingRows.includes(userId)} onClick={action.run} sx={{ minWidth: 44, minHeight: 44, color: "inherit" }}>
+                                          {renderIcon()}
+                                        </IconButton>
+                                      ) : renderIcon()}
                                       {canRestoreFromDtr && (
                                         <Tooltip title="Restore DTR Present">
                                           <IconButton
                                             size="small"
                                             aria-label="Restore attendance to Present from DTR"
+                                            disabled={pendingRows.includes(userId)}
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               handleRestoreDtrAttendance(userId, dateStr);
@@ -790,7 +706,7 @@ export default function AttendancePage() {
                                     </Box>
                                     {rec?.clockInTime && (
                                       <Typography variant="caption" sx={{ fontSize: '0.6rem', lineHeight: 1, mt: 0.25, color: 'text.secondary' }}>
-                                        {new Date(rec.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})}
+                                        {new Date(rec.clockInTime).toLocaleTimeString([], { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' })}
                                       </Typography>
                                     )}
                                   </Box>
@@ -842,6 +758,7 @@ export default function AttendancePage() {
           <Button onClick={() => setTimePickerData(null)}>Cancel</Button>
           <Button
             variant="contained"
+            disabled={!/^([01]\d|2[0-3]):[0-5]\d$/.test(timeStr) || timePickerData?.dateStr !== todayStr || systemStatus?.isOnline !== false}
             onClick={() => {
               if (timePickerData) {
                 // Construct a full ISO date string from dateStr + timeStr

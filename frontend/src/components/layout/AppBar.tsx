@@ -16,6 +16,8 @@ import {
   Badge,
   Switch,
   Button,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -28,6 +30,8 @@ import {
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
   Devices as DevicesIcon,
+  PhoneIphone as PhoneIphoneIcon,
+  Android as AndroidIcon,
 } from '@mui/icons-material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
@@ -41,9 +45,11 @@ import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
-import { attendanceApi, notificationsApi, AttendanceStatus } from '@/app/api/references';
+import EnvironmentOverlay from './EnvironmentOverlay';
+import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig } from '@/app/api/references';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
+import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -63,6 +69,33 @@ interface AppNotification {
 const isIdSegment = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) || /^\d+$/.test(s);
 
+function isAppleMobileDevice(): boolean {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function getAndroidApkUrl(): string | null {
+  if (Capacitor.isNativePlatform() || !/\bAndroid\b/i.test(navigator.userAgent)) return null;
+  try {
+    const url = new URL(import.meta.env.VITE_ANDROID_APK_URL?.trim() || '');
+    return url.protocol === 'https:' && !url.username && !url.password && !url.search &&
+      !url.hash && /\.apk$/i.test(url.pathname) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function isHomeScreenApp(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+}
+
+function decodeApplicationServerKey(key: string): Uint8Array {
+  const padding = '='.repeat((4 - (key.length % 4)) % 4);
+  const decoded = window.atob(key.replace(/-/g, '+').replace(/_/g, '/') + padding);
+  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+
 export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -70,6 +103,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
   const { mode, setAppearance, layoutMode, toggleLayoutMode } = useThemeMode();
+  const { canGoBack, goBack } = useMobileNavigation();
+  const theme = useTheme();
+  const compactHeader = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   const [savingAppearance, setSavingAppearance] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -88,7 +124,116 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [isNotifLoading, setIsNotifLoading] = useState(false);
   const [notifError, setNotifError] = useState<string | null>(null);
   const [markingAllRead, setMarkingAllRead] = useState(false);
+  const [pushConfig, setPushConfig] = useState<BrowserPushConfig | null>(null);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushNeedsHomeScreen, setPushNeedsHomeScreen] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
+  const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
+  const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
   const notificationRequestRef = React.useRef(0);
+
+  useEffect(() => {
+    setShowIosProfileDownload(import.meta.env.VITE_PHONE_PREVIEW !== '1' &&
+      isAppleMobileDevice() && !Capacitor.isNativePlatform());
+    setAndroidApkUrl(getAndroidApkUrl());
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setPushEnabled(false);
+      setPushConfig(null);
+      return;
+    }
+    let current = true;
+    const initializePush = async () => {
+      const appleHomeScreenRequired = isAppleMobileDevice() && !isHomeScreenApp();
+      const supported = window.isSecureContext && 'serviceWorker' in navigator &&
+        'PushManager' in window && 'Notification' in window;
+      setPushNeedsHomeScreen(appleHomeScreenRequired);
+      setPushSupported(supported);
+      try {
+        const config = await notificationsApi.getPushConfig();
+        if (!current) return;
+        setPushConfig(config);
+        if (supported) {
+          const registration = await navigator.serviceWorker.getRegistration('/');
+          const subscription = await registration?.pushManager.getSubscription();
+          if (!current) return;
+          const enabled = !!subscription && Notification.permission === 'granted' && config.enabled;
+          if (enabled && subscription) {
+            // Keep endpoint ownership aligned with the account authenticated on this device.
+            await notificationsApi.savePushSubscription(subscription.toJSON());
+          }
+          if (current) setPushEnabled(enabled);
+        }
+      } catch {
+        if (current) setPushConfig({ enabled: false, publicKey: null });
+      }
+    };
+    void initializePush();
+    return () => { current = false; };
+  }, [user]);
+
+  const handleBrowserPushToggle = async () => {
+    if (pushBusy) return;
+    if (pushEnabled) {
+      setPushBusy(true);
+      try {
+        await notificationsApi.unsubscribeCurrentPushSubscription();
+        setPushEnabled(false);
+        setPushMessage('Browser alerts are off on this device.');
+        const badgeNavigator = navigator as Navigator & { clearAppBadge?: () => Promise<void> };
+        await badgeNavigator.clearAppBadge?.().catch(() => undefined);
+      } catch {
+        setPushMessage('Could not turn off browser alerts. Please try again.');
+      } finally { setPushBusy(false); }
+      return;
+    }
+    if (pushNeedsHomeScreen) {
+      setPushMessage('On iPhone or iPad, add this site to the Home Screen first, then enable alerts from its icon.');
+      return;
+    }
+    if (!pushSupported || !pushConfig?.enabled || !pushConfig.publicKey) {
+      setPushMessage('Browser alerts are not available on this browser or server.');
+      return;
+    }
+
+    setPushBusy(true);
+    let newSubscription: PushSubscription | null = null;
+    try {
+      // Call the permission API directly from this button gesture, as required by browsers.
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushMessage(permission === 'denied'
+          ? 'Notifications are blocked in browser settings. Allow them for this site to continue.'
+          : 'Notification permission was not granted.');
+        return;
+      }
+      const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+      const readyRegistration = await navigator.serviceWorker.ready;
+      const activeRegistration = readyRegistration || registration;
+      let subscription = await activeRegistration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await activeRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: decodeApplicationServerKey(pushConfig.publicKey) as BufferSource,
+        });
+        newSubscription = subscription;
+      }
+      const payload = subscription.toJSON();
+      if (!payload.endpoint || !payload.keys?.auth || !payload.keys?.p256dh) {
+        throw new Error('The browser returned an incomplete push subscription.');
+      }
+      await notificationsApi.savePushSubscription(payload);
+      setPushEnabled(true);
+      setPushMessage('Browser alerts are enabled on this device.');
+    } catch {
+      await newSubscription?.unsubscribe().catch(() => false);
+      setPushMessage('Could not enable browser alerts. Check your connection and try again.');
+    } finally { setPushBusy(false); }
+  };
 
   const fetchMyShift = React.useCallback(() => {
     if (myCap?.isAttendanceEligible) {
@@ -352,7 +497,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       try {
         const summary = await notificationsApi.getSummary();
         if (requestId !== notificationRequestRef.current) return null;
-        if (playSound && summary.unreadCount > prevUnreadCountRef.current) {
+        if (playSound && !pushEnabled && summary.unreadCount > prevUnreadCountRef.current) {
           playNotificationSound();
         }
         prevUnreadCountRef.current = summary.unreadCount;
@@ -370,7 +515,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         return null;
       }
     },
-    [playNotificationSound, user],
+    [playNotificationSound, pushEnabled, user],
   );
 
   // Notifications Polling with Page Visibility API
@@ -413,11 +558,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
   // Live updates – listen for SSE changes
   useSse(['NOTIFICATION_CREATED'], (payload) => {
-    if (!payload?.reconnected) playNotificationSound();
+    if (!payload?.reconnected && !pushEnabled) playNotificationSound();
     void fetchNotificationSummary();
   });
 
   useSse(['NOTIFICATIONS_READ'], () => { void fetchNotificationSummary(); });
+
+  useEffect(() => {
+    if (!pushEnabled || !('setAppBadge' in navigator)) return;
+    const badgeNavigator = navigator as Navigator & {
+      setAppBadge?: (count?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    const updateBadge = unreadCount > 0
+      ? badgeNavigator.setAppBadge?.(unreadCount)
+      : badgeNavigator.clearAppBadge?.();
+    void updateBadge?.catch(() => undefined);
+  }, [pushEnabled, unreadCount]);
 
   const handleMarkAllRead = async () => {
     if (markingAllRead || unreadCount === 0) return;
@@ -546,10 +703,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   };
 
   const breadcrumbs = generateBreadcrumbs();
-  const canGoBack = breadcrumbs.length > 1;
-
+  const visibleBreadcrumbs = compactHeader ? breadcrumbs.slice(-1) : breadcrumbs;
   const handleBack = () => {
-    router.back();
+    goBack();
   };
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -590,12 +746,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
   return (
     <MuiAppBar
+      id="app-top-bar"
+      className="app-global-appbar"
       position="fixed"
+      data-app-layout-mode={layoutMode}
       sx={{
         left: { xs: 0, md: `${drawerWidth}px` },
         width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
         bgcolor: 'background.paper',
         color: 'text.primary',
+        pt: { xs: 'env(safe-area-inset-top)', md: 0 },
+        '& .MuiToolbar-root': {
+          minHeight: { xs: 56, sm: 64 },
+          px: { xs: 1, sm: 2 },
+          gap: { xs: 0.25, sm: 0.5 },
+          paddingLeft: { xs: 'max(8px, env(safe-area-inset-left))', sm: 'max(16px, env(safe-area-inset-left))' },
+          paddingRight: { xs: 'max(8px, env(safe-area-inset-right))', sm: 'max(16px, env(safe-area-inset-right))' },
+        },
         transition: (theme) =>
           theme.transitions.create(['left', 'width'], {
             easing: theme.transitions.easing.sharp,
@@ -611,7 +778,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           aria-label="open drawer"
           edge="start"
           onClick={onMenuClick}
-          sx={{ mr: 2, display: { md: 'none' } }}
+          sx={{ mr: { xs: 0.25, sm: 1 }, flexShrink: 0, display: { md: 'none' } }}
         >
           <MenuIcon />
         </IconButton>
@@ -622,7 +789,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           aria-label="toggle sidebar"
           edge="start"
           onClick={toggleSidebar}
-          sx={{ mr: 2, display: { xs: 'none', md: 'inline-flex' } }}
+          sx={{ mr: 2, flexShrink: 0, display: { xs: 'none', md: 'inline-flex' } }}
         >
           {isCollapsed ? <MenuIcon /> : <MenuOpenIcon />}
         </IconButton>
@@ -631,20 +798,38 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         {canGoBack && (
           <IconButton
             color="inherit"
-            aria-label="go back"
+            aria-label="Go back"
             edge="start"
             onClick={handleBack}
-            sx={{ mr: 2 }}
+            sx={{ mr: { xs: 0.25, sm: 1 }, flexShrink: 0, minWidth: 44, minHeight: 44 }}
           >
             <BackIcon />
           </IconButton>
         )}
 
         {/* Breadcrumbs */}
-        <Box sx={{ flexGrow: 1 }}>
-          <Breadcrumbs aria-label="Breadcrumb" maxItems={3} itemsBeforeCollapse={1} itemsAfterCollapse={2}>
-            {breadcrumbs.map((crumb, index) => {
-              const isLast = index === breadcrumbs.length - 1;
+        <Box sx={{ flex: '1 1 0%', minWidth: 0, overflow: 'hidden' }}>
+          <Breadcrumbs
+            aria-label="Breadcrumb"
+            maxItems={compactHeader ? 2 : 3}
+            itemsBeforeCollapse={compactHeader ? 0 : 1}
+            itemsAfterCollapse={1}
+            sx={{
+              minWidth: 0,
+              overflow: 'hidden',
+              '& .MuiBreadcrumbs-ol': { flexWrap: 'nowrap', minWidth: 0, overflow: 'hidden' },
+              '& .MuiBreadcrumbs-li': { minWidth: 0, whiteSpace: 'nowrap' },
+              '& .MuiTypography-root, & .MuiLink-root': {
+                display: 'block',
+                maxWidth: compactHeader ? 104 : 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              },
+            }}
+          >
+            {visibleBreadcrumbs.map((crumb, index) => {
+              const isLast = index === visibleBreadcrumbs.length - 1;
 
               if (isLast) {
                 return (
@@ -673,6 +858,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           </Breadcrumbs>
         </Box>
 
+        <EnvironmentOverlay compact />
+
         {/* Shift Indicator */}
         {myShift && myShift.attendanceStatus && myShift.attendanceStatus !== 'present' ? (
           <Box sx={{ mr: 2, display: { xs: 'none', sm: 'block' } }}>
@@ -700,8 +887,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         ) : null}
 
         {/* Notifications */}
-        <Box sx={{ mr: 2 }}>
-          <IconButton color="inherit" onClick={handleNotifOpen}>
+        <Box sx={{ mr: { xs: 0, sm: 1.5 }, flexShrink: 0 }}>
+          <IconButton color="inherit" aria-label="Notifications" onClick={handleNotifOpen} sx={{ minWidth: 44, minHeight: 44 }}>
             <Badge badgeContent={unreadCount} color="error">
               <NotificationsIcon />
             </Badge>
@@ -716,7 +903,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 overflow: 'visible',
                 filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
                 mt: 1.5,
-                width: 320,
+                width: { xs: 'min(320px, calc(100vw - 16px))', sm: 320 },
+                maxWidth: 'calc(100vw - 16px)',
                 maxHeight: 400,
                 overflowY: 'auto',
                 '& .MuiAvatar-root': {
@@ -750,6 +938,30 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 disabled={markingAllRead || isNotifLoading || unreadCount === 0 || !navigator.onLine}>
                 {markingAllRead ? 'Marking…' : 'Mark All as Read'}
               </Button>
+            </Box>
+            <Divider />
+            <Box sx={{ px: 2, py: 1.25 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <Typography variant="body2" fontWeight={600}>Browser alerts</Typography>
+                <Button
+                  size="small"
+                  onClick={() => void handleBrowserPushToggle()}
+                  disabled={pushBusy || !user || (!pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
+                >
+                  {pushBusy ? 'Working…' : pushEnabled ? 'Turn off' : 'Enable'}
+                </Button>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
+                {pushMessage || (pushNeedsHomeScreen
+                  ? 'iPhone/iPad needs this site added to the Home Screen for alerts.'
+                  : !pushSupported
+                    ? 'This browser or connection does not support background alerts.'
+                    : !pushConfig?.enabled
+                      ? 'Browser alerts are not configured on this server.'
+                      : pushEnabled
+                        ? 'Enabled on this device. Sound and badges follow device settings.'
+                        : 'Receive alerts when the browser is closed; permission is required.')}
+              </Typography>
             </Box>
             <Divider />
             {isNotifLoading ? (
@@ -799,6 +1011,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             aria-haspopup="true"
             onClick={handleProfileMenuOpen}
             color="inherit"
+            sx={{ flexShrink: 0, p: 0.75 }}
           >
             <Avatar
               sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
@@ -827,6 +1040,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             }}
             open={Boolean(anchorEl)}
             onClose={handleProfileMenuClose}
+            PaperProps={{ sx: { maxWidth: 'calc(100vw - 16px)' } }}
           >
             <Box sx={{ px: 2, py: 1 }}>
               <Typography variant="subtitle2" fontWeight={600}>
@@ -837,6 +1051,38 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </Typography>
             </Box>
             <Divider />
+            {showIosProfileDownload && (
+              <>
+                <MenuItem
+                  component="a"
+                  href="/api/ios-profile.mobileconfig"
+                  onClick={handleProfileMenuClose}
+                  sx={{ alignItems: 'flex-start', py: 1.25 }}
+                >
+                  <PhoneIphoneIcon sx={{ mr: 1.25, mt: 0.25 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>Install on iPhone/iPad</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Add a fullscreen Home Screen icon
+                    </Typography>
+                  </Box>
+                </MenuItem>
+                <Divider />
+              </>
+            )}
+            {androidApkUrl && (
+              <>
+                <MenuItem component="a" href={androidApkUrl} rel="noreferrer" onClick={handleProfileMenuClose}
+                  sx={{ alignItems: 'flex-start', py: 1.25 }}>
+                  <AndroidIcon sx={{ mr: 1.25, mt: 0.25 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>Download Android app</Typography>
+                    <Typography variant="caption" color="text.secondary">Android installation file (APK)</Typography>
+                  </Box>
+                </MenuItem>
+                <Divider />
+              </>
+            )}
             <MenuItem onClick={() => void handleThemeToggle()} disabled={savingAppearance}>
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}

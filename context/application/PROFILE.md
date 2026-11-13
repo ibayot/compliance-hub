@@ -36,7 +36,7 @@ Locate exact pack patterns through [technology](../technology/INDEX.md), [platfo
 
 ## Shared guidance integration
 
-Reviewed guidance-only merge from `application-development-context` 0.5.0 on 2026-10-27. Discovery, first-run readiness, targeted testing/debugging, measured UI quality, engine safeguards, provider boundaries and the reporting/update lessons are available through MASTER. The separate library owns its pack/routing/integrity/export/adoption machinery and test harness; those are not installed or claimed verified in this legacy application context, and no `.context-library.json` receipt has been invented.
+Reviewed guidance-only merges from `application-development-context` 0.5.0 on 2026-10-27 and 0.6.0 on 2026-11-13, followed by the UI/UX guides from 0.7.0 and the acceptance checks from 0.8.0. Use MASTER to route to the applicable shared patterns and local overlays. The separate library owns its pack, routing, integrity, export and adoption tooling and test harness. Compliance Hub uses its local router and validator.
 
 Preserve this active profile, Compliance Hub overlay, ADR/exception history, canonical implementation bindings and artifact policy when bringing later guidance forward. PostgreSQL and provider reference documents are available but remain inactive unless deliberately selected for an applicable task. MariaDB, the current frontend/backend/native stack, local-update authority and user-managed staging/production responsibility remain unchanged. Context checks do not certify application conformance or authorize runtime changes.
 
@@ -46,10 +46,12 @@ Preserve this active profile, Compliance Hub overlay, ADR/exception history, can
 | --- | --- |
 | Runtime ownership, source truth, gateway routing | [system map](compliance-hub/system-map.md) |
 | Tickets, SLA, escalation, comments, images, duty, attendance | [ticketing](compliance-hub/ticketing.md) |
+| Shared workspace, phone layout, install and device previews | [workspace and mobile](compliance-hub/workspace-and-mobile.md) |
+| In-app notifications, browser alerts, push subscriptions, notification badges | [notifications](compliance-hub/notifications.md), [administration](compliance-hub/administration.md) |
 | Monthly ticket report builder, saved templates, interruption metrics | [report builder](compliance-hub/ticket-report-builder.md), [ticketing](compliance-hub/ticketing.md) |
 | Account-request API for the server administration integration | [API contract](compliance-hub/server-admin-api.md), [ticketing](compliance-hub/ticketing.md) |
 | Documents, versions, reviews, metrics, KPI, MoV | [compliance](compliance-hub/compliance.md) |
-| Identities, staff directory, units, capabilities, security settings | [administration](compliance-hub/administration.md) |
+| Identities, sign-in, staff directory, units, capabilities, security settings | [administration](compliance-hub/administration.md) |
 | Issuances, incidents, cybersecurity records | [governance records](compliance-hub/governance-records.md) |
 | Release versions and in-app changelogs | [release policy](compliance-hub/release-policy.md) |
 | Canonical components and existing source | [implementation map](../inventory/canonical-implementations.md) |

@@ -3,6 +3,8 @@ import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState } from 'react';
 import {
+  Alert,
+  Button,
   Accordion,
   AccordionDetails,
   AccordionSummary,
@@ -37,6 +39,7 @@ import { useQuery } from '@tanstack/react-query';
 import { documentsApi, type RepositoryBucket, type Document } from '@/lib/api/documents';
 import DocumentViewer from '@/components/documents/DocumentViewer';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDocumentPreview } from '@/lib/utils/useDocumentPreview';
 
 function DocumentTable({
   documents,
@@ -151,9 +154,9 @@ export default function RepositoryPage() {
   const canAccessRepository = !!myCap?.isRepositoryAccess;
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
-  const [previewMimeType, setPreviewMimeType] = useState<string>('application/pdf');
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const { preview, loading: previewLoading, error: previewError, retry: retryPreview } = useDocumentPreview(
+    previewDoc ? { documentId: previewDoc.id } : null,
+  );
 
   const downloadLatestVersion = async (doc: Document | null) => {
     if (!doc) return;
@@ -178,7 +181,7 @@ export default function RepositoryPage() {
     }
   };
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['repository'],
     queryFn: () => documentsApi.getRepository(),
   });
@@ -188,7 +191,7 @@ export default function RepositoryPage() {
   if (!canAccessRepository) {
     return (
       <Box p={3}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
+        <Typography component="h1" variant="h4" fontWeight={700} gutterBottom>
           Report Repository
         </Typography>
         <Typography color="error">You do not have access to this feature.</Typography>
@@ -207,55 +210,19 @@ export default function RepositoryPage() {
   if (isError) {
     return (
       <Box p={3}>
-        <Typography color="error">Failed to load repository. Please try again.</Typography>
+        <Alert severity="error" action={<Button color="inherit" onClick={() => void refetch()}>Retry</Button>}>Could not load the report repository.</Alert>
       </Box>
     );
   }
 
   const years = data?.years ?? [];
 
-  const closePreview = () => {
-    if (previewBlobUrl && previewBlobUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previewBlobUrl);
-    }
-    setPreviewBlobUrl(null);
-    setPreviewMimeType('application/pdf');
-    setPreviewDoc(null);
-    setPreviewLoading(false);
-  };
-
-  const openPreview = async (doc: Document) => {
-    setPreviewDoc(doc);
-    setPreviewLoading(true);
-    setPreviewBlobUrl(null);
-    try {
-      const [fullDoc, versions] = await Promise.all([
-        documentsApi.getDocument(doc.id),
-        documentsApi.getVersionHistory(doc.id),
-      ]);
-      const target =
-        versions.find((v) => v.version_number === fullDoc.current_version) ||
-        versions.reduce((a, b) => (a.version_number >= b.version_number ? a : b), versions[0]);
-      if (!target) {
-        setPreviewLoading(false);
-        return;
-      }
-      const { blobUrl, mimeType } = await documentsApi.getPreviewBlobUrl(doc.id, target.id);
-      setPreviewMimeType(mimeType);
-      setPreviewBlobUrl((prev) => {
-        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-        return blobUrl;
-      });
-    } catch {
-      setPreviewBlobUrl(null);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
+  const closePreview = () => setPreviewDoc(null);
+  const openPreview = (doc: Document) => setPreviewDoc(doc);
 
   return (
     <Box p={3}>
-<WorkspaceLayout kind="standard" context={<><Typography variant="h4" fontWeight={700} gutterBottom>
+<WorkspaceLayout kind="standard" context={<><Typography component="h1" variant="h4" fontWeight={700} gutterBottom>
         Report Repository
       </Typography>
 <Typography variant="body2" color="text.secondary" mb={3}>
@@ -357,17 +324,13 @@ export default function RepositoryPage() {
             <Box display="flex" justifyContent="center" alignItems="center" minHeight={240}>
               <CircularProgress size={28} />
             </Box>
-          ) : previewBlobUrl ? (
+          ) : preview ? (
             <DocumentViewer
-              pdfUrl={previewBlobUrl}
-              mimeType={previewMimeType}
+              previewBlob={preview.blob}
+              mimeType={preview.mimeType}
               viewerTitle={previewDoc?.title || 'Document Preview'}
             />
-          ) : (
-            <Typography color="text.secondary">
-              Preview is not available for this document.
-            </Typography>
-          )}
+          ) : previewError ? (<Alert severity="warning" action={<Button color="inherit" onClick={retryPreview}>Retry</Button>}>Could not load the document preview.</Alert>) : null}
         </DialogContent>
       </Dialog>
 </Box>

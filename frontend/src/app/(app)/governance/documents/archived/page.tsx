@@ -63,7 +63,7 @@ export default function ArchivedDocumentsPage() {
 <Box sx={{ py: 4 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <IconButton onClick={() => router.push('/governance/documents')}>
+          <IconButton aria-label="Back to documents" onClick={() => router.push('/governance/documents')} sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
             <BackIcon />
           </IconButton>
           <Typography variant="h4">Archived Documents</Typography>

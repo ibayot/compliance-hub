@@ -12,6 +12,8 @@ Use page anatomy to organize a workflow; compose it with the selected element, i
 
 ## Patterns
 
+- [Web UI and UX](web-ui-ux-pattern.md) — browser workflows and page composition.
+- [Mobile UI and UX](mobile-ui-ux-pattern.md) — phone-sized workflows across supported surfaces.
 - [List Page Pattern](list-page-pattern.md) — listing page, search results page, management page.
 - [Detail Page Pattern](detail-page-pattern.md) — record details, view page, detail route.
 - [Create Page Pattern](create-page-pattern.md) — new record, create form, new page.
@@ -24,4 +26,4 @@ Use page anatomy to organize a workflow; compose it with the selected element, i
 
 Read only the selected patterns and their necessary dependencies. Check [application activation](../../application/PROFILE.md) before applying technology/platform-specific implementations. Return to the [design-system catalog](../INDEX.md) when the task changes.
 
-- [Workspace composition and presets](workspace-layout-pattern.md) � explicit context/content regions and responsive preset differences.
+- [Workspace composition and presets](workspace-layout-pattern.md) � explicit context/content regions and responsive preset differences.

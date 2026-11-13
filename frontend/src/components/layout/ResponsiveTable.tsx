@@ -81,6 +81,7 @@ export default function ResponsiveTable({
             bgcolor: 'background.paper',
             borderBottom: 1,
             borderColor: 'divider',
+            '& .MuiIconButton-root': { minWidth: 44, minHeight: 44 },
           }}
         >
           <IconButton
@@ -105,11 +106,18 @@ export default function ResponsiveTable({
       )}
       <TableContainer
         ref={containerRef}
+        role={hasOverflow ? 'region' : undefined}
+        aria-label={hasOverflow ? 'Scrollable table. Use the scroll controls or swipe horizontally to see more columns.' : undefined}
+        tabIndex={hasOverflow ? 0 : undefined}
         {...(component ? { component } : {})}
         sx={{
           maxHeight,
           overflowX: 'auto',
           minWidth: 0,
+          maxWidth: '100%',
+          overscrollBehaviorX: 'contain',
+          WebkitOverflowScrolling: 'touch',
+          '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: 2 },
           '& > table': minWidth ? { minWidth } : undefined,
           ...tableContainerSx,
         }}

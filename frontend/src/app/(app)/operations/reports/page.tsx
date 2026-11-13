@@ -3,7 +3,8 @@ import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 import TicketReportBuilder from '@/components/ticket-reports/TicketReportBuilder';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Autocomplete,
   Box,
@@ -25,12 +26,17 @@ import {
   Chip,
   Stack,
   LinearProgress,
+  useMediaQuery,
+  Collapse,
   ToggleButtonGroup,
   ToggleButton,
   Tabs,
   Tab
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   PieChart,
   Pie,
@@ -43,7 +49,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { ticketsApi, TicketReportResult, RatingsReportResult } from '@/app/api/references';
+import { ticketsApi } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
@@ -54,6 +60,9 @@ const Table = ({ children, ...props }: any) => (
     <MuiTable {...props}>{children}</MuiTable>
   </ResponsiveTable>
 );
+
+const EMPTY_ROWS: never[] = [];
+type ReportAssignee = Awaited<ReturnType<typeof ticketsApi.getReportTechnicians>>[number];
 
 const TYPE_LABELS: Record<string, string> = {
   desktop_support: 'Desktop Support',
@@ -125,191 +134,144 @@ const ESC_PIE_COLORS: Record<string, string> = {
 
 export default function TicketReportsPage() {
   const { user, myCap } = useAuth();
+  const queryClient = useQueryClient();
   const canManageReports = !!myCap?.isTicketReportsManage;
+  const isCompactViewport = useMediaQuery('(max-width:599.95px)');
+  const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
   const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
   const [quarter, setQuarter] = useState<number>(Math.ceil((new Date().getMonth() + 1) / 3));
   const [semester, setSemester] = useState<number>(new Date().getMonth() < 6 ? 1 : 2);
-  const [technicianId, setTechnicianId] = useState<number | ''>('');
-  const [pieData, setPieData] = useState<any[]>([]);
-  const [escalationPieData, setEscalationPieData] = useState<any[]>([]);
-  const [slaPieData, setSlaPieData] = useState<any[]>([]);
+  const [assignee, setAssignee] = useState<ReportAssignee | null>(null);
+  const technicianId = assignee?.id;
   const [ticketType, setTicketType] = useState<string>('');
-  const [technicians, setTechnicians] = useState<
-    Array<{ id: number; firstName: string; middleName?: string; lastName: string; suffix?: string; role: string }>
-  >([]);
-  const [result, setResult] = useState<TicketReportResult | null>(null);
-  const [detailedResult, setDetailedResult] = useState<RatingsReportResult | null>(null);
+  const [chartTicketType, setChartTicketType] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const reportRequestRef = React.useRef(0);
-  const visibleReportRequestInFlight = React.useRef(false);
 
   // Tabs State
   const [tab, setTab] = useState(0);
   const [issuesSubTab, setIssuesSubTab] = useState(0);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
-  const [slaInsights, setSlaInsights] = useState<any[]>([]);
-  const [slaLoading, setSlaLoading] = useState(false);
-
-  const [issueCountsData, setIssueCountsData] = useState<any[]>([]);
   const [explanationsLoading, setExplanationsLoading] = useState(false);
   const [printError, setPrintError] = useState('');
+  const activeTicketTypeFilter = chartTicketType ?? ticketType;
+
+  const clearChartFilterWhenClickingOutside = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!chartTicketType) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('[data-support-type-chart="true"], button, input, a, [role="combobox"], [role="option"]')) return;
+    setChartTicketType(null);
+  };
+
+  const toggleChartSupportType = (type: string) => {
+    setChartTicketType((current) => (current === type ? null : type));
+  };
+
+  const handleSupportTypeSliceKeyDown = (
+    event: React.KeyboardEvent<SVGPathElement>,
+    type: string,
+  ) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    toggleChartSupportType(type);
+  };
 
   useEffect(() => {
     if (!canManageReports && (tab === 1 || tab === 2)) setTab(0);
   }, [canManageReports, tab]);
 
-  // Period-filtered technician dropdown
-  useEffect(() => {
-    if (!canManageReports) return;
-    const filters: Parameters<typeof ticketsApi.getReportTechnicians>[0] = { year };
-    if (periodMode === 'month') filters.month = month;
-    else if (periodMode === 'quarter') filters.quarter = quarter;
-    else if (periodMode === 'semester') filters.semester = semester;
-    if (ticketType) filters.ticketType = ticketType;
-    ticketsApi
-      .getReportTechnicians(filters)
-      .then(setTechnicians)
-      .catch(() => { });
-  }, [canManageReports, year, periodMode, month, quarter, semester, ticketType]);
-
-  const fetchReports = useCallback(async (silent = false) => {
-    if (tab === 4) { reportRequestRef.current++; visibleReportRequestInFlight.current = false; setLoading(false); return; }
-    if (silent && visibleReportRequestInFlight.current) return;
-    const requestId = ++reportRequestRef.current;
-    if (!silent) {
-      visibleReportRequestInFlight.current = true;
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const filters: Parameters<typeof ticketsApi.getReports>[0] = { year };
-      if (periodMode === 'month') filters.month = month;
-      else if (periodMode === 'quarter') filters.quarter = quarter;
-      else if (periodMode === 'semester') filters.semester = semester;
-      // Privileged users: filter by chosen technician (optional); non-privileged: always filter to own id
-      const useStaffAndTypeFilters = tab === 0 || tab === 3;
-      const effectiveTechId = canManageReports
-        ? useStaffAndTypeFilters && technicianId !== ''
-          ? (technicianId as number)
-          : undefined
-        : (user?.id ?? undefined);
-      if (effectiveTechId) filters.technicianId = effectiveTechId;
-      if (useStaffAndTypeFilters && ticketType) filters.ticketType = ticketType;
-      const data = await ticketsApi.getReports(filters);
-      if (requestId !== reportRequestRef.current) return;
-      setResult(data);
-      try {
-        if (canManageReports) {
-          const { technicianId: _unusedTechnicianId, ticketType: _unusedTicketType, ...issueFilters } = filters;
-          const issueData = await ticketsApi.getIssueCountsReport(issueFilters);
-          if (requestId !== reportRequestRef.current) return;
-          setIssueCountsData(issueData);
-        } else {
-          setIssueCountsData([]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch issue counts', err);
-        if (requestId === reportRequestRef.current) {
-          setIssueCountsData([]);
-          if (tab === 1) setError('Failed to load issue counts. Please refresh or adjust the period.');
-        }
-      }
-
-      const pData = data.avgRatingByType.map((row) => ({
-        name: TYPE_LABELS[row.type] ?? row.type,
-        value: row.count,
-      }));
-      setPieData(pData);
-
-      try {
-        const dData = await ticketsApi.getRatingsReport({
-          year,
-          month: periodMode === 'month' ? month : undefined,
-          quarter: periodMode === 'quarter' ? quarter : undefined,
-          semester: periodMode === 'semester' ? semester : undefined,
-          technicianId: effectiveTechId,
-          ticketType: useStaffAndTypeFilters && ticketType ? ticketType : undefined,
-        });
-        if (requestId !== reportRequestRef.current) return;
-        setDetailedResult(dData);
-
-        const escChartData = [];
-        if (data.acceptedEscalations > 0)
-          escChartData.push({ name: 'Accepted', value: data.acceptedEscalations });
-        if (data.returnedEscalations > 0)
-          escChartData.push({ name: 'Returned', value: data.returnedEscalations });
-        if (
-          data.totalEscalations > 0 &&
-          data.totalEscalations > data.acceptedEscalations + data.returnedEscalations
-        ) {
-          escChartData.push({
-            name: 'Pending/Other',
-            value: data.totalEscalations - (data.acceptedEscalations + data.returnedEscalations),
-          });
-        }
-        setEscalationPieData(escChartData);
-
-        const slaData = [];
-        if (data.slaStats?.met > 0) slaData.push({ name: 'Met SLA', value: data.slaStats.met });
-        if (data.slaStats?.missed > 0) slaData.push({ name: 'Missed SLA', value: data.slaStats.missed });
-        setSlaPieData(slaData);
-      } catch (err) {
-        console.error('Failed to fetch detailed ratings', err);
-      }
-    } catch (err: any) {
-      if (requestId === reportRequestRef.current) {
-        setResult(null);
-        setIssueCountsData([]);
-        setError(err?.response?.data?.message || 'Failed to load report data.');
-      }
-    } finally {
-      if (!silent && requestId === reportRequestRef.current) {
-        visibleReportRequestInFlight.current = false;
-        setLoading(false);
-      }
-    }
-  }, [
+  const periodFilters = {
     year,
-    periodMode,
-    month,
-    quarter,
-    semester,
-    technicianId,
-    ticketType,
-    tab,
-    canManageReports,
-    user?.id,
-  ]);
+    month: periodMode === 'month' ? month : undefined,
+    quarter: periodMode === 'quarter' ? quarter : undefined,
+    semester: periodMode === 'semester' ? semester : undefined,
+  };
+  const reportFilters = {
+    ...periodFilters,
+    technicianId: canManageReports ? technicianId : user?.id,
+    ticketType: activeTicketTypeFilter || undefined,
+  };
+  const supportTypeFilters = { ...reportFilters, ticketType: undefined };
+  const isOverview = tab === 0;
+  const isPerformance = tab === 3;
+  const reportScope = ['ticket-reports', user?.id, canManageReports] as const;
+  const reportQuery = useQuery({
+    queryKey: [...reportScope, 'summary', reportFilters],
+    queryFn: ({ signal }) => ticketsApi.getReports(reportFilters, { signal }),
+    enabled: !!user && (isPerformance || (isOverview && viewMode === 'overview')),
+    retry: false,
+  });
+  const supportTypeQuery = useQuery({
+    queryKey: [...reportScope, 'summary', supportTypeFilters],
+    queryFn: ({ signal }) => ticketsApi.getReports(supportTypeFilters, { signal }),
+    enabled: !!user && isOverview && viewMode === 'overview' && !!activeTicketTypeFilter,
+    retry: false,
+  });
+  const ratingsQuery = useQuery({
+    queryKey: [...reportScope, 'ratings', reportFilters],
+    queryFn: ({ signal }) => ticketsApi.getRatingsReport(reportFilters, { signal }),
+    enabled: !!user && isOverview && viewMode === 'detailed',
+    retry: false,
+  });
+  const issuesQuery = useQuery({
+    queryKey: [...reportScope, 'issues', periodFilters],
+    queryFn: ({ signal }) => ticketsApi.getIssueCountsReport(periodFilters, { signal }),
+    enabled: !!user && canManageReports && tab === 1,
+    retry: false,
+  });
+  const insightsQuery = useQuery({
+    queryKey: [...reportScope, 'sla-insights', periodFilters],
+    queryFn: ({ signal }) => ticketsApi.getSlaInsights(periodFilters, { signal }),
+    enabled: !!user && canManageReports && tab === 2,
+    retry: false,
+  });
+  const technicianFilters = { ...periodFilters, ticketType: activeTicketTypeFilter || undefined };
+  const techniciansQuery = useQuery({
+    queryKey: [...reportScope, 'assignees', technicianFilters],
+    queryFn: ({ signal }) => ticketsApi.getReportTechnicians(technicianFilters, { signal }),
+    enabled: !!user && canManageReports && (isOverview || isPerformance),
+    retry: false,
+  });
 
-  useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+  const primaryQuery = tab === 1 ? issuesQuery : tab === 2 ? insightsQuery
+    : isOverview && viewMode === 'detailed' ? ratingsQuery : reportQuery;
+  const loading = tab !== 4 && primaryQuery.isPending && !primaryQuery.isError;
+  const error = tab !== 4 && primaryQuery.isError;
+  const result = reportQuery.isError ? undefined : reportQuery.data;
+  const detailedResult = ratingsQuery.isError ? undefined : ratingsQuery.data;
+  const slaInsights = insightsQuery.isError ? EMPTY_ROWS : insightsQuery.data ?? EMPTY_ROWS;
+  const issueCountsData = issuesQuery.isError ? EMPTY_ROWS : issuesQuery.data ?? EMPTY_ROWS;
+  const technicians = techniciansQuery.data ?? EMPTY_ROWS;
+  const assigneeOptions = assignee && !technicians.some((option) => option.id === assignee.id)
+    ? [assignee, ...technicians] : technicians;
+  const supportTypeError = isOverview && viewMode === 'overview' && !!activeTicketTypeFilter && supportTypeQuery.isError;
+  const supportTypeLoading = isOverview && viewMode === 'overview' && !!activeTicketTypeFilter && supportTypeQuery.isPending;
+  const supportTypeRows = activeTicketTypeFilter
+    ? supportTypeQuery.isError ? undefined : supportTypeQuery.data?.avgRatingByType
+    : result?.avgRatingByType;
 
-  const fetchSlaInsights = React.useCallback(async () => {
-    setSlaLoading(true);
-    try {
-      const filters: any = { year };
-      if (periodMode === 'month') filters.month = month;
-      else if (periodMode === 'quarter') filters.quarter = quarter;
-      else if (periodMode === 'semester') filters.semester = semester;
-      
-      const data = await ticketsApi.getSlaInsights(filters);
-      setSlaInsights(data);
-    } catch (err) {
-      console.error('Failed to fetch SLA insights', err);
-    } finally {
-      setSlaLoading(false);
+  const pieData = React.useMemo(() => (supportTypeRows ?? []).map((row) => ({
+    type: row.type, name: TYPE_LABELS[row.type] ?? row.type, value: row.count,
+  })), [supportTypeRows]);
+
+  const { escalationPieData, slaPieData } = React.useMemo(() => {
+    const escalationPieData: { name: string; value: number }[] = [];
+    const slaPieData: { name: string; value: number }[] = [];
+    if (result) {
+      const { acceptedEscalations, returnedEscalations, totalEscalations, slaStats } = result;
+      if (acceptedEscalations > 0) escalationPieData.push({ name: 'Accepted', value: acceptedEscalations });
+      if (returnedEscalations > 0) escalationPieData.push({ name: 'Returned', value: returnedEscalations });
+      const pending = totalEscalations - acceptedEscalations - returnedEscalations;
+      if (pending > 0) escalationPieData.push({ name: 'Pending/Other', value: pending });
+      if (slaStats?.met > 0) slaPieData.push({ name: 'Met SLA', value: slaStats.met });
+      if (slaStats?.missed > 0) slaPieData.push({ name: 'Missed SLA', value: slaStats.missed });
     }
-  }, [year, month, quarter, semester, periodMode]);
+    return { escalationPieData, slaPieData };
+  }, [result]);
 
-  useEffect(() => {
-    if (canManageReports && tab === 2) fetchSlaInsights();
-  }, [canManageReports, tab, fetchSlaInsights]);
+  const canPrint = tab !== 4 && !error && primaryQuery.isSuccess && !supportTypeError && !supportTypeLoading;
 
   // Derived data for Issues Tab
   const uniqueCategories = React.useMemo(() => {
@@ -406,7 +368,9 @@ export default function TicketReportsPage() {
     const maxLen = Math.max(...slaInsights.map(i => (i.issueName || '').length));
     return Math.max(60, maxLen * 3.5);
   }, [slaInsights]);
-  useSse(['TICKET_UPDATED'], () => fetchReports(true));
+  useSse(['TICKET_UPDATED'], () => {
+    if (tab !== 4) void queryClient.invalidateQueries({ queryKey: reportScope }, { cancelRefetch: false });
+  });
 
   const periodLabel = (() => {
     if (periodMode === 'month') return MONTHS.find((m) => m.value === month)?.label ?? '';
@@ -414,6 +378,17 @@ export default function TicketReportsPage() {
     if (periodMode === 'semester') return `S${semester}`;
     return 'Full Year';
   })();
+  const reportFilterSummary = [
+    `${periodLabel} ${year}`,
+    ...([0, 3].includes(tab)
+      ? [
+          TYPE_LABELS[activeTicketTypeFilter] ?? 'All support types',
+          canManageReports
+            ? (assignee ? formatPersonName(assignee) : 'All assignees')
+            : 'My tickets',
+        ]
+      : []),
+  ].join(' · ');
 
   const barData =
     result?.avgRatingByTechnician.map((row) => ({
@@ -442,6 +417,11 @@ export default function TicketReportsPage() {
     : tab === 1 ? issuesSubTab === 0 ? 'Categories' : 'Issues'
       : tab === 2 ? 'SLA Insights' : 'Performance';
   const chartSpecs = React.useMemo<ReportVisualSpec[]>(() => {
+    if (viewMode === 'detailed') return detailedResult ? [
+      { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })), headers: ['Day', 'Average Rating (out of 5)'] },
+      { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })), headers: ['Week', 'Average Rating (out of 5)'] },
+      { id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table', values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })), headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'], rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, new Date(row.submittedAt).toLocaleDateString(), String(row.rating), row.comment || '—']) },
+    ] : [];
     if (!result) return [];
     const supportTypeValues = result.avgRatingByType.map((row) => ({
       label: TYPE_LABELS[row.type] ?? row.type,
@@ -471,19 +451,6 @@ export default function TicketReportsPage() {
       { id: 'overview_escalation_chart', title: 'Escalation outcome', kind: 'chart', values: escalationPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['Outcome', 'Escalations'] },
       { id: 'overview_rating_type_chart', title: 'Average rating by support type', kind: 'chart', values: supportTypeValues, headers: ['Support Type', 'Average Rating (out of 5)'] },
     ];
-    if (viewMode === 'detailed' && detailedResult) {
-      return [
-        { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })), headers: ['Day', 'Average Rating (out of 5)'] },
-        { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })), headers: ['Week', 'Average Rating (out of 5)'] },
-        {
-          id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table',
-          values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })),
-          headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'],
-          rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, new Date(row.submittedAt).toLocaleDateString(), String(row.rating), row.comment || '—']),
-        },
-      ];
-    }
-    if (viewMode === 'detailed') return [];
     if (!isIndividualView) {
       baseOverview.push(
         { id: 'overview_rating_assignee_chart', title: 'Average rating by assignee', kind: 'chart', values: assigneeValues, headers: ['Assignee', 'Average Rating (out of 5)'] },
@@ -494,7 +461,6 @@ export default function TicketReportsPage() {
   }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, pieData, escalationPieData, slaPieData, viewMode, detailedResult, isIndividualView]);
 
   const printSpecs = React.useMemo<ReportVisualSpec[]>(() => {
-    if (!result) return [];
     if (tab === 1 && issuesSubTab === 0) return [
       { id: 'issues_categories_chart', title: 'Tickets by category', kind: 'chart', values: categoryData.map((row) => ({ label: row.categoryName, value: Number(row.count || 0) })), headers: ['Category', 'Tickets with Issues'] },
       ...(selectedCategoryName ? [{ id: 'issues_category_drilldown_chart', title: `Issues in ${selectedCategoryName}`, kind: 'chart', values: drillDownData.map((row: any) => ({ label: row.issueName, value: Number(row.open || 0) + Number(row.in_progress || 0) + Number(row.resolved || 0) + Number(row.closed || 0) + Number(row.freeze_pause || 0) })), headers: ['Issue', 'Tickets'] }] : []),
@@ -504,18 +470,18 @@ export default function TicketReportsPage() {
       { id: 'sla_insights_chart', title: 'Configured versus actual SLA', kind: 'chart', values: slaInsights.flatMap((row: any) => [{ label: `${row.issueName || 'Unknown issue'} — configured SLA hours`, value: Number(row.configuredSlaHours || 0) }, { label: `${row.issueName || 'Unknown issue'} — average active resolution hours`, value: Number(row.avgResolutionHours || 0) }]), headers: ['Issue and Metric', 'Hours'] },
       { id: 'sla_insights_table', title: 'SLA insight details', kind: 'table', values: slaInsights.map((row: any) => ({ label: row.issueName || 'Unknown issue', value: Number(row.avgResolutionHours || 0) })), headers: ['Category', 'Issue', 'Resolved Tickets', 'Configured SLA', 'Avg Active Resolution', 'Status', 'Interpretation'], rows: slaInsights.map((row: any) => [row.categoryName || 'Unknown', row.issueName, String(row.resolvedTicketsCount || 0), row.configuredSlaHours > 0 ? `${Number(row.configuredSlaHours).toFixed(1)}h` : 'None', row.avgResolutionHours ? `${Number(row.avgResolutionHours).toFixed(1)}h` : '—', row.configuredSlaHours > 0 ? (row.isFailingSla ? 'Failing' : 'Healthy') : 'Unmonitored', row.configuredSlaHours <= 0 ? '—' : row.isFailingSla ? 'Review the issue SLA or resolution process' : row.avgResolutionHours < row.configuredSlaHours * 0.5 ? 'The configured SLA may be more generous than the observed active work time' : 'Observed active work time is aligned with the configured SLA']) },
     ] as ReportVisualSpec[];
-    if (tab === 3) return [
+    if (tab === 3) return result ? [
       { id: 'performance_sla_chart', title: 'SLA performance', kind: 'chart', values: slaPieData.map((row) => ({ label: row.name, value: Number(row.value || 0) })), headers: ['SLA Outcome', 'Resolved Tickets'] },
       { id: 'performance_sla_category_table', title: 'SLA by support type', kind: 'table', values: result.slaByType.flatMap((row) => [{ label: `${TYPE_LABELS[row.type] ?? row.type} met`, value: Number(row.met || 0) }, { label: `${TYPE_LABELS[row.type] ?? row.type} missed`, value: Number(row.missed || 0) }]), headers: ['Support Type', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByType.map((row) => [TYPE_LABELS[row.type] ?? row.type, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
       { id: 'performance_sla_assignee_table', title: 'SLA by assignee', kind: 'table', values: result.slaByTechnician.flatMap((row) => [{ label: `${row.techName || `Assignee #${row.techId}`} met`, value: Number(row.met || 0) }, { label: `${row.techName || `Assignee #${row.techId}`} missed`, value: Number(row.missed || 0) }]), headers: ['Assignee', 'Met', 'Missed', 'Avg Active Resolution (hrs)'], rows: result.slaByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.met), String(row.missed), String(row.avgResolutionTimeHours)]) },
       ...(canManageReports && result.weeklyTechnicianPerformance?.length ? [{ id: 'performance_weekly_technicians_table', title: 'Ticket assignee ranking — selected period', kind: 'table' as const, values: result.weeklyTechnicianPerformance.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.weightedScore || 0) })), headers: ['Rank', 'Assignee', 'Resolved', 'SLA Met', 'SLA Missed', 'SLA Rate', 'Avg Active Time', 'Weighted Score'], rows: result.weeklyTechnicianPerformance.map((row, index) => [String(index + 1), row.techName || `Assignee #${row.techId}`, String(row.resolvedTickets), String(row.met), String(row.missed), `${row.slaRate.toFixed(1)}%`, `${row.avgActiveResolutionHours.toFixed(1)}h`, row.weightedScore.toFixed(1)]) }] : []),
       { id: 'performance_assignee_table', title: 'Assignee performance detail', kind: 'table', values: result.avgRatingByTechnician.map((row) => ({ label: row.techName || `Assignee #${row.techId}`, value: Number(row.avg || 0) })), headers: ['Assignee', 'Resolved Tickets', 'Rated Tickets', 'Average Rating'], rows: result.avgRatingByTechnician.map((row) => [row.techName || `Assignee #${row.techId}`, String(row.count), String(row.ratedCount || 0), Number(row.avg || 0).toFixed(2)]) },
-    ];
+    ] : [];
     return chartSpecs;
   }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, slaPieData, chartSpecs, canManageReports]);
 
   const handlePrint = async () => {
-    if (loading || (tab === 2 && slaLoading) || printSpecs.length === 0) return;
+    if (!canPrint || printSpecs.length === 0) return;
     const printWindow = window.open('', '_blank', 'width=1100,height=780');
     if (!printWindow) {
       setPrintError('The print window was blocked. Allow pop-ups for this site, then try again.');
@@ -653,10 +619,9 @@ export default function TicketReportsPage() {
       return element;
     };
     add('h1', `Ticket Reports — ${sectionTitle}`);
-    const assignee = technicians.find((person) => person.id === technicianId);
     const assigneeLabel = assignee ? formatPersonName(assignee, `Assignee #${assignee.id}`) : canManageReports ? 'All assignees' : 'My tickets';
     const printUsesStaffAndTypeFilters = tab === 0 || tab === 3;
-    add('div', `${periodLabel} ${year} • ${printUsesStaffAndTypeFilters && ticketType ? TYPE_LABELS[ticketType] ?? ticketType : 'All support types'} • ${printUsesStaffAndTypeFilters ? assigneeLabel : 'All assignees'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
+    add('div', `${periodLabel} ${year} • ${printUsesStaffAndTypeFilters && activeTicketTypeFilter ? TYPE_LABELS[activeTicketTypeFilter] ?? activeTicketTypeFilter : 'All support types'} • ${printUsesStaffAndTypeFilters ? assigneeLabel : 'All assignees'} • Generated ${new Date().toLocaleString()}`, doc.body).className = 'meta';
     if (tab === 1) add('p', 'These counts include tickets with configured issues and exclude duplicate and cancelled tickets. Category totals are the sum of their listed issues.');
     const addBarChart = (values: Array<{ label: string; value: number }>, parent: HTMLElement, visualId: string) => {
       const maxValue = Math.max(1, ...values.map((row) => Number(row.value) || 0));
@@ -729,7 +694,7 @@ export default function TicketReportsPage() {
   };
 
   return (
-    <Box>
+    <Box onClickCapture={clearChartFilterWhenClickingOutside}>
 <Box
         display="flex"
         justifyContent="space-between"
@@ -737,14 +702,14 @@ export default function TicketReportsPage() {
         mb={1}
         sx={{ '@media print': { display: 'none' } }}
       >
-        <Typography variant="h5" fontWeight={700}>
+        <Typography component="h1" variant="h5" fontWeight={700}>
           Ticket Reports
         </Typography>
         {tab !== 4 && <Button
           variant="outlined"
           startIcon={<PrintIcon />}
           onClick={handlePrint}
-          disabled={!result || !!error || printSpecs.length === 0 || loading || explanationsLoading || (tab === 2 && slaLoading)}
+          disabled={!canPrint || printSpecs.length === 0 || explanationsLoading}
           size="small"
         >
           Print / Export PDF
@@ -761,11 +726,29 @@ export default function TicketReportsPage() {
       </Box>
 <WorkspaceLayout kind="report" context={<>{tab !== 4 && <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
         <CardContent>
-          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+          <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ display: { xs: 'none', sm: 'block' } }}>
             Filters
           </Typography>
+          <Box sx={{ display: { xs: 'block', sm: 'none' }, mb: 1 }}>
+            <Button
+              variant="outlined"
+              fullWidth
+              aria-expanded={mobileFiltersExpanded}
+              aria-controls="report-filter-fields"
+              onClick={() => setMobileFiltersExpanded((expanded) => !expanded)}
+              startIcon={<FilterListIcon />}
+              endIcon={mobileFiltersExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              sx={{ minHeight: 44, justifyContent: 'space-between' }}
+            >
+              Filters
+            </Button>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
+              {reportFilterSummary}
+            </Typography>
+          </Box>
+          <Collapse id="report-filter-fields" in={!isCompactViewport || mobileFiltersExpanded}>
           <Box sx={{ pb: 1 }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, '& > *': { flex: '1 1 120px' } }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(auto-fit, minmax(120px, 1fr))' }, gap: 2, '& > *': { minWidth: 0, width: '100%' } }}>
               <TextField
                 select
                 fullWidth
@@ -850,8 +833,11 @@ export default function TicketReportsPage() {
                     fullWidth
                     size="small"
                     label="Support Type"
-                    value={ticketType}
-                    onChange={(e) => setTicketType(e.target.value)}
+                    value={activeTicketTypeFilter}
+                    onChange={(e) => {
+                      setTicketType(e.target.value);
+                      setChartTicketType(null);
+                    }}
                     sx={{ minWidth: 120 }}
                   >
                     <MenuItem value="">All Types</MenuItem>
@@ -862,10 +848,10 @@ export default function TicketReportsPage() {
                   </TextField>
                   {canManageReports && (
                     <Autocomplete
-                      options={technicians}
+                      options={assigneeOptions}
                       getOptionLabel={(option) => formatPersonName(option)}
-                      value={technicians.find((option) => option.id === technicianId) ?? null}
-                      onChange={(_, option) => setTechnicianId(option?.id ?? '')}
+                      value={assignee}
+                      onChange={(_, option) => setAssignee(option)}
                       isOptionEqualToValue={(option, value) => option.id === value.id}
                       openOnFocus
                       clearOnEscape
@@ -873,6 +859,7 @@ export default function TicketReportsPage() {
                       size="small"
                       sx={{ minWidth: 120 }}
                       noOptionsText="No assignees available"
+                      loading={techniciansQuery.isPending}
                       renderInput={(params) => <TextField {...params} label="Assignee" placeholder="All Assignees" />}
                     />
                   )}
@@ -880,9 +867,23 @@ export default function TicketReportsPage() {
               )}
             </Box>
           </Box>
+          </Collapse>
         </CardContent>
       </Card>}</>}>
 {printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError('')}>{printError}</Alert>}
+{loading && <Box role="status" display="flex" justifyContent="center" alignItems="center" gap={1.5} py={6}>
+  <CircularProgress size={24} aria-hidden="true" />
+  <Typography color="text.secondary">Loading report…</Typography>
+</Box>}
+{error && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => void primaryQuery.refetch()}>Retry</Button>}>
+  {sectionTitle} could not load for the selected period.
+</Alert>}
+{supportTypeError && !error && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => void supportTypeQuery.refetch()}>Retry chart</Button>}>
+  The support type chart could not load. The other figures are available.
+</Alert>}
+{canManageReports && (isOverview || isPerformance) && techniciansQuery.isError && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => void techniciansQuery.refetch()}>Retry list</Button>}>
+  The assignee list could not be refreshed. Your current filter is still applied.
+</Alert>}
 {tab === 4 && <TicketReportBuilder />}
 {/* ── Filters ── */}
 
@@ -914,23 +915,12 @@ export default function TicketReportsPage() {
             <Typography variant="h5" fontWeight={700}>
               Ticket Reports — {periodLabel} {year}
             </Typography>
-            {ticketType && (
+            {activeTicketTypeFilter && (
               <Typography variant="body2">
-                Support Type: {TYPE_LABELS[ticketType] ?? ticketType}
+                Support Type: {TYPE_LABELS[activeTicketTypeFilter] ?? activeTicketTypeFilter}
               </Typography>
             )}
           </Box>
-
-          {loading && (
-            <Box textAlign="center" py={4}>
-              <CircularProgress />
-            </Box>
-          )}
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
 
           <Box sx={{ '@media print': { display: 'none' } }}>
             {!loading && viewMode === 'overview' && result && (
@@ -1112,37 +1102,51 @@ export default function TicketReportsPage() {
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                               Tickets by Support Type
                             </Typography>
-                            {pieData.length === 0 ? (
+                            {supportTypeError ? null : supportTypeLoading ? <CircularProgress size={24} aria-label="Loading support types" /> : pieData.length === 0 ? (
                               <Typography variant="body2" color="text.secondary">
                                 No data for this period.
                               </Typography>
                             ) : (
-                              <ResponsiveContainer width="100%" height={320}>
-                                <PieChart>
-                                  <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={80}
-                                    dataKey="value"
-                                  >
-                                    {pieData.map((_, i) => (
-                                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                  <Legend
-                                    formatter={(value, entry: any) => {
-                                      const payload = entry.payload;
-                                      if (!payload) return value;
-                                      const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
-                                      const percent =
-                                        total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
-                                      return `${value} (${percent}%)`;
-                                    }}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
+                              <Box data-support-type-chart="true" sx={{ cursor: 'pointer' }}>
+                                <ResponsiveContainer width="100%" height={isCompactViewport ? 245 : 300}>
+                                  <PieChart>
+                                    <Pie
+                                      data={pieData}
+                                      cx="50%"
+                                      cy="50%"
+                                      outerRadius={isCompactViewport ? 66 : 80}
+                                      dataKey="value"
+                                    >
+                                      {pieData.map((row, i) => (
+                                        <Cell
+                                          key={row.type}
+                                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                                          tabIndex={0}
+                                          role="button"
+                                          aria-pressed={activeTicketTypeFilter === row.type}
+                                          aria-label={`${row.name}: ${row.value} tickets. Select to filter this report.`}
+                                          onClick={() => toggleChartSupportType(row.type)}
+                                          onKeyDown={(event: React.KeyboardEvent<SVGPathElement>) =>
+                                            handleSupportTypeSliceKeyDown(event, row.type)
+                                          }
+                                          style={{ cursor: 'pointer' }}
+                                        />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend
+                                      formatter={(value, entry: any) => {
+                                        const payload = entry.payload;
+                                        if (!payload) return value;
+                                        const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                        const percent =
+                                          total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                        return `${value} (${percent}%)`;
+                                      }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </Box>
                             )}
                           </CardContent>
                         </Card>
@@ -1230,37 +1234,51 @@ export default function TicketReportsPage() {
                             <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                               Tickets by Support Type
                             </Typography>
-                            {pieData.length === 0 ? (
+                            {supportTypeError ? null : supportTypeLoading ? <CircularProgress size={24} aria-label="Loading support types" /> : pieData.length === 0 ? (
                               <Typography variant="body2" color="text.secondary">
                                 No data.
                               </Typography>
                             ) : (
-                              <ResponsiveContainer width="100%" height={320}>
-                                <PieChart>
-                                  <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={80}
-                                    dataKey="value"
-                                  >
-                                    {pieData.map((_, i) => (
-                                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                                    ))}
-                                  </Pie>
-                                  <Tooltip />
-                                  <Legend
-                                    formatter={(value, entry: any) => {
-                                      const payload = entry.payload;
-                                      if (!payload) return value;
-                                      const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
-                                      const percent =
-                                        total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
-                                      return `${value} (${percent}%)`;
-                                    }}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
+                              <Box data-support-type-chart="true" sx={{ cursor: 'pointer' }}>
+                                <ResponsiveContainer width="100%" height={isCompactViewport ? 245 : 300}>
+                                  <PieChart>
+                                    <Pie
+                                      data={pieData}
+                                      cx="50%"
+                                      cy="50%"
+                                      outerRadius={isCompactViewport ? 66 : 80}
+                                      dataKey="value"
+                                    >
+                                      {pieData.map((row, i) => (
+                                        <Cell
+                                          key={row.type}
+                                          fill={PIE_COLORS[i % PIE_COLORS.length]}
+                                          tabIndex={0}
+                                          role="button"
+                                          aria-pressed={activeTicketTypeFilter === row.type}
+                                          aria-label={`${row.name}: ${row.value} tickets. Select to filter this report.`}
+                                          onClick={() => toggleChartSupportType(row.type)}
+                                          onKeyDown={(event: React.KeyboardEvent<SVGPathElement>) =>
+                                            handleSupportTypeSliceKeyDown(event, row.type)
+                                          }
+                                          style={{ cursor: 'pointer' }}
+                                        />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip />
+                                    <Legend
+                                      formatter={(value, entry: any) => {
+                                        const payload = entry.payload;
+                                        if (!payload) return value;
+                                        const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                                        const percent =
+                                          total > 0 ? ((payload.value / total) * 100).toFixed(0) : 0;
+                                        return `${value} (${percent}%)`;
+                                      }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </Box>
                             )}
                           </CardContent>
                         </Card>
@@ -1965,9 +1983,7 @@ export default function TicketReportsPage() {
         </Box>
       )}
 {/* ── Tab 1: Issues ── */}
-{canManageReports && tab === 1 && loading && <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>}
-{canManageReports && tab === 1 && error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-{canManageReports && tab === 1 && !loading && !error && result && (
+{canManageReports && tab === 1 && !loading && !error && (
         <Box sx={{ mt: 2 }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
@@ -2152,7 +2168,7 @@ export default function TicketReportsPage() {
         </Box>
       )}
 {/* ── Tab 2: SLA Insights ── */}
-{canManageReports && tab === 2 && (
+{canManageReports && tab === 2 && !loading && !error && (
         <Box sx={{ mt: 4 }}>
           <Typography variant="h6" fontWeight={600} mb={2}>
             SLA Recalibration Insights
@@ -2166,11 +2182,7 @@ export default function TicketReportsPage() {
 
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              {slaLoading ? (
-                <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : slaInsights.length === 0 ? (
+              {slaInsights.length === 0 ? (
                 <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
                   <Typography color="text.secondary">No resolution data available for the selected period.</Typography>
                 </Box>
@@ -2213,13 +2225,7 @@ export default function TicketReportsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {slaLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        <CircularProgress size={24} />
-                      </TableCell>
-                    </TableRow>
-                  ) : slaInsights.length === 0 ? (
+                  {slaInsights.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
                         <Typography color="text.secondary" py={2}>

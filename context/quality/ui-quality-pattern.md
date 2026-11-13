@@ -35,6 +35,12 @@ Before choosing an unspecified visual direction, follow the preference/reference
 
 Review the direction against the brief before implementing. After a prototype/build exists, inspect representative screenshots or the actual surface with realistic short, average, and long content. Include empty/loading/validation/error/disabled/stale/recovery states where applicable, not only a successful populated screen. Critique alignment, hierarchy, readable density, copy clarity, and whether decoration earns its place. Novelty is not a reason to replace established workflows or weaken semantics. FND-UI-001..004 and DS-CATALOG-001..004 remain authoritative.
 
+### Verify the visible change
+
+Translate approved references and feedback into specific comparisons. For a layout change, name the expected regions, their relative placement and what expands, stays pinned or disappears. For a choice between layouts, render the same populated page and state in each option and compare the arrangement and interaction differences. Check another affected page family before claiming application-wide coverage. For theme work, inspect the surfaces that must respond, including shared navigation, overlays and sticky regions where affected.
+
+Run the interaction that can reveal the reported defect. Scroll a populated table through the sticky region and inspect the short-result state. Open an overlay with realistic content and verify dismissal and focus return. Compare relevant capability variants when an action or surrounding container appears conditionally. Test with the input focused or the original page action visible when keyboard or floating controls are involved. A screenshot of the starting state does not cover these transitions. Use QA-DONE-005..007 for claims and evidence limits.
+
 ### Task-based usability
 
 Apply [workflow completeness](../application/workflow-completeness.md) to multi-step forms and generated drafts: carry changed values to their consumer, identify stage-specific blockers, provide correction links and keep the default synthetic journey traversable. Incomplete scenarios must be explicit. Compare counters and allowed actions with the field/transition contract rather than accepting hard-coded success or incompleteness labels (APP-COMPLETE-003..007).

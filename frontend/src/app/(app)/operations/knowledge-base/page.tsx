@@ -45,6 +45,7 @@ import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { knowledgeBaseApi } from '@/app/api/references';
 import { SafeMarkdown } from '@/components/SafeRichText';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 
 interface KBArticle {
   id: number;
@@ -156,6 +157,7 @@ export default function KnowledgeBasePage() {
   };
 
   const canManage = !!myCap?.isKnowledgeBaseManage;
+  const addArticleButtonRef = useMobilePageAction('Add Article');
 
   const applyMarkdown = (before: string, after = '', placeholder = 'text') => {
     const input = contentInputRef.current;
@@ -297,7 +299,7 @@ export default function KnowledgeBasePage() {
   return (
     <Box>
 <Stack direction={{ xs: 'column', sm: 'row' }} flexWrap="wrap" alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between" gap={2} mb={3}>
-  <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
+  <Box sx={{ flex: { xs: '0 0 auto', sm: '1 1 260px' }, minWidth: 0 }}>
         <Typography variant="h4" fontWeight={700}>
           Knowledge Base
         </Typography>
@@ -305,7 +307,7 @@ export default function KnowledgeBasePage() {
           Find self-service articles, helpful guides, and technical insights.
         </Typography>
   </Box>
-  {canManage && <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, whiteSpace: 'nowrap' }}>
+  {canManage && <Button ref={addArticleButtonRef} variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, whiteSpace: 'nowrap' }}>
     Add Article
   </Button>}
 </Stack>

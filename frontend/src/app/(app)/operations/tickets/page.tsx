@@ -41,12 +41,16 @@ import {
   Tabs,
   useMediaQuery,
   useTheme,
+  Collapse,
   Grid,
   Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
+  FilterList as FilterListIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
   Visibility as ViewIcon,
   AssignmentInd as AssignIcon,
   ThumbUp as SatisfactionIcon,
@@ -66,7 +70,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
-import { useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { SafeMarkdown } from '@/components/SafeRichText';
 import {
@@ -99,6 +103,7 @@ import OvertimeTicketQueue from '@/components/OvertimeTicketQueue';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
 import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
+import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 
 import {
   PRIORITY_CHIP_SX,
@@ -145,6 +150,7 @@ export default function TicketsPage({
       : `/operations/tickets/${ticketId}`;
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const { user, myCap, loading: authLoading } = useAuth();
   // Old bookmarks to Tickets must use the same requester view as My Tickets.
   const personalRequestedOnly = requestedOnly || user?.role === 'user';
@@ -176,12 +182,24 @@ export default function TicketsPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
   const [filterPeriodMode, setFilterPeriodMode] = useState<TicketFilterPeriodMode>('day');
+  const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
   const [showMyTickets, setShowMyTickets] = useState(false);
   const [hydratedEntryKey, setHydratedEntryKey] = useState<string | null>(null);
   const [showEscalatedToMe, setShowEscalatedToMe] = useState(false);
   const [myTicketsCount, setMyTicketsCount] = useState(0);
   const [escalatedToMeCount, setEscalatedToMeCount] = useState(0);
   const [globalConfig, setGlobalConfig] = useState<any>(null);
+  const activeTicketFilterCount = [
+    Boolean(filterType),
+    Boolean(filterPriority),
+    Boolean(filterSla),
+    filterYear !== currentYear,
+    filterPeriodMode !== 'day',
+    filterPeriodMode === 'day' && filterDate !== todayInManila(),
+    filterPeriodMode === 'month' && Boolean(filterMonth),
+    filterPeriodMode === 'quarter' && Boolean(filterQuarter),
+    filterPeriodMode === 'semester' && Boolean(filterSemester),
+  ].filter(Boolean).length;
 
   useEffect(() => {
     if (myCap?.isGlobalSettingsAccess) {
@@ -1204,6 +1222,8 @@ export default function TicketsPage({
     setNewDialogOpen(true);
   };
 
+  const createTicketButtonRef = useMobilePageAction('New Ticket');
+
   const openAssignDialog = async (ticket: Ticket) => {
     setAssigningTicket(ticket);
     setSelectedTechId('');
@@ -1431,6 +1451,71 @@ export default function TicketsPage({
     />
   );
 
+  const mobileFilterToggle = (
+    <Button
+      variant="outlined"
+      fullWidth
+      aria-expanded={mobileFiltersExpanded}
+      aria-controls="ticket-filter-fields"
+      onClick={() => setMobileFiltersExpanded((expanded) => !expanded)}
+      startIcon={<FilterListIcon />}
+      endIcon={mobileFiltersExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      sx={{ display: { xs: 'inline-flex', sm: 'none' }, minHeight: 44, justifyContent: 'space-between' }}
+    >
+      {activeTicketFilterCount > 0 ? `Filters (${activeTicketFilterCount})` : 'Filters'}
+    </Button>
+  );
+
+  const ticketQueueShortcuts = !restrictedAssignedOnly &&
+    (isFocalTech || canManageAll || canViewEscalatedQueue) ? (
+      <Box sx={ticketFilterShortcutsSx}>
+        {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
+          <Badge
+            badgeContent={myTicketsCount}
+            color="error"
+            overlap="circular"
+            sx={{ width: 'auto', minWidth: 0, flex: '1 1 140px', maxWidth: 220, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
+          >
+            <Button
+              size="small"
+              variant={showMyTickets ? 'contained' : 'outlined'}
+              aria-pressed={showMyTickets}
+              color="primary"
+              sx={{ width: '100%', minWidth: 0, height: '100%', whiteSpace: 'nowrap', px: 1 }}
+              onClick={() => {
+                setShowMyTickets((value) => !value);
+                setShowEscalatedToMe(false);
+              }}
+            >
+              Assigned to Me
+            </Button>
+          </Badge>
+        )}
+        {canViewEscalatedQueue && (
+          <Badge
+            badgeContent={escalatedToMeCount}
+            color="error"
+            overlap="circular"
+            sx={{ width: 'auto', minWidth: 0, flex: '1 1 140px', maxWidth: 220, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
+          >
+            <Button
+              size="small"
+              variant={showEscalatedToMe ? 'contained' : 'outlined'}
+              color="warning"
+              aria-pressed={showEscalatedToMe}
+              sx={{ width: '100%', minWidth: 0, height: '100%', whiteSpace: 'nowrap', px: 1 }}
+              onClick={() => {
+                setShowEscalatedToMe((value) => !value);
+                setShowMyTickets(false);
+              }}
+            >
+              {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
+            </Button>
+          </Badge>
+        )}
+      </Box>
+    ) : null;
+
   return (
     <Box>
 <Box
@@ -1442,7 +1527,7 @@ export default function TicketsPage({
         mb={2}
       >
         <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
-          <Typography variant="h4" fontWeight={700}>
+          <Typography component="h1" variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.45rem', sm: '2rem' }, lineHeight: 1.2 }}>
             {showEscalations
               ? 'Escalation History'
               : restrictedAssignedOnly
@@ -1462,6 +1547,7 @@ export default function TicketsPage({
           </Typography>
         </Box>
         <TicketPageActions
+          createButtonRef={createTicketButtonRef}
           canCreate={!restrictedAssignedOnly && !personalRequestedOnly && !showEscalations}
           canInvite={canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations}
           canViewEscalations={canViewEscalatedQueue}
@@ -1474,8 +1560,11 @@ export default function TicketsPage({
 <WorkspaceLayout kind="standard" context={<>{!showEscalations && !canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={ticketFilterPanelSx}>
-            <Box sx={ticketFilterGridSx}>
-              {searchField}
+            {isPhone && searchField}
+            {mobileFilterToggle}
+            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
+              <Box sx={ticketFilterGridSx}>
+              {!isPhone && searchField}
               <TextField
                 select
                 label="Year"
@@ -1596,61 +1685,20 @@ export default function TicketsPage({
               >
                 Reset
               </Button>
-              {!restrictedAssignedOnly && (isFocalTech || canViewEscalatedQueue) && (
-                <Box sx={ticketFilterShortcutsSx}>
-                  {isFocalTech && (
-                    <Badge
-                      badgeContent={myTicketsCount}
-                      color="error"
-                      overlap="circular"
-                      sx={{ '& .MuiBadge-badge': { zIndex: 1 } }}
-                    >
-                      <Button
-                        size="small"
-                        variant={showMyTickets ? 'contained' : 'outlined'}
-                        aria-pressed={showMyTickets}
-                        color="primary"
-                        onClick={() => {
-                          setShowMyTickets((v) => !v);
-                          setShowEscalatedToMe(false);
-                        }}
-                      >
-                        Assigned to Me
-                      </Button>
-                    </Badge>
-                  )}
-                  {canViewEscalatedQueue && (
-                    <Badge
-                      badgeContent={escalatedToMeCount}
-                      color="error"
-                      overlap="circular"
-                      sx={{ '& .MuiBadge-badge': { zIndex: 1 } }}
-                    >
-                      <Button
-                        size="small"
-                        variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                        color="warning"
-                        aria-pressed={showEscalatedToMe}
-                        onClick={() => {
-                          setShowEscalatedToMe((v) => !v);
-                          setShowMyTickets(false);
-                        }}
-                      >
-                        {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                      </Button>
-                    </Badge>
-                  )}
-                </Box>
-              )}
-            </Box>
+              </Box>
+            </Collapse>
+            {ticketQueueShortcuts}
           </CardContent>
         </Card>
       )}
 {!showEscalations && canManageAll && (
         <Card sx={{ mb: 2 }}>
           <CardContent sx={ticketFilterPanelSx}>
-            <Box sx={ticketFilterGridSx}>
-              {searchField}
+            {isPhone && searchField}
+            {mobileFilterToggle}
+            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
+              <Box sx={ticketFilterGridSx}>
+              {!isPhone && searchField}
               <TextField
                 inputProps={{ maxLength: 255 }}
                 select
@@ -1812,55 +1860,9 @@ export default function TicketsPage({
               >
                 Reset
               </Button>
-              <Box
-                sx={ticketFilterShortcutsSx}
-              >
-                {!restrictedAssignedOnly && (isFocalTech || canManageAll) && (
-                  <Badge
-                    badgeContent={myTicketsCount}
-                    color="error"
-                    overlap="circular"
-                    sx={{ width: 'fit-content', minWidth: 170, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
-                  >
-                    <Button
-                      size="small"
-                      variant={showMyTickets ? 'contained' : 'outlined'}
-                      aria-pressed={showMyTickets}
-                      color="primary"
-                      sx={{ minWidth: 170, height: '100%', whiteSpace: 'nowrap', px: 1.5 }}
-                      onClick={() => {
-                        setShowMyTickets((v) => !v);
-                        setShowEscalatedToMe(false);
-                      }}
-                    >
-                      Assigned to Me
-                    </Button>
-                  </Badge>
-                )}
-                {canViewEscalatedQueue && (
-                  <Badge
-                    badgeContent={escalatedToMeCount}
-                    color="error"
-                    overlap="circular"
-                    sx={{ width: 'fit-content', minWidth: 170, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
-                  >
-                    <Button
-                      size="small"
-                      variant={showEscalatedToMe ? 'contained' : 'outlined'}
-                      color="warning"
-                      aria-pressed={showEscalatedToMe}
-                      sx={{ minWidth: 170, height: '100%', whiteSpace: 'nowrap', px: 1.5 }}
-                      onClick={() => {
-                        setShowEscalatedToMe((v) => !v);
-                        setShowMyTickets(false);
-                      }}
-                    >
-                      {showEscalatedToMe ? 'Escalated To Me ✓' : 'Escalated To Me'}
-                    </Button>
-                  </Badge>
-                )}
               </Box>
-            </Box>
+            </Collapse>
+            {ticketQueueShortcuts}
           </CardContent>
         </Card>
       )}
@@ -1956,6 +1958,29 @@ export default function TicketsPage({
               <Box display="flex" justifyContent="center" p={3}>
                 <Typography color="text.secondary">{escalationHistoryError ? 'Escalation history is unavailable.' : 'No escalations found.'}</Typography>
               </Box>
+            ) : isMobile ? (
+              <Stack spacing={1}>
+                {visibleEscalations.map((entry) => (
+                  <Card key={entry.id} component="article" variant="outlined">
+                    <CardContent sx={{ overflowWrap: 'anywhere' }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={1}>
+                        <Button component={RouterLink} to={ticketDetailsHref(entry.ticketId)} sx={{ minHeight: 44 }}>
+                          {entry.ticket?.ticketNumber || entry.ticketId}
+                        </Button>
+                        <Chip size="small" label={entry.status.toUpperCase()}
+                          color={entry.status === 'pending' ? 'warning' : entry.status === 'accepted' ? 'success' : 'default'} />
+                      </Stack>
+                      <Typography variant="body2">{new Date(entry.createdAt).toLocaleDateString()}</Typography>
+                      <Typography variant="body2">From: {formatPersonName(entry.escalatedBy, '—')}</Typography>
+                      <Typography variant="body2">To: {formatPersonName(entry.escalatedTo, '—')}</Typography>
+                      {entry.notes && <Box component="details" sx={{ mt: 0.5 }}>
+                        <Typography component="summary" variant="body2" sx={{ cursor: 'pointer', minHeight: 44, py: 1.25 }}>Escalation notes</Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{entry.notes}</Typography>
+                      </Box>}
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
             ) : (
               <TableContainer>
                 <Table size="small">
@@ -2046,33 +2071,23 @@ export default function TicketsPage({
               return (
                 <Card
                   key={ticket.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Open ticket ${ticket.ticketNumber}`}
-                  onClick={() => router.push(ticketDetailsHref(ticket.id))}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      router.push(ticketDetailsHref(ticket.id));
-                    }
-                  }}
+                  className="ticket-mobile-card"
+                  component="article"
                   sx={{
                     ...(hasPendingSatisfaction ? { backgroundColor: 'warning.50' } : {}),
-                    cursor: 'pointer',
-                    transition: 'box-shadow 120ms ease, transform 120ms ease',
-                    '&:hover, &:focus-visible': { boxShadow: 4 },
-                    '&:active': { transform: 'scale(0.995)' },
+                    position: 'relative',
                   }}
                 >
-                  <CardContent>
+                  <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
                     <Box
                       display="flex"
+                      flexWrap="wrap"
                       justifyContent="space-between"
-                      alignItems="flex-start"
+                      alignItems="center"
+                      gap={0.75}
                       mb={1}
                     >
-                      <Typography sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      <Typography sx={{ fontFamily: 'monospace', fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>
                         {hasUnread ? (
                           <Badge
                             color="error"
@@ -2085,14 +2100,13 @@ export default function TicketsPage({
                           ticket.ticketNumber
                         )}
                       </Typography>
-                      <Box>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.5, minWidth: 0 }}>
                         {hasPendingSatisfaction && (
                           <Chip
                             size="small"
                             label="Unrated"
                             color="warning"
                             variant="filled"
-                            sx={{ mr: 1 }}
                           />
                         )}
                         <Chip
@@ -2103,13 +2117,22 @@ export default function TicketsPage({
                       </Box>
                     </Box>
                     <Typography
+                      className="ticket-mobile-subject"
                       variant="body1"
+                      component={RouterLink}
+                      to={ticketDetailsHref(ticket.id)}
+                      aria-label={`Open ticket ${ticket.ticketNumber}: ${ticket.subject}`}
                       sx={{
+                        display: 'block',
+                        color: 'inherit',
+                        textDecoration: 'none',
                         fontWeight: 600,
                         mb: 1,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
+                        '&::after': { content: '""', position: 'absolute', inset: 0, borderRadius: 2 },
+                        '&:focus-visible::after': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
                       }}
                     >
                       {ticket.subject}
@@ -2151,7 +2174,7 @@ export default function TicketsPage({
                     <Box
                       sx={{
                         display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                         gap: 1.25,
                         mb: 1.5,
                       }}
@@ -2206,23 +2229,9 @@ export default function TicketsPage({
                         </Typography>
                       </Box>
                     </Box>
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Typography variant="caption" color="text.secondary">
-                        Tap the card to view details
-                      </Typography>
-                      <Stack direction="row" spacing={0.5}>
+                    <Box className="ticket-mobile-actions" display="flex" justifyContent="flex-end" alignItems="center" gap={1}>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ position: 'relative', zIndex: 1, '& .MuiIconButton-root': { minWidth: 44, minHeight: 44 } }}>
                         <TicketCancelButton ticket={ticket} onCancelled={() => void refreshAfterTicketChange()} />
-                        <Tooltip title="View Details">
-                          <IconButton
-                            size="small"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              router.push(ticketDetailsHref(ticket.id));
-                            }}
-                          >
-                            <ViewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
                         {canAssign && !['duplicate', 'cancelled'].includes(ticket.status) && (
                           <Tooltip
                             title={
@@ -2235,6 +2244,7 @@ export default function TicketsPage({
                               <IconButton
                                 size="small"
                                 color="primary"
+                                aria-label="Assign ticket"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   openAssignDialog(ticket);
@@ -2253,6 +2263,7 @@ export default function TicketsPage({
                               <IconButton
                                 size="small"
                                 color="warning"
+                                aria-label="Escalate ticket"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   openEscalateDialog(ticket);
@@ -2267,6 +2278,7 @@ export default function TicketsPage({
                             <IconButton
                               size="small"
                               color="success"
+                              aria-label="Rate this resolution"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openSatDialog(ticket);
@@ -2282,6 +2294,7 @@ export default function TicketsPage({
                               <IconButton
                                 size="small"
                                 color="secondary"
+                                aria-label="Correct resolution time"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   openResolutionOverrideDialog(ticket);
@@ -2794,7 +2807,7 @@ export default function TicketsPage({
                   xs: '1fr',
                   sm: 'repeat(auto-fit, minmax(145px, 1fr))',
                 },
-                gap: 2,
+                gap: { xs: 1, sm: 2 },
               }}
             >
               {[
@@ -2830,7 +2843,7 @@ export default function TicketsPage({
                 <Card
                   key={opt.value}
                   sx={{
-                    minHeight: 170,
+                    minHeight: { xs: 76, sm: 170 },
                     border:
                       form.ticketType === opt.value
                         ? `2.5px solid ${opt.color}`
@@ -2854,13 +2867,15 @@ export default function TicketsPage({
                       })
                     }
                     sx={{
-                      minHeight: 170,
+                      minHeight: { xs: 76, sm: 170 },
                       height: '100%',
-                      p: 2,
+                      p: { xs: 1.25, sm: 2 },
                       display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      textAlign: 'center',
+                      alignItems: 'center',
+                      flexDirection: { xs: 'row', sm: 'column' },
+                      justifyContent: { xs: 'flex-start', sm: 'center' },
+                      gap: { xs: 1.25, sm: 0 },
+                      textAlign: { xs: 'left', sm: 'center' },
                       '&:focus-visible': {
                         outline: '3px solid',
                         outlineColor: 'primary.main',
@@ -2868,15 +2883,17 @@ export default function TicketsPage({
                       },
                     }}
                   >
-                    <Typography variant="h5" sx={{ mb: 0.5 }}>
+                    <Typography variant="h5" sx={{ mb: { xs: 0, sm: 0.5 }, fontSize: { xs: '1.45rem', sm: undefined }, flexShrink: 0 }}>
                       {opt.icon}
                     </Typography>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      {opt.label}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {opt.desc}
-                    </Typography>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight={700} lineHeight={1.25}>
+                        {opt.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                        {opt.desc}
+                      </Typography>
+                    </Box>
                   </CardActionArea>
                 </Card>
               ))}

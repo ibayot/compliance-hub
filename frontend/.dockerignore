@@ -7,6 +7,9 @@ pnpm-debug.log*
 .gitignore
 Dockerfile*
 dist
+dist-phone-preview
+android
+ios
 test-results
 playwright-report
 coverage

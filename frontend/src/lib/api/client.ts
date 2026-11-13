@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { canRecoverSession, markSessionSignedOut, recoveryGeneration, isRejectedSession } from '../auth/session-recovery';
+import { rememberExpiredDestination } from '../auth/sign-in-destination';
 
 // Use Vite proxy in dev (/api is proxied to localhost:4000/api by vite.config.ts).
 // VITE_API_URL can override for production deployments if necessary, but we force '/api' 
@@ -13,10 +14,14 @@ let API_URL = import.meta.env.PROD
 // If running natively on a Mobile App, relative paths (e.g. '/api') or 'localhost' will break
 // because 'localhost' resolves to the phone itself, and relative paths resolve to `http://localhost`.
 if (Capacitor.isNativePlatform()) {
-  if (API_URL.startsWith('/') || API_URL.includes('localhost')) {
+  const allowEmulator = import.meta.env.VITE_NATIVE_DEV_NETWORK === '1';
+  if (allowEmulator && (API_URL.startsWith('/') || API_URL.includes('localhost'))) {
     // 10.0.2.2 is the special alias for your host machine's loopback interface in Android emulators.
-    // We route through Nginx (port 80) instead of Gateway directly (4000) to bypass potential Windows Firewall blocks.
-    API_URL = 'http://10.0.2.2/api';
+    // The local gateway listens on port 4000. The browser's Nginx may redirect
+    // to a development certificate that the Android WebView does not trust.
+    API_URL = 'http://10.0.2.2:4000/api';
+  } else if (!allowEmulator && !API_URL.startsWith('https://')) {
+    API_URL = '/api';
   }
 }
 
@@ -68,6 +73,7 @@ class ApiClient {
 
   private rejectSession(): void {
     if (!canRecoverSession()) return;
+    rememberExpiredDestination(window.location);
     markSessionSignedOut();
     tokenStore.remove('accessToken');
     tokenStore.remove('refreshToken');

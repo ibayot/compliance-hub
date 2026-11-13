@@ -24,6 +24,8 @@ import {
   DialogActions,
   Chip,
   IconButton,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { Visibility as ViewIcon } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
@@ -179,6 +181,8 @@ function JsonDiffViewer({ oldValues, newValues }: { oldValues: any; newValues: a
 }
 
 export default function AuditLogsPage() {
+  const theme = useTheme();
+  const compactLogs = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   
   const [logs, setLogs] = useState<any[]>([]);
@@ -274,7 +278,25 @@ export default function AuditLogsPage() {
           </Stack>
         </CardContent>
       </Card></>}>
-<ResponsiveTable component={Paper} minWidth={900} testId="audit-log-table">
+{compactLogs ? (
+  <Stack spacing={1}>
+    {logs.length === 0 && <Typography color="text.secondary">No audit logs found.</Typography>}
+    {logs.map((log) => (
+      <Card component="article" key={log.id} variant="outlined" sx={{ p: 1.5, overflowWrap: 'anywhere' }}>
+        <Stack spacing={0.75} alignItems="flex-start">
+          <Typography fontWeight={700}>{humanizeTableName(log.tableName)}</Typography>
+          <Typography variant="body2">{humanizeDatabaseName(log.databaseName)} · {new Date(log.createdAt).toLocaleString()}</Typography>
+          <Typography variant="body2" color="text.secondary">{log.userEmail || 'System'}</Typography>
+          <Stack direction="row" gap={1} alignItems="center" useFlexGap flexWrap="wrap">
+            <Chip label={log.action} size="small" color={log.action === 'INSERT' ? 'success' : log.action === 'UPDATE' ? 'warning' : 'error'} />
+            <Button size="small" startIcon={<ViewIcon />} onClick={() => handleOpenView(log)} sx={{ minHeight: 44 }}
+              aria-label={`View audit log for ${humanizeTableName(log.tableName)}`}>Details</Button>
+          </Stack>
+        </Stack>
+      </Card>
+    ))}
+  </Stack>
+) : <ResponsiveTable component={Paper} minWidth={900} testId="audit-log-table">
         <Table size="small">
           <TableHead sx={{ bgcolor: 'background.default' }}>
             <TableRow>
@@ -321,6 +343,7 @@ export default function AuditLogsPage() {
             )}
           </TableBody>
         </Table>
+      </ResponsiveTable>}
         <TablePagination
           component="div"
           count={total}
@@ -332,7 +355,6 @@ export default function AuditLogsPage() {
             setPage(0);
           }}
         />
-      </ResponsiveTable>
 </WorkspaceLayout>
 <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Audit Log Details</DialogTitle>

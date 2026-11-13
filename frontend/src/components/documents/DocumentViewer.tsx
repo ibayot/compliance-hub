@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Button, Typography, CircularProgress } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import {
@@ -10,15 +10,15 @@ import {
   NavigateNext as NextIcon,
 } from '@mui/icons-material';
 import { Document, Page, pdfjs } from 'react-pdf';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 interface DocumentViewerProps {
-  /** Blob URL pointing to the document content */
-  pdfUrl: string;
+  previewBlob: Blob;
   /** MIME type of the document content: 'application/pdf' or 'text/html' */
   mimeType?: string;
   /** Viewer label/title for HTML iframe */
@@ -27,7 +27,7 @@ interface DocumentViewerProps {
 
 /** Renders a document inline. Supports PDF (react-pdf) and HTML (styled iframe) previews. */
 export default function DocumentViewer({
-  pdfUrl,
+  previewBlob,
   mimeType = 'application/pdf',
   viewerTitle = 'Document Viewer',
 }: DocumentViewerProps) {
@@ -37,85 +37,66 @@ export default function DocumentViewer({
   const [scale, setScale] = useState<number>(1.0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [htmlPreviewUrl, setHtmlPreviewUrl] = useState<string | null>(null);
+  const [htmlPreview, setHtmlPreview] = useState<{ source: Blob; markup: string | null }>();
+  const [pdfFile, setPdfFile] = useState<{ source: Blob; file: { data: Uint8Array } }>();
+  const pdfViewport = useRef<HTMLDivElement>(null);
+  const [pdfWidth, setPdfWidth] = useState(0);
 
   const isHtml = mimeType === 'text/html' || mimeType?.startsWith('text/html');
 
-  const isSafePreviewUrl = (candidate: string): boolean => {
-    try {
-      if (candidate.startsWith('blob:')) return true;
-      if (candidate.startsWith('/')) return true;
-      const parsed = new URL(candidate, window.location.origin);
-      return parsed.origin === window.location.origin;
-    } catch {
-      return false;
-    }
-  };
-
   useEffect(() => {
+    let active = true;
     if (!isHtml) {
-      setHtmlPreviewUrl((previousUrl) => {
-        if (previousUrl && previousUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(previousUrl);
-        }
-        return null;
+      // The authorized API request already returned the file. Reading its bytes
+      // avoids a second fetch through a blob URL and its browser CSP restrictions.
+      void previewBlob.arrayBuffer().then((buffer) => {
+        if (active) setPdfFile({ source: previewBlob, file: { data: new Uint8Array(buffer) } });
+      }).catch(() => {
+        if (!active) return;
+        setError('Could not read the PDF preview.');
+        setLoading(false);
       });
-      return;
+      return () => { active = false; };
     }
 
-    let isCancelled = false;
     const filenameHeadingRegex =
       /(<h1\b[^>]*>)\s*([A-Za-z0-9_.\- ]+\.(?:docx|pdf|xlsx|xls|pptx|ppt))\s*(<\/h1>)/i;
     const headerDisplayNameRegex = /(<div\s+class="display-name"[^>]*>)([\s\S]*?)(<\/div>)/i;
 
     (async () => {
       try {
-        if (!isSafePreviewUrl(pdfUrl)) {
-          throw new Error('Unsafe preview URL blocked');
-        }
-        const response = await fetch(pdfUrl);
-        const htmlText = await response.text();
-        let normalizedHtml = htmlText;
-
-        if (filenameHeadingRegex.test(normalizedHtml)) {
-          normalizedHtml = normalizedHtml.replace(filenameHeadingRegex, `$1${viewerTitle}$3`);
-        }
-
-        if (headerDisplayNameRegex.test(normalizedHtml)) {
-          normalizedHtml = normalizedHtml.replace(headerDisplayNameRegex, `$1${viewerTitle}$3`);
-        }
-
-        const normalizedBlobUrl = URL.createObjectURL(
-          new Blob([normalizedHtml], { type: 'text/html' }),
-        );
-        if (isCancelled) {
-          URL.revokeObjectURL(normalizedBlobUrl);
-          return;
-        }
-
-        setHtmlPreviewUrl((previousUrl) => {
-          if (previousUrl && previousUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(previousUrl);
-          }
-          return normalizedBlobUrl;
-        });
+        const htmlText = await previewBlob.text();
+        const safeTitle = viewerTitle.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const normalizedHtml = htmlText.replace(filenameHeadingRegex, (_, start, _name, end) => start + safeTitle + end)
+          .replace(headerDisplayNameRegex, (_, start, _name, end) => start + safeTitle + end);
+        const policy = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">';
+        const markup = /<head\b[^>]*>/i.test(normalizedHtml)
+          ? normalizedHtml.replace(/<head\b[^>]*>/i, (head) => head + policy)
+          : policy + normalizedHtml;
+        if (active) setHtmlPreview({ source: previewBlob, markup });
       } catch {
-        if (!isCancelled) {
-          setHtmlPreviewUrl(null);
-        }
+        if (active) setHtmlPreview({ source: previewBlob, markup: null });
       }
     })();
 
-    return () => {
-      isCancelled = true;
-      setHtmlPreviewUrl((previousUrl) => {
-        if (previousUrl && previousUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(previousUrl);
-        }
-        return null;
-      });
+    return () => { active = false; };
+  }, [isHtml, previewBlob, viewerTitle]);
+
+  useEffect(() => {
+    const container = pdfViewport.current;
+    if (isHtml || !container) return;
+    const measure = () => {
+      if (container.clientWidth > 0) setPdfWidth(Math.min(800, container.clientWidth));
     };
-  }, [isHtml, pdfUrl, viewerTitle]);
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : undefined;
+    observer?.observe(container);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [isHtml]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -139,6 +120,7 @@ export default function DocumentViewer({
 
   // --- HTML preview via sandboxed iframe ---
   if (isHtml) {
+    const current = htmlPreview?.source === previewBlob ? htmlPreview : undefined;
     return (
       <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 1 }}>
         <Box
@@ -156,30 +138,23 @@ export default function DocumentViewer({
           <Typography variant="body2" color="text.secondary">
             HTML Document Preview — rendered from extracted content
           </Typography>
-          <Button
-            size="small"
-            component="a"
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open in Tab
-          </Button>
         </Box>
-        <Box
+        {current?.markup ? <Box
           component="iframe"
-          src={htmlPreviewUrl || pdfUrl}
+          srcDoc={current.markup}
           title={viewerTitle}
-          sandbox="allow-same-origin allow-popups allow-scripts"
+          sandbox=""
           sx={{
             width: '100%',
-            height: 700,
+            height: { xs: '62dvh', sm: 700 },
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,
             bgcolor: '#fff',
           }}
-        />
+        /> : <Typography role={current ? 'alert' : 'status'} p={2}>
+          {current ? 'Could not open the document preview.' : 'Loading document preview…'}
+        </Typography>}
       </Box>
     );
   }
@@ -191,10 +166,12 @@ export default function DocumentViewer({
       <Box
         sx={{
           display: 'flex',
+          flexWrap: 'wrap',
+          gap: 1,
           justifyContent: 'space-between',
           alignItems: 'center',
           mb: 2,
-          p: 2,
+          p: { xs: 1, sm: 2 },
           bgcolor: 'background.paper',
           borderRadius: 1,
           boxShadow: 1,
@@ -237,15 +214,16 @@ export default function DocumentViewer({
 
       {/* PDF Display */}
       <Box
+        ref={pdfViewport}
         sx={{
           display: 'flex',
-          justifyContent: 'center',
           alignItems: 'center',
-          minHeight: 600,
+          minHeight: { xs: 280, sm: 480 },
           bgcolor: 'action.hover',
           borderRadius: 1,
           overflow: 'auto',
           position: 'relative',
+          '& .document-pdf': { flexShrink: 0, mx: 'auto' },
         }}
       >
         {loading && (
@@ -270,15 +248,17 @@ export default function DocumentViewer({
           </Typography>
         )}
 
-        {!error && (
+        {!error && pdfFile?.source === previewBlob && (
           <Document
-            file={pdfUrl}
+            file={pdfFile.file}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             loading=""
+            className="document-pdf"
           >
             <Page
               pageNumber={pageNumber}
+              width={pdfWidth || undefined}
               scale={scale}
               renderTextLayer={true}
               renderAnnotationLayer={true}

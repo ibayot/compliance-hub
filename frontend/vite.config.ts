@@ -12,6 +12,15 @@ const appVersionManifest = JSON.stringify({
 });
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        assetFileNames: ({ name }) => name === 'pdf.worker.min.mjs'
+          ? 'assets/pdf.worker.min-[hash].js'
+          : 'assets/[name]-[hash][extname]',
+      },
+    },
+  },
   define: {
     'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(buildId),
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
@@ -50,10 +59,10 @@ export default defineConfig({
   server: {
     port: 3000,
     strictPort: false,
-    host: true, // listen on 0.0.0.0 so LAN peers can reach the dev server
+    host: '127.0.0.1',
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         // No rewrite needed — backend is mounted at /api
       },

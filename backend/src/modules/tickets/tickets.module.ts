@@ -14,6 +14,7 @@ import { EscalationFocalConfig } from './entities/escalation-focal-config.entity
 import { TicketingConfig } from './entities/ticketing-config.entity';
 import { KnowledgeArticle } from './entities/knowledge-article.entity';
 import { TicketNotification } from './entities/ticket-notification.entity';
+import { WebPushSubscription } from './entities/web-push-subscription.entity';
 import {
   RatingInvitation,
   RatingInvitationEvent,
@@ -46,6 +47,7 @@ import { DutyAssignment, DutyDailyCoverage, DutyException, DutyMeetingReliever, 
 import { DutyService } from './services/duty.service';
 import { DutyController } from './controllers/duty.controller';
 import { NotificationService } from './services/notification.service';
+import { WebPushService } from './services/web-push.service';
 import {
   PublicRatingController,
   RatingInvitationController,
@@ -79,6 +81,7 @@ import { AuthEmailPolicyController } from './controllers/auth-email-policy.contr
       DtrView,
       TicketStatusJustification,
       TicketNotification,
+      WebPushSubscription,
       RatingInvitation,
       RatingInvitationTicket,
       RatingInvitationEvent,
@@ -130,6 +133,7 @@ import { AuthEmailPolicyController } from './controllers/auth-email-policy.contr
     CapabilityGuard,
     DutyService,
     NotificationService,
+    WebPushService,
     RatingInvitationService,
   ],
   exports: [
@@ -141,6 +145,7 @@ import { AuthEmailPolicyController } from './controllers/auth-email-policy.contr
     KnowledgeBaseService,
     DutyService,
     NotificationService,
+    WebPushService,
     RatingInvitationService,
   ],
 })
