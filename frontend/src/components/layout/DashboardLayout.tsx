@@ -375,7 +375,12 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           maxWidth: '100%',
           overflowX: 'clip',
           bgcolor: 'background.default',
-          pb: { xs: pageAction ? 9 : 2, md: 0 },
+          pb: {
+            xs: pageAction
+              ? 'calc(120px + env(safe-area-inset-bottom))'
+              : 'calc(72px + env(safe-area-inset-bottom))',
+            md: 0,
+          },
           transition: (theme) =>
             theme.transitions.create(['margin', 'width'], {
               easing: theme.transitions.easing.sharp,

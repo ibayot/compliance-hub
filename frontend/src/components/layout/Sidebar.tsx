@@ -509,11 +509,12 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
         elevation={8}
         sx={{
           display: { xs: 'block', md: 'none' },
-          position: 'sticky',
-          flexShrink: 0,
-          zIndex: (currentTheme) => currentTheme.zIndex.appBar,
-          insetInline: 0,
+          position: 'fixed',
+          left: 0,
+          right: 0,
           bottom: 0,
+          boxSizing: 'border-box',
+          zIndex: (currentTheme) => currentTheme.zIndex.appBar,
           pb: 'env(safe-area-inset-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
