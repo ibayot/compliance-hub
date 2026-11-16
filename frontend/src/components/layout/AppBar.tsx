@@ -71,7 +71,7 @@ const isIdSegment = (s: string) =>
 
 function isAppleMobileDevice(): boolean {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    (/Mac/i.test(`${navigator.platform} ${navigator.userAgent}`) && navigator.maxTouchPoints > 1);
 }
 
 function getAndroidApkUrl(): string | null {
@@ -135,8 +135,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
 
   useEffect(() => {
-    setShowIosProfileDownload(import.meta.env.VITE_PHONE_PREVIEW !== '1' &&
-      isAppleMobileDevice() && !Capacitor.isNativePlatform());
+    setShowIosProfileDownload(isAppleMobileDevice() && !Capacitor.isNativePlatform());
     setAndroidApkUrl(getAndroidApkUrl());
   }, []);
 
@@ -1061,7 +1060,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 >
                   <PhoneIphoneIcon sx={{ mr: 1.25, mt: 0.25 }} />
                   <Box>
-                    <Typography variant="body2" fontWeight={600}>Install on iPhone/iPad</Typography>
+                    <Typography variant="body2" fontWeight={600}>Download iOS Configuration</Typography>
                     <Typography variant="caption" color="text.secondary">
                       Add a fullscreen Home Screen icon
                     </Typography>

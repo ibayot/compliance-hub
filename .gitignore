@@ -63,6 +63,7 @@ backend/src/database/seed-data.sql
 *.png
 !frontend/public/icons/
 !frontend/public/icons/*.png
+!frontend/public/apple-touch-icon.png
 !backend/assets/compliance-hub-webclip-icon.png
 *.md
 !AGENTS.md

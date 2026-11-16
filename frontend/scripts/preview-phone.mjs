@@ -19,7 +19,6 @@ const env = {
   VITE_API_URL: '/api',
   VITE_APP_ENV: 'local',
   VITE_ANDROID_APK_URL: '',
-  VITE_PHONE_PREVIEW: '1',
 };
 const root = fileURLToPath(new URL('../', import.meta.url));
 const vite = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url));

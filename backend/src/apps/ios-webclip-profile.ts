@@ -99,6 +99,8 @@ ${iconData}
   <string>RICTMS Compliance Hub</string>
   <key>PayloadRemovalDisallowed</key>
   <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
   <key>PayloadUUID</key>
   <string>${profileUuid}</string>
   <key>PayloadVersion</key>

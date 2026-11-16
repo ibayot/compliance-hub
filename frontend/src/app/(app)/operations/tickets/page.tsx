@@ -3,7 +3,7 @@ import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -70,7 +70,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { SafeMarkdown } from '@/components/SafeRichText';
 import {
@@ -126,6 +126,17 @@ const effectiveResolvedAt = (ticket: Ticket) =>
 type TicketFilterPeriodMode = 'day' | 'month' | 'quarter' | 'semester' | 'year';
 
 const TICKET_LIST_STATE_STORAGE_PREFIX = 'compliance-hub:ticket-list-state:v1';
+interface TicketListPosition {
+  entry: ReturnType<typeof resolveTicketListEntry>;
+  mobileFiltersExpanded: boolean;
+  escalationPage: number;
+  top: number;
+  tableTop: number;
+  tableLeft: number;
+}
+
+const ticketListPositions = new Map<string, TicketListPosition>();
+const ticketDetailListState = { openedFromTicketList: true };
 const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
 const toDateTimeLocalValue = (value?: string | null) => {
@@ -144,6 +155,8 @@ export default function TicketsPage({
 }) {
   const router = useRouter();
   const location = useLocation();
+  const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const ticketDetailsHref = (ticketId: string) =>
     personalRequestedOnly
       ? `/operations/tickets/${ticketId}?source=my-tickets`
@@ -357,6 +370,7 @@ export default function TicketsPage({
     : null;
   const ticketListEntryKey = user?.id ? `${user.id}:${ticketListViewScope}:${location.key}` : null;
   const filtersHydrated = !!ticketListEntryKey && hydratedEntryKey === ticketListEntryKey;
+  const pendingListPosition = useRef<TicketListPosition | null>(null);
 
   const refreshRatingInvitationAvailability = useCallback(() => {
     if (!canSendRatingInvitations) {
@@ -511,6 +525,31 @@ export default function TicketsPage({
 
   // Table Scroll State
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const getCurrentListEntry = () => ({
+    filterStatus, filterType, filterPriority, filterSla, filterDate, filterYear, filterMonth,
+    filterQuarter, filterSemester, filterPeriodMode, searchDraft, searchQuery, selectedTab,
+    showMyTickets, showEscalatedToMe, showEscalations, escalationSearch, page,
+  });
+  const saveListPosition = () => {
+    if (!ticketListEntryKey || !filtersHydrated) return;
+    ticketListPositions.delete(ticketListEntryKey);
+    ticketListPositions.set(ticketListEntryKey, {
+      entry: getCurrentListEntry(),
+      mobileFiltersExpanded,
+      escalationPage,
+      top: window.scrollY,
+      tableTop: tableContainerRef.current?.scrollTop ?? 0,
+      tableLeft: tableContainerRef.current?.scrollLeft ?? 0,
+    });
+    if (ticketListPositions.size > 20) {
+      const oldestKey = ticketListPositions.keys().next().value;
+      if (oldestKey) ticketListPositions.delete(oldestKey);
+    }
+  };
+  const openTicketDetails = (id: string) => {
+    saveListPosition();
+    navigate(ticketDetailsHref(id), { state: ticketDetailListState });
+  };
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
@@ -562,10 +601,12 @@ export default function TicketsPage({
   );
 
   useEffect(() => {
-    setEscalationPage(1);
-  }, [escalationSearch]);
+    if (filtersHydrated) setEscalationPage(pendingListPosition.current?.escalationPage ?? 1);
+  }, [escalationSearch, filtersHydrated]);
   useEffect(() => {
-    if (escalationPage > escalationTotalPages) setEscalationPage(escalationTotalPages);
+    if (!pendingListPosition.current && escalationPage > escalationTotalPages) {
+      setEscalationPage(escalationTotalPages);
+    }
   }, [escalationPage, escalationTotalPages]);
 
   const statusTabs = [
@@ -613,7 +654,15 @@ export default function TicketsPage({
     ticketSseTimerRef.current = null;
     const params = new URLSearchParams(window.location.search);
     let entry = resolveTicketListEntry(params, { today: todayInManila(), defaultAssignedToMe: defaultShowMyTickets, personalRequestedOnly });
-    if (!TICKET_ENTRY_QUERY_KEYS.some(key => params.has(key)) && ticketListStorageKey) {
+    const explicitFilters = TICKET_ENTRY_QUERY_KEYS.some(key => params.has(key));
+    const position = !explicitFilters && navigationType === 'POP'
+      ? ticketListPositions.get(ticketListEntryKey)
+      : undefined;
+    pendingListPosition.current = position ?? null;
+    setMobileFiltersExpanded(position?.mobileFiltersExpanded ?? false);
+    if (position) {
+      entry = position.entry;
+    } else if (!explicitFilters && ticketListStorageKey) {
       try { entry = restoreTicketListEntry(sessionStorage.getItem(ticketListStorageKey), entry); }
       catch { /* Storage is optional; retain the documented defaults. */ }
     }
@@ -635,14 +684,31 @@ export default function TicketsPage({
     setShowEscalations(entry.showEscalations);
     setEscalationSearch(entry.escalationSearch);
     setPage(entry.page);
-    if (TICKET_ENTRY_QUERY_KEYS.some(key => params.has(key))) {
+    if (explicitFilters) {
       TICKET_ENTRY_QUERY_KEYS.forEach(key => params.delete(key));
       const remainingQuery = params.toString();
       window.history.replaceState(window.history.state, '',
         `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ''}${window.location.hash}`);
     }
     setHydratedEntryKey(ticketListEntryKey);
-  }, [authLoading, ticketListEntryKey, hydratedEntryKey, defaultShowMyTickets, personalRequestedOnly, ticketListStorageKey]);
+  }, [authLoading, ticketListEntryKey, hydratedEntryKey, defaultShowMyTickets, personalRequestedOnly, ticketListStorageKey, navigationType]);
+
+  useLayoutEffect(() => {
+    const position = pendingListPosition.current;
+    if (!position || !filtersHydrated || loading || (showEscalations && escalationHistoryLoading)) return;
+    // Wait for the rows to render. Restoring on route entry clamps the position
+    // to the loading placeholder, well before the list reaches its full height.
+    if (showEscalations && escalationPage > escalationTotalPages) {
+      setEscalationPage(escalationTotalPages);
+      return;
+    }
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = position.tableTop;
+      tableContainerRef.current.scrollLeft = position.tableLeft;
+    }
+    window.scrollTo(0, position.top);
+    pendingListPosition.current = null;
+  }, [filtersHydrated, loading, escalationHistoryLoading, showEscalations, escalationPage, escalationTotalPages]);
 
   useEffect(() => {
     if (!filtersHydrated || !ticketListStorageKey) return;
@@ -702,8 +768,9 @@ export default function TicketsPage({
   );
 
   useEffect(() => {
-    setPage(1);
+    if (filtersHydrated) setPage(pendingListPosition.current?.entry.page ?? 1);
   }, [
+    filtersHydrated,
     selectedTab,
     filterStatus,
     filterType,
@@ -1574,7 +1641,7 @@ export default function TicketsPage({
           <CardContent sx={ticketFilterPanelSx}>
             {isPhone && searchField}
             {mobileFilterToggle}
-            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
+            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded} timeout={0}>
               <Box sx={{ ...ticketFilterGridSx, pt: { xs: 1.5, sm: 0 } }}>
               {!isPhone && searchField}
               <TextField
@@ -1708,7 +1775,7 @@ export default function TicketsPage({
           <CardContent sx={ticketFilterPanelSx}>
             {isPhone && searchField}
             {mobileFilterToggle}
-            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
+            <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded} timeout={0}>
               <Box sx={{ ...ticketFilterGridSx, pt: { xs: 1.5, sm: 0 } }}>
               {!isPhone && searchField}
               <TextField
@@ -1976,7 +2043,8 @@ export default function TicketsPage({
                   <Card key={entry.id} component="article" variant="outlined">
                     <CardContent sx={{ overflowWrap: 'anywhere' }}>
                       <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={1}>
-                        <Button component={RouterLink} to={ticketDetailsHref(entry.ticketId)} sx={{ minHeight: 44 }}>
+                        <Button component={RouterLink} to={ticketDetailsHref(entry.ticketId)}
+                          state={ticketDetailListState} onClick={saveListPosition} sx={{ minHeight: 44 }}>
                           {entry.ticket?.ticketNumber || entry.ticketId}
                         </Button>
                         <Chip size="small" label={entry.status.toUpperCase()}
@@ -2011,7 +2079,7 @@ export default function TicketsPage({
                       <TableRow
                         key={e.id}
                         hover
-                        onClick={() => router.push(`/operations/tickets/${e.ticketId}`)}
+                        onClick={() => openTicketDetails(e.ticketId)}
                         sx={{ cursor: 'pointer' }}
                       >
                         <TableCell>{new Date(e.createdAt).toLocaleDateString()}</TableCell>
@@ -2133,6 +2201,8 @@ export default function TicketsPage({
                       variant="body1"
                       component={RouterLink}
                       to={ticketDetailsHref(ticket.id)}
+                      state={ticketDetailListState}
+                      onClick={saveListPosition}
                       aria-label={`Open ticket ${ticket.ticketNumber}: ${ticket.subject}`}
                       sx={{
                         display: 'block',
@@ -2441,11 +2511,11 @@ export default function TicketsPage({
                         hover
                         tabIndex={0}
                         aria-label={`Open ticket ${ticket.ticketNumber}`}
-                        onClick={() => router.push(ticketDetailsHref(ticket.id))}
+                        onClick={() => openTicketDetails(ticket.id)}
                         onKeyDown={(event) => {
                           if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) {
                             event.preventDefault();
-                            router.push(ticketDetailsHref(ticket.id));
+                            openTicketDetails(ticket.id);
                           }
                         }}
                         className="ticket-row"
@@ -2663,7 +2733,7 @@ export default function TicketsPage({
                             actions={(() => {
                               const actions: TicketMenuAction[] = [{
                                 label: 'View Details', icon: <ViewIcon fontSize="small" />,
-                                onClick: () => router.push(ticketDetailsHref(ticket.id)),
+                                onClick: () => openTicketDetails(ticket.id),
                               }];
                               if (canAssign && !['duplicate', 'cancelled'].includes(ticket.status)) actions.push({
                                 label: ticket.assignedToId ? 'Reassign Ticket' : 'Assign Ticket',

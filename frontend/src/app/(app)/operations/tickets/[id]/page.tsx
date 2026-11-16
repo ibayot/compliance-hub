@@ -47,6 +47,7 @@ import {
   Link,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
@@ -210,6 +211,8 @@ function SlaCountdownTimer({
 }
 
 export default function TicketDetailPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const params = useParams();
   const router = useRouter();
   const { user, myCap } = useAuth();
@@ -514,6 +517,10 @@ export default function TicketDetailPage() {
       : isRequester
         ? '/operations/my-tickets'
         : '/operations/my-assigned-tickets';
+  const returnToTicketList = () => {
+    if (location.state?.openedFromTicketList) navigate(-1);
+    else navigate(ticketListPath);
+  };
   const canSatisfaction =
     isRequester &&
     (ticket?.status === 'resolved' || ticket?.status === 'closed') &&
@@ -1325,7 +1332,7 @@ export default function TicketDetailPage() {
         <Typography color="error">Ticket not found</Typography>
         <Button
           startIcon={<BackIcon />}
-          onClick={() => router.push(ticketListPath)}
+          onClick={returnToTicketList}
           sx={{ mt: 2, display: { xs: 'none', md: 'inline-flex' } }}
         >
           Back to Tickets
@@ -1383,7 +1390,7 @@ export default function TicketDetailPage() {
     <Box>
 <Button
         startIcon={<BackIcon />}
-        onClick={() => router.push(ticketListPath)}
+        onClick={returnToTicketList}
         sx={{ mb: 2, display: { xs: 'none', md: 'inline-flex' } }}
       >
         Back to Tickets
@@ -1392,22 +1399,53 @@ export default function TicketDetailPage() {
         <CardContent>
           <Box
             display="grid"
-            gridTemplateColumns={{ xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) auto' }}
-            alignItems="flex-start"
-            gap={2}
+            gridTemplateColumns="minmax(0, 1fr) auto"
+            alignItems="center"
+            columnGap={{ xs: 0.75, sm: 2 }}
+            rowGap={1}
           >
-            <Box minWidth={0}>
-              <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={{ xs: 0.75, sm: 1.25 }} sx={{ minWidth: 0 }}>
+              <Box sx={{ flexShrink: 0 }}>
                 <StaffProfilePhoto key={`${ticketId}:${ticket.requester?.staffId || ''}`} staffId={ticket.requester?.staffId} name={requesterName} size={42} />
-                <Box minWidth={0}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    {requesterLabel}
-                  </Typography>
-                  <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>
-                    {requesterName}
-                  </Typography>
-                </Box>
-              </Stack>
+              </Box>
+              <Box minWidth={0}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700, letterSpacing: '0.04em' }}>
+                  {requesterLabel}
+                </Typography>
+                <Typography variant="body2" fontWeight={700} sx={{ overflowWrap: 'anywhere' }}>
+                  {requesterName}
+                </Typography>
+              </Box>
+            </Stack>
+
+            {/* Keep the main action visible; secondary actions retain the same guards. */}
+            <Box sx={{
+              display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center',
+              gap: { xs: 0.25, sm: 1 },
+              maxWidth: { xs: 142, sm: 'none' },
+              '& .MuiButton-root': { minHeight: 44, maxWidth: { xs: 94, sm: 'none' }, lineHeight: 1.2 },
+              '& .MuiIconButton-root': { width: 44, height: 44 },
+              '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+            }}>
+              {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={handleClaimOvertime}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
+              {detailActionKeys.includes('updateStatus') && (
+                <Button ref={updateStatusButtonRef} variant="contained" size="small" startIcon={<EditIcon />}
+                  onClick={detailActions.updateStatus.onClick}>
+                  Update Status
+                </Button>
+              )}
+              {detailActionKeys.includes('rate') && (
+                <Button variant="contained" color="success" size="small" startIcon={detailActions.rate.icon}
+                  onClick={detailActions.rate.onClick}>
+                  {detailActions.rate.label}
+                </Button>
+              )}
+              <TicketActionsMenu orientation="vertical" ticket={ticket}
+                actions={detailActionKeys.filter(key => key !== 'updateStatus' && key !== 'rate').map(key => detailActions[key])}
+                onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
+            </Box>
+
+            <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
               <Typography variant="h5" gutterBottom sx={{ overflowWrap: 'anywhere' }}>
                 {ticket.subject}
               </Typography>
@@ -1416,25 +1454,6 @@ export default function TicketDetailPage() {
               </Typography>
             </Box>
 
-            {/* Keep the main action visible; secondary actions retain the same guards. */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
-              {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={handleClaimOvertime}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
-              {detailActionKeys.includes('updateStatus') && (
-                <Button ref={updateStatusButtonRef} variant="contained" size="small" startIcon={<EditIcon />}
-                  onClick={detailActions.updateStatus.onClick} sx={{ whiteSpace: 'nowrap' }}>
-                  Update Status
-                </Button>
-              )}
-              {detailActionKeys.includes('rate') && (
-                <Button variant="contained" color="success" size="small" startIcon={detailActions.rate.icon}
-                  onClick={detailActions.rate.onClick} sx={{ minHeight: 44, whiteSpace: 'nowrap' }}>
-                  {detailActions.rate.label}
-                </Button>
-              )}
-              <TicketActionsMenu orientation="vertical" ticket={ticket}
-                actions={detailActionKeys.filter(key => key !== 'updateStatus' && key !== 'rate').map(key => detailActions[key])}
-                onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
-            </Box>
           </Box>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' }, gap: { xs: 1.5, sm: 2 },
             p: { xs: 1.5, sm: 2 }, mt: 1.5, mb: 1.5, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 2 }}>

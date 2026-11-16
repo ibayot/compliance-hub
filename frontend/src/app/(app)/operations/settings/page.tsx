@@ -199,7 +199,7 @@ function SettingsFilterPanel({
 
 export default function TicketSettingsPage() {
   const theme = useTheme();
-  const compactRecords = useMediaQuery(theme.breakpoints.down('sm'));
+  const compactRecords = useMediaQuery(theme.breakpoints.down('md'));
   const { enqueueSnackbar } = useSnackbar();
   const userFeedbackTabIndex = 4;
 
@@ -747,6 +747,9 @@ export default function TicketSettingsPage() {
     const issueMatch = rule.targetIssueType?.name?.toLowerCase().includes(s);
     return Boolean(kwMatch || typeMatch || catMatch || issueMatch);
   });
+  const paginatedRules = visibleRules.slice(rulePage * PAGE_SIZE, (rulePage + 1) * PAGE_SIZE);
+  const visibleFocals = focals.filter((focal) => focalTicketTypeFilter === 'all' || focal.ticketType === focalTicketTypeFilter);
+  const paginatedFocals = visibleFocals.slice(focalPage * PAGE_SIZE, (focalPage + 1) * PAGE_SIZE);
 
   return (
     <Box>
@@ -1177,7 +1180,25 @@ export default function TicketSettingsPage() {
                 ))}
               </TextField>
             </SettingsFilterPanel>
-            <ResponsiveTable minWidth={820}>
+            {compactRecords ? (
+              <Stack spacing={1}>
+                {rulesLoading ? <CircularProgress size={24} aria-label="Loading keyword rules" /> :
+                  paginatedRules.length === 0 ? <Typography color="text.secondary">No keyword rules configured yet.</Typography> :
+                  paginatedRules.map((rule) => (
+                    <CompactSettingRecord
+                      key={rule.id}
+                      name={(rule.keywords?.length ? rule.keywords : [rule.keyword]).join(', ')}
+                      context={TYPE_LABELS[rule.targetTicketType] ?? rule.targetTicketType}
+                      active={rule.isActive}
+                      onEdit={() => openRuleDialog(rule)}
+                      onDelete={() => setDeleteRuleId(rule.id)}
+                    >
+                      <Typography variant="body2">Category: {(rule.targetCategory ?? rule.category)?.name ?? '—'}</Typography>
+                      <Typography variant="body2">Issue: {rule.targetIssueType?.name ?? '—'}</Typography>
+                    </CompactSettingRecord>
+                  ))}
+              </Stack>
+            ) : <ResponsiveTable minWidth={820}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -1192,22 +1213,20 @@ export default function TicketSettingsPage() {
                 <TableBody>
                   {rulesLoading ? (
                     <TableRow>
-                      <TableCell colSpan={5} align="center">
+                      <TableCell colSpan={6} align="center">
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
                   ) : visibleRules.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} align="center">
+                      <TableCell colSpan={6} align="center">
                         <Typography color="text.secondary" py={2}>
                           No keyword rules configured yet.
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    visibleRules
-                      .slice(rulePage * PAGE_SIZE, (rulePage + 1) * PAGE_SIZE)
-                      .map((rule) => (
+                    paginatedRules.map((rule) => (
                       <TableRow key={rule.id} hover sx={{ '& td, & th': { height: 'auto', py: 1, verticalAlign: 'middle' } }}>
                         <TableCell>
                           <Box display="flex" gap={0.5} flexWrap="wrap">
@@ -1258,7 +1277,7 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </ResponsiveTable>
+            </ResponsiveTable>}
             {!rulesLoading && (
               <TablePagination
                 component="div"
@@ -1298,7 +1317,25 @@ export default function TicketSettingsPage() {
                 ))}
               </TextField>
             </SettingsFilterPanel>
-            <ResponsiveTable minWidth={560}>
+            {compactRecords ? (
+              <Stack spacing={1}>
+                {focalsLoading ? <CircularProgress size={24} aria-label="Loading escalation focals" /> :
+                  paginatedFocals.length === 0 ? <Typography color="text.secondary">No escalation focals configured.</Typography> :
+                  paginatedFocals.map((focal) => (
+                    <Card key={focal.id} component="article" variant="outlined" sx={{ p: 1.5 }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                        <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                          <Typography component="h3" variant="body1" fontWeight={700}>{focal.label}</Typography>
+                          <Typography variant="body2" color="text.secondary">{TYPE_LABELS[focal.ticketType] ?? focal.ticketType}</Typography>
+                        </Box>
+                        <IconButton aria-label={`Remove ${focal.label}`} color="error" onClick={() => setDeleteFocalId(focal.id)} sx={{ width: 44, height: 44, flexShrink: 0 }}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </Stack>
+                    </Card>
+                  ))}
+              </Stack>
+            ) : <ResponsiveTable minWidth={560}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -1311,22 +1348,20 @@ export default function TicketSettingsPage() {
                 <TableBody>
                   {focalsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={4} align="center">
+                      <TableCell colSpan={3} align="center">
                         <CircularProgress size={24} />
                       </TableCell>
                     </TableRow>
-                  ) : focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter).length === 0 ? (
+                  ) : visibleFocals.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} align="center">
+                      <TableCell colSpan={3} align="center">
                         <Typography color="text.secondary" py={2}>
                           No escalation focals configured.
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter)
-                      .slice(focalPage * PAGE_SIZE, (focalPage + 1) * PAGE_SIZE)
-                      .map((f) => (
+                    paginatedFocals.map((f) => (
                       <TableRow key={f.id} hover>
                         <TableCell>
                           <Chip
@@ -1353,11 +1388,11 @@ export default function TicketSettingsPage() {
                   )}
                 </TableBody>
               </Table>
-            </ResponsiveTable>
+            </ResponsiveTable>}
             {!focalsLoading && (
               <TablePagination
                 component="div"
-                count={focals.filter((f) => focalTicketTypeFilter === 'all' || f.ticketType === focalTicketTypeFilter).length}
+                count={visibleFocals.length}
                 page={focalPage}
                 onPageChange={(_, value) => setFocalPage(value)}
                 rowsPerPage={PAGE_SIZE}

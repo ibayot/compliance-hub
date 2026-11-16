@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack,
-  Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, Dialog, DialogActions, DialogContent, DialogTitle, Stack,
+  Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography,
+  useMediaQuery, useTheme } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
@@ -11,6 +12,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 
 export default function PendingStaffPanel({ onCompleted }: { onCompleted: () => Promise<void> }) {
   const { myCap } = useAuth();
+  const compact = useMediaQuery(useTheme().breakpoints.down('md'));
   const { enqueueSnackbar } = useSnackbar();
   const [staff, setStaff] = useState<PendingStaffRecord[]>([]);
   const [roles, setRoles] = useState<Array<{value: string; label: string}>>([]);
@@ -50,6 +52,46 @@ export default function PendingStaffPanel({ onCompleted }: { onCompleted: () => 
       if (err?.response?.status === 409) void reload();
     } finally { setSaving(false); }
   };
+  const visibleStaff = filtered.slice(currentPage * rows, (currentPage + 1) * rows);
+  const renderStaff = (person: PendingStaffRecord) => {
+    const reviewRequired = person.reviewReason === 'Reportorial-unit staff require authorized account setup.' && myCap?.isUserManagementAdmin ? '' : person.reviewReason;
+    const problem = reviewRequired || (person.linkedUserId ? 'Linked account needs reconciliation.' : '') ||
+      (!person.unitId || !Number(person.unitActive) ? 'An active unit is required.' : '') ||
+      (Number(person.reportorial) && !myCap?.isUserManagementAdmin ? 'User Management Admin is required for RICTMS accounts.' : '');
+    const name = [person.firstName, person.middleName, person.lastName, person.suffix].filter(Boolean).join(' ');
+    const unit = <>{person.unit || 'Not assigned'}<Typography variant="caption" display="block" color="text.secondary">{person.positionFull}</Typography></>;
+    const action = (
+      <Button size="small" variant="outlined" disabled={!!problem} sx={{ minHeight: { xs: 44, md: 32 } }}
+        onClick={() => {
+          setSelected(person);
+          setEmail('');
+          setRole(Number(person.reportorial) ? '' : 'user');
+        }}
+      >Add Email</Button>
+    );
+    const explanation = problem && <Typography variant="caption" display="block" color="text.secondary">{problem}</Typography>;
+
+    if (compact) return (
+      <Card key={person.staffId} component="article" variant="outlined" sx={{ p: 1.25, overflowWrap: 'anywhere' }}>
+        <Typography variant="body2" fontWeight={700}>{name}</Typography>
+        <Typography variant="caption" display="block" color="text.secondary">Staff ID: {person.staffId}</Typography>
+        <Typography component="div" variant="body2" sx={{ my: 0.5 }}>{unit}</Typography>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+          {explanation}
+          <Box sx={{ ml: 'auto', flexShrink: 0 }}>{action}</Box>
+        </Stack>
+      </Card>
+    );
+
+    return (
+      <TableRow key={person.staffId} hover>
+        <TableCell>{person.staffId}</TableCell>
+        <TableCell>{name}</TableCell>
+        <TableCell>{unit}</TableCell>
+        <TableCell>{action}{explanation}</TableCell>
+      </TableRow>
+    );
+  };
   return <Box>
     <Alert severity="info" sx={{ mb: 2 }}>These staff have been synchronized but do not yet have accounts. Add an email to create their account from the existing details. Existing accounts remain in the regular account tabs.</Alert>
     {error && <Alert severity="error" action={<Button color="inherit" onClick={() => void reload()}>Retry</Button>} sx={{ mb: 2 }}>{error}</Alert>}
@@ -58,25 +100,14 @@ export default function PendingStaffPanel({ onCompleted }: { onCompleted: () => 
       <Button onClick={() => void reload()} disabled={loading}>Refresh</Button>
     </Stack>
     {loading && <Typography color="text.secondary">Loading pending staff...</Typography>}
-    <TableContainer><Table size="small"><TableHead><TableRow>
-      <TableCell>Staff ID</TableCell><TableCell>Name</TableCell><TableCell>Unit / Position</TableCell><TableCell>Action</TableCell>
-    </TableRow></TableHead><TableBody>
-      {filtered.slice(currentPage * rows, (currentPage + 1) * rows).map((person) => {
-        const reviewRequired = person.reviewReason === 'Reportorial-unit staff require authorized account setup.' && myCap?.isUserManagementAdmin ? '' : person.reviewReason;
-        const problem = reviewRequired || (person.linkedUserId ? 'Linked account needs reconciliation.' : '') ||
-          (!person.unitId || !Number(person.unitActive) ? 'An active unit is required.' : '') ||
-          (Number(person.reportorial) && !myCap?.isUserManagementAdmin ? 'User Management Admin is required for RICTMS accounts.' : '');
-        return <TableRow key={person.staffId} hover><TableCell>{person.staffId}</TableCell>
-          <TableCell>{[person.firstName, person.middleName, person.lastName, person.suffix].filter(Boolean).join(' ')}</TableCell>
-          <TableCell>{person.unit || 'Not assigned'}<Typography variant="caption" display="block">{person.positionFull}</Typography></TableCell>
-          <TableCell><Button size="small" variant="outlined" disabled={!!problem} onClick={() => {
-            setSelected(person); setEmail('');
-            setRole(Number(person.reportorial) ? '' : 'user');
-          }}>Add Email</Button>{problem && <Typography variant="caption" display="block" color="text.secondary">{problem}</Typography>}</TableCell>
-        </TableRow>;
-      })}
-      {!loading && !filtered.length && <TableRow><TableCell colSpan={4}>No pending staff match this list.</TableCell></TableRow>}
-    </TableBody></Table></TableContainer>
+    {!loading && !error && !filtered.length && <Typography color="text.secondary">No pending staff match this list.</Typography>}
+    {visibleStaff.length > 0 && (compact ? (
+      <Stack spacing={1}>{visibleStaff.map(renderStaff)}</Stack>
+    ) : (
+      <TableContainer><Table size="small"><TableHead><TableRow>
+        <TableCell>Staff ID</TableCell><TableCell>Name</TableCell><TableCell>Unit / Position</TableCell><TableCell>Action</TableCell>
+      </TableRow></TableHead><TableBody>{visibleStaff.map(renderStaff)}</TableBody></Table></TableContainer>
+    ))}
     <TablePagination component="div" count={filtered.length} page={currentPage} rowsPerPage={rows}
       onPageChange={(_, value) => setPage(value)} onRowsPerPageChange={(e) => { setRows(Number(e.target.value)); setPage(0); }} />
     <Dialog open={!!selected} onClose={() => { if (!saving) setSelected(null); }} fullWidth maxWidth="sm">

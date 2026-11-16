@@ -347,6 +347,11 @@ body {
 }
 
 @media (max-width: 899px) {
+  body,
+  #root {
+    min-width: 0;
+  }
+
   html,
   body,
   #root,

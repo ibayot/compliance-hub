@@ -1,7 +1,7 @@
 import WorkspaceTabs from '@/components/layout/WorkspaceTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import { Fragment, useEffect, useId, useState, type ReactNode } from 'react';
-import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Switch, Tab, Table, TableBody, TableCell, TableContainer as MuiTableContainer, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
+import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, Grid, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Switch, Tab, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Tabs, TextField, Typography } from '@mui/material';
 import { Add, Delete, Edit, ExpandMore, GroupAdd, Refresh, Star } from '@mui/icons-material';
 import { dutiesApi, DutyAccess, DutyType } from '@/lib/api/duties';
 import type { UserRecord } from '@/lib/api/users';
@@ -23,9 +23,6 @@ const isDutyStaff = (user: any) => user.active !== false && user.role !== 'super
 const formatType = (value: string) => String(value || '').replaceAll('_', ' ').toUpperCase();
 const userName = (users: UserRecord[], id: number) => { const u = users.find((x) => x.id === id); return u ? formatPersonName(u, `User #${id}`) : `User #${id}`; };
 const meetingSlot = (x: any) => !x.startTime && !x.endTime ? 'Whole Day' : Number(String(x.startTime).slice(0, 2)) < 12 ? 'AM' : 'PM';
-const TableContainer = ({ component, children, ...props }: any) => component
-  ? <MuiTableContainer component={component} {...props}>{children}</MuiTableContainer>
-  : <ResponsiveTable minWidth={620}>{children}</ResponsiveTable>;
 
 function DutyRecords({ columns, rows, empty }: {
   columns: string[];
@@ -390,14 +387,19 @@ export default function DutiesPage() {
                 <Stack spacing={1}>
                   {selectedDayEvents.map((event: any, index: number) => (
                     <Accordion key={`${event.kind}-${index}`} disableGutters elevation={0} variant="outlined" TransitionProps={{ timeout: 0 }} sx={{ borderColor: 'divider', borderLeft: `3px solid ${event.color}`, '&:before': { display: 'none' } }}>
-                      <AccordionSummary expandIcon={<ExpandMore />} sx={{ minHeight: 54, '& .MuiAccordionSummary-content': { my: 1 } }}>
+                      <AccordionSummary expandIcon={<ExpandMore />} sx={{
+                        minHeight: 54,
+                        textAlign: 'left',
+                        '& .MuiAccordionSummary-content': { my: 1, minWidth: 0, overflow: 'hidden' },
+                        '& .MuiAccordionSummary-expandIconWrapper': { ml: 1, flexShrink: 0 },
+                      }}>
                         <Box sx={{ minWidth: 0 }}>
                           <Typography variant="body2" fontWeight={700} noWrap>{event.label}</Typography>
                           <Typography variant="caption" color="text.secondary">{event.kind === 'meeting' ? 'Meeting' : event.kind === 'od' ? 'Officer of the Day' : 'Exception'}</Typography>
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails sx={{ pt: 0, pb: 1.5 }}>
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{event.detail}</Typography>
+                        <Typography variant="body2" sx={{ textAlign: 'left', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{event.detail}</Typography>
                       </AccordionDetails>
                     </Accordion>
                   ))}
@@ -408,7 +410,15 @@ export default function DutiesPage() {
         </Box>
       </Box>
     </>}
-    {tab === 'rotation' && <Grid container spacing={2}>{TYPES.map((t) => <Grid item xs={12} md={6} key={t}><Card variant="outlined"><CardContent><Typography variant="h6" mb={1}>{t} ROTATION</Typography><TableContainer><Table size="small"><TableHead><TableRow><TableCell>Name</TableCell><TableCell>Last Assigned</TableCell><TableCell>Days Since</TableCell><TableCell>Next?</TableCell></TableRow></TableHead><TableBody><RotationRows rows={data.rotation} t={t} /></TableBody></Table></TableContainer></CardContent></Card></Grid>)}</Grid>}
+    {tab === 'rotation' && (
+      <Grid container spacing={2}>
+        {TYPES.map((dutyType) => (
+          <Grid item xs={12} md={6} key={dutyType}>
+            <DutyRotation dutyType={dutyType} rows={data.rotation} />
+          </Grid>
+        ))}
+      </Grid>
+    )}
     {tab === 'logs' && <Section title="Duty Log" add={() => open('log',{dutyDate:TODAY(),dutyType:'OD',dutyPeriod:'WHOLE_DAY'})}><DutyRecords columns={['Date', 'Name', 'Duty', 'Period', 'Remarks', 'Actions']}
       rows={data.logs.items.map((x: any) => ({ id: x.id, cells: [
         <>{x.dutyDate}</>,
@@ -462,8 +472,64 @@ export default function DutiesPage() {
 </Box>;
 }
 
-function EmptyTableRow({colSpan, message}: { colSpan: number; message: string }) { return <TableRow><TableCell colSpan={colSpan}><Typography color="text.secondary" align="center">{message}</Typography></TableCell></TableRow> }
-function RotationRows({rows, t}: { rows: any[]; t: DutyType }) { const filtered = rows.filter((x: any) => x.dutyType===t); return filtered.length ? <>{filtered.map((x:any) => <TableRow key={x.id} sx={{opacity:x.excluded?.5:1}}><TableCell>{x.name}</TableCell><TableCell>{x.lastAssigned||'Never'}</TableCell><TableCell>{x.daysSince===9999?'First rotation':x.daysSince}</TableCell><TableCell>{x.next ? <Star color="warning" fontSize="small" /> : ''}</TableCell></TableRow>)}</> : <EmptyTableRow colSpan={4} message="No rotation data available." />; }
+interface RotationEntry {
+  id: string;
+  name: string;
+  dutyType: DutyType;
+  lastAssigned?: string | null;
+  daysSince: number;
+  next?: boolean;
+  excluded?: boolean;
+}
+
+function DutyRotation({ rows, dutyType }: { rows: RotationEntry[]; dutyType: DutyType }) {
+  const compact = useMediaQuery(useTheme().breakpoints.down('md'));
+  const rotation = rows.filter((row) => row.dutyType === dutyType);
+  const nextBadge = <Chip label="Next" color="warning" icon={<Star />} size="small" variant="outlined" />;
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="h6" mb={1}>{dutyType} Rotation</Typography>
+        {rotation.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No rotation data available.</Typography>
+        ) : compact ? (
+          <Stack spacing={1}>
+            {rotation.map((row) => (
+              <Paper component="article" key={row.id} variant="outlined" sx={{ p: 1.25, overflowWrap: 'anywhere' }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={0.75}>
+                  <Typography variant="body2" fontWeight={700}>{row.name}</Typography>
+                  {row.next && nextBadge}
+                  {row.excluded && <Chip label="Excluded" size="small" />}
+                </Stack>
+                <Typography variant="caption" display="block" color="text.secondary">Last assigned: {row.lastAssigned || 'Never'}</Typography>
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {row.daysSince === 9999 ? 'First rotation' : `Days since: ${row.daysSince}`}
+                </Typography>
+              </Paper>
+            ))}
+          </Stack>
+        ) : (
+          <ResponsiveTable minWidth={430}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Last Assigned</TableCell><TableCell>Days Since</TableCell><TableCell>Next?</TableCell></TableRow></TableHead>
+              <TableBody>
+                {rotation.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.name}{row.excluded && <Chip label="Excluded" size="small" sx={{ ml: 1 }} />}</TableCell>
+                    <TableCell>{row.lastAssigned || 'Never'}</TableCell>
+                    <TableCell>{row.daysSince === 9999 ? 'First rotation' : row.daysSince}</TableCell>
+                    <TableCell>{row.next && nextBadge}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ResponsiveTable>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 function Section({title,add,children}:any){return <Box><Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}><Typography variant="h6">{title}</Typography><Button variant="contained" startIcon={<Add/>} onClick={add}>Add</Button></Stack>{children}</Box>}
 function ActionButtons({edit,remove}:any){return <Stack direction="row"><IconButton color="primary" size="small" aria-label="Edit" onClick={edit}><Edit fontSize="small" /></IconButton><IconButton color="error" size="small" aria-label="Delete" onClick={remove}><Delete fontSize="small" /></IconButton></Stack>}
 function DateField({label,value,min,change,disabled}:any){return <TextField disabled={disabled} type="date" label={label} InputLabelProps={{shrink:true}} inputProps={min ? { min } : undefined} value={value||''} onChange={(e)=>change(e.target.value)}/>}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Box,
   Drawer,
@@ -49,7 +51,6 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
 import { usersApi } from '@/lib/api/users';
 import { formatPersonName } from '@/lib/utils/person-name';
-import { useState, useEffect } from 'react';
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -69,10 +70,58 @@ interface NavItem {
 }
 
 export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }: SidebarProps) {
-  const location = useLocation();
-  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const mobileNavRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const nav = mobileNavRef.current;
+    const viewport = window.visualViewport;
+    if (!isMobile || !nav || !viewport) return;
+
+    const rootStyle = document.documentElement.style;
+    let offset = 0;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const rect = nav.getBoundingClientRect();
+      const focused = document.activeElement;
+      const editing = focused?.matches('textarea, [contenteditable="true"], input:is([type="text"], [type="search"], [type="email"], [type="password"], [type="number"], [type="tel"], [type="url"], :not([type]))');
+      const keyboardOpen = editing && window.innerHeight - viewport.height > 150;
+      // Remove our previous offset before comparing Safari's fixed edge to its visible edge.
+      const fixedEdge = rect.bottom - offset;
+      const visibleEdge = viewport.offsetTop + viewport.height;
+      const nextOffset = rect.height && viewport.scale === 1 && !keyboardOpen
+        ? Math.round(visibleEdge - fixedEdge)
+        : 0;
+      if (nextOffset !== offset) {
+        offset = nextOffset;
+        rootStyle.setProperty('--app-mobile-nav-offset', `${offset}px`);
+      }
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(measure);
+    };
+    viewport.addEventListener('resize', schedule);
+    viewport.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, { passive: true });
+    document.addEventListener('focusin', schedule);
+    document.addEventListener('focusout', schedule);
+    schedule();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      viewport.removeEventListener('resize', schedule);
+      viewport.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule);
+      document.removeEventListener('focusin', schedule);
+      document.removeEventListener('focusout', schedule);
+      rootStyle.removeProperty('--app-mobile-nav-offset');
+    };
+  }, [isMobile]);
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user, myCap } = useAuth();
   const { isCollapsed, drawerWidth } = useSidebar();
   const isNavigationCollapsed = !isMobile && isCollapsed;
@@ -502,8 +551,9 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
 
   return (
     <>
-      <Paper
+      {createPortal(<Paper
         component="nav"
+        ref={mobileNavRef}
         id="app-mobile-nav"
         aria-label="Quick navigation"
         elevation={8}
@@ -513,6 +563,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
           zIndex: (currentTheme) => currentTheme.zIndex.appBar,
           insetInline: 0,
           bottom: 0,
+          transform: 'translateY(var(--app-mobile-nav-offset, 0px))',
           pb: 'env(safe-area-inset-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
@@ -532,11 +583,11 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
             handleNavigate(value);
           }}
           sx={{
-            height: 64,
-            minHeight: 64,
+            height: 56,
+            minHeight: 56,
             bgcolor: 'transparent',
-            '& .MuiBottomNavigationAction-root': { minWidth: 0, minHeight: 48, px: 0.5, py: 0.5 },
-            '& .MuiBottomNavigationAction-label': { fontSize: '0.7rem', whiteSpace: 'nowrap', mt: 0.25 },
+            '& .MuiBottomNavigationAction-root': { flex: 1, minWidth: 0, maxWidth: 'none', minHeight: 48, px: 0.5, py: 0.5 },
+            '& .MuiBottomNavigationAction-label': { fontSize: '0.7rem', textAlign: 'center', lineHeight: 1.1, mt: 0.25 },
           }}
         >
           {mobilePrimaryItems.map((item) => {
@@ -550,7 +601,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
           })}
           <BottomNavigationAction value="more" label="More" icon={<MoreIcon />} />
         </BottomNavigation>
-      </Paper>
+      </Paper>, document.body)}
 
       <Drawer
         variant="temporary"

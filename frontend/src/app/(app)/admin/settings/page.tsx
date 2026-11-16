@@ -1285,6 +1285,7 @@ function RoleManagementCard() {
 
 function FocalUserManagementCard() {
   const { user: currentUser, myCap, logout } = useAuth();
+  const compactUsers = useMediaQuery(useTheme().breakpoints.down('md'));
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [focalUsers, setFocalUsers] = useState<any[]>([]);
@@ -1607,6 +1608,128 @@ function FocalUserManagementCard() {
     }
   };
 
+  const renderUserRecord = (user: (typeof focalUsers)[number]) => {
+    const name = formatPersonName(user, user.email);
+    const isActive = Boolean(user.is_active || user.active);
+    const canModify = canModifyUser(user);
+    const role = String(user.role || user.roleValue || user.role_value || user.userRole || '—')
+      .replace(/_/g, ' ').toUpperCase();
+    const identity = (
+      <>
+        <Typography variant="body2" fontWeight={700}>{name}</Typography>
+        <Typography variant="caption" color="text.secondary">{user.email}</Typography>
+      </>
+    );
+    const unit = (
+      <>
+        <Typography variant="body2">{user.units?.[0]?.name || 'Not assigned'}</Typography>
+        {user.unitAssignmentSource && (
+          <Chip
+            label={user.unitAssignmentSource === 'manual' ? 'Selected in Compliance Hub' : 'Synchronized from UMS'}
+            size="small"
+            color={user.unitAssignmentSource === 'manual' ? 'info' : 'success'}
+            variant="outlined"
+          />
+        )}
+      </>
+    );
+    const roleBadge = <Chip label={role} size="small" variant="outlined" />;
+    const statusBadge = <Chip
+      icon={isActive ? <ActiveIcon /> : <InactiveIcon />}
+      label={isActive ? 'Active' : 'Inactive'}
+      size="small" color={isActive ? 'success' : 'default'}
+    />;
+    const mfaBadge = user.mfaRecoveryRequired && (
+      <Tooltip title={user.mfaLockExpiresAt ? `Lock expiry: ${new Date(user.mfaLockExpiresAt).toLocaleString()}` : 'OTP failures need account recovery.'}>
+        <Chip label={user.mfaLockExpiresAt && new Date(user.mfaLockExpiresAt).getTime() > Date.now() ? 'MFA Locked' : 'MFA recovery needed'}
+          size="small" color="warning" variant="outlined" />
+      </Tooltip>
+    );
+    const actions = (
+      <Stack direction="row" justifyContent="flex-end" sx={{
+        flexShrink: 0,
+        '& .MuiIconButton-root': { minWidth: { xs: 44, md: 30 }, minHeight: { xs: 44, md: 30 } },
+      }}>
+        <Tooltip title="Quick Reset Password"><span>
+          <IconButton size="small" color="error" aria-label={`Reset password for ${name}`}
+            onClick={() => setResetUser(user)} disabled={!canModify}>
+            <KeyIcon fontSize="small" />
+          </IconButton>
+        </span></Tooltip>
+        {canUnlockMfa(user) && (
+          <Tooltip title="Unlock MFA">
+            <IconButton size="small" color="warning" aria-label={`Unlock MFA for ${name}`}
+              onClick={() => { setMfaRecoveryUser(user); setMfaRecoveryReason(''); setMfaIdentityVerified(false); setMfaRecoveryError(null); }}>
+              <UnlockMfaIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        <Tooltip title="Edit user"><span>
+          <IconButton size="small" color="primary" aria-label={`Edit ${name}`} disabled={!canModify}
+            onClick={() => setEditUser({
+              id: user.id,
+              email: user.email || '',
+              firstName: user.firstName || '',
+              middleName: user.middleName || '',
+              lastName: user.lastName || '',
+              suffix: user.suffix || '',
+              staffId: user.staffId || '',
+              phoneNumber: user.phoneNumber || '',
+              sex: user.sex || '',
+              position: user.position || '',
+              positionFull: user.positionFull || '',
+              designation: user.designation || '',
+              autoAssignmentEligible: user.autoAssignmentEligible !== false,
+              role: user.role,
+              unitIds: Array.isArray(user.units) ? user.units.map((unit: Unit) => unit.id) : [],
+            })}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </span></Tooltip>
+        <Tooltip title={isActive ? 'Deactivate' : 'Activate'}><span>
+          <IconButton size="small" color={isActive ? 'warning' : 'success'}
+            aria-label={`${isActive ? 'Deactivate' : 'Activate'} ${name}`}
+            onClick={() => void handleToggleActive(user)}
+            disabled={user.id == currentUser?.id || !canModify}>
+            {isActive ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
+          </IconButton>
+        </span></Tooltip>
+      </Stack>
+    );
+
+    if (compactUsers) return (
+      <Card key={user.id} component="article" variant="outlined" aria-label={name} sx={{
+        p: 1.25, overflowWrap: 'anywhere',
+        '& .MuiChip-root': { maxWidth: '100%', height: 'auto', minHeight: 24 },
+        '& .MuiChip-label': { whiteSpace: 'normal' },
+      }}>
+        {identity}
+        {userTab === 0 && user.staffId && (
+          <Typography variant="caption" display="block" color="text.secondary">Staff ID: {user.staffId}</Typography>
+        )}
+        {userTab === 1 && <Box mt={0.5}>{unit}</Box>}
+        {mfaBadge && <Box mt={0.5}>{mfaBadge}</Box>}
+        <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={0.5} mt={0.75}>
+          <Stack direction="row" alignItems="center" useFlexGap flexWrap="wrap" gap={0.5}>
+            {roleBadge}{statusBadge}
+          </Stack>
+          <Box ml="auto">{actions}</Box>
+        </Stack>
+      </Card>
+    );
+
+    return (
+      <TableRow key={user.id} hover>
+        <TableCell>{identity}</TableCell>
+        {userTab === 0 && <TableCell>{user.staffId || ''}</TableCell>}
+        {userTab === 1 && <TableCell>{unit}</TableCell>}
+        <TableCell>{roleBadge}</TableCell>
+        <TableCell>{mfaBadge}{statusBadge}</TableCell>
+        <TableCell align="right">{actions}</TableCell>
+      </TableRow>
+    );
+  };
+
   return (
     <Card elevation={2}>
       <CardHeader
@@ -1805,7 +1928,7 @@ function FocalUserManagementCard() {
               setUserTab(v);
               setPage(0);
             }}
-            sx={{ minWidth: 0 }}
+            sx={{ minWidth: 0, maxWidth: '100%' }}
           >
             <Tab
               label={`RICTMS Staff (${focalUsers.filter((u: any) => u.role !== 'user' && u.role !== 'super_admin').length})`}
@@ -1876,7 +1999,7 @@ function FocalUserManagementCard() {
 
           return (
             <>
-              <Box sx={{ minWidth: 0 }}>
+              {compactUsers ? <Stack spacing={1}>{paginatedUsers.map(renderUserRecord)}</Stack> : <Box sx={{ minWidth: 0 }}>
                 {(canScrollLeft || canScrollRight) && (
                   <Box
                     role="toolbar"
@@ -1913,7 +2036,7 @@ function FocalUserManagementCard() {
                   </Box>
                 )}
                 <TableContainer ref={tableContainerRef} onScroll={handleTableScroll}>
-                  <Table size="small" sx={{ minWidth: 980 }}>
+                  <Table size="small" sx={{ minWidth: userTab === 0 ? 700 : 980 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell>
@@ -1924,9 +2047,7 @@ function FocalUserManagementCard() {
                           <strong>Staff ID</strong>
                         </TableCell>
                       )}
-                      <TableCell>
-                        <strong>Unit / Source</strong>
-                      </TableCell>
+                      {userTab === 1 && <TableCell><strong>Unit / Source</strong></TableCell>}
                       <TableCell>
                         <strong>Role</strong>
                       </TableCell>
@@ -1939,141 +2060,11 @@ function FocalUserManagementCard() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {paginatedUsers.map((u: any) => (
-                      <TableRow key={u.id} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {[u.firstName, u.middleName, u.lastName, u.suffix]
-                              .filter(Boolean)
-                              .join(' ') || ''}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {u.email}
-                          </Typography>
-                        </TableCell>
-                        {userTab === 0 && (
-                          <TableCell>
-                            <Typography variant="body2">{u.staffId || ''}</Typography>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Typography variant="body2">{u.units?.[0]?.name || 'Not assigned'}</Typography>
-                          {u.unitAssignmentSource && (
-                            <Chip
-                              label={
-                                u.unitAssignmentSource === 'manual'
-                                  ? 'Selected in Compliance Hub'
-                                  : 'Synchronized from UMS'
-                              }
-                              size="small"
-                              color={u.unitAssignmentSource === 'manual' ? 'info' : 'success'}
-                              variant="outlined"
-                              sx={{ mt: 0.5 }}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={String(u.role || u.roleValue || u.role_value || u.userRole || '—').replace(/_/g, ' ').toUpperCase()}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {u.mfaRecoveryRequired && <Tooltip title={u.mfaLockExpiresAt ? `Lock expiry: ${new Date(u.mfaLockExpiresAt).toLocaleString()}` : 'OTP failures need account recovery.'}>
-                            <Chip label={u.mfaLockExpiresAt && new Date(u.mfaLockExpiresAt).getTime() > Date.now() ? 'MFA Locked' : 'MFA recovery needed'} size="small" color="warning" variant="outlined" sx={{ mb: 0.5 }} />
-                          </Tooltip>}
-                          {u.is_active || u.active ? (
-                            <Chip
-                              icon={<ActiveIcon />}
-                              label="Active"
-                              size="small"
-                              color="success"
-                            />
-                          ) : (
-                            <Chip
-                              icon={<InactiveIcon />}
-                              label="Inactive"
-                              size="small"
-                              color="default"
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Quick Reset Password">
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => setResetUser(u)}
-                                disabled={!canModifyUser(u)}
-                              >
-                                <KeyIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          {canUnlockMfa(u) && <Tooltip title="Unlock MFA">
-                            <IconButton size="small" color="warning" aria-label={`Unlock MFA for ${formatPersonName(u)}`}
-                              onClick={() => { setMfaRecoveryUser(u); setMfaRecoveryReason(''); setMfaIdentityVerified(false); setMfaRecoveryError(null); }}>
-                              <UnlockMfaIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>}
-                          <Tooltip title="Edit user">
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => {
-                                  setEditUser({
-                                    id: u.id,
-                                    email: u.email || '',
-                                    firstName: u.firstName || '',
-                                    middleName: u.middleName || '',
-                                    lastName: u.lastName || '',
-                                    suffix: u.suffix || '',
-                                    staffId: u.staffId || '',
-                                     phoneNumber: u.phoneNumber || '',
-                                     sex: u.sex || '',
-                                    position: u.position || '',
-                                    positionFull: u.positionFull || '',
-                                    designation: u.designation || '',
-
-                                    autoAssignmentEligible: u.autoAssignmentEligible !== false,
-                                    role: u.role,
-                                    unitIds: Array.isArray(u.units)
-                                      ? u.units.map((unit: any) => unit.id)
-                                      : [],
-                                  });
-                                }}
-                                disabled={!canModifyUser(u)}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title={u.is_active || u.active ? 'Deactivate' : 'Activate'}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color={u.is_active || u.active ? 'warning' : 'success'}
-                                onClick={() => handleToggleActive(u)}
-                                disabled={u.id == currentUser?.id || !canModifyUser(u)}
-                              >
-                                {u.is_active || u.active ? (
-                                  <InactiveIcon fontSize="small" />
-                                ) : (
-                                  <ActiveIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {paginatedUsers.map(renderUserRecord)}
                   </TableBody>
                 </Table>
               </TableContainer>
-              </Box>
+              </Box>}
               <TablePagination
                 component="div"
                 count={displayUsers.length}
