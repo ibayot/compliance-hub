@@ -410,7 +410,10 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
             '--app-layout-text': (theme) => theme.palette.text.primary,
             '--app-layout-muted': (theme) => theme.palette.text.secondary,
             '@media (max-width:600px)': {
-              width: 'calc(100% - 24px)',
+              width: '100%',
+              maxWidth: '100%',
+              mx: 0,
+              px: 1,
               py: 1,
             },
           }}

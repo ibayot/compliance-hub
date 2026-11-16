@@ -94,9 +94,10 @@
   .workspace-context,
   .workspace-content { gap: 10px; }
   .workspace-context > *,
-  .workspace-content > * { min-width: 0; max-width: 100%; }
+  .workspace-content > * { width: 100%; min-width: 0; max-width: 100%; }
   [data-app-layout-preset='sectioned-workspace'] .workspace-layout { gap: 12px; }
-  [data-app-layout-preset='sectioned-workspace'] .workspace-context { padding: 10px; }
+  .workspace-context { padding: 8px; }
+  [data-app-layout-preset='sectioned-workspace'] .workspace-context { padding: 8px; }
   [data-app-layout-preset='sectioned-workspace'] .workspace-content { gap: 10px; }
 }
 @media print {

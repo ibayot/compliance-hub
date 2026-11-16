@@ -30,7 +30,7 @@ import {
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
   Devices as DevicesIcon,
-  Download as DownloadIcon,
+  Smartphone as SmartphoneIcon,
 } from '@mui/icons-material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
@@ -271,7 +271,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       return;
     }
     if (!pushSupported || !pushConfig?.enabled || !pushConfig.publicKey) {
-      setPushMessage('This server needs Web Push configured on its Ticketing service before alerts can be enabled.');
+      setPushMessage('The Ticketing service has not confirmed valid Web Push settings. Check all four server values and recreate the Ticketing service.');
       return;
     }
 
@@ -974,20 +974,20 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             variant="contained"
             color="primary"
             size="small"
-            startIcon={<DownloadIcon />}
+            startIcon={<SmartphoneIcon className="app-download-app-icon" sx={{ fontSize: { xs: 18, sm: 20 } }} />}
             onClick={() => void handleDownloadApp()}
             aria-label="Download App"
             sx={{
               flexShrink: 0,
               minWidth: 0,
               minHeight: 44,
-              px: { xs: 0.9, sm: 1.25 },
-              fontSize: { xs: '0.68rem', sm: '0.8125rem' },
+              px: { xs: 0.8, sm: 1.25 },
+              fontSize: { xs: '0.65rem', sm: '0.8125rem' },
               fontWeight: 700,
               whiteSpace: 'nowrap',
               boxShadow: 'none',
               '&:hover': { boxShadow: 'none' },
-              '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inline-flex' } },
+              '& .MuiButton-startIcon': { display: 'inline-flex', mr: { xs: 0.4, sm: 0.75 } },
             }}
           >
             Download App
@@ -1069,7 +1069,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                       : pushConfigCheckFailed
                         ? 'Could not check server alert settings. Tap Retry to try again.'
                     : !pushConfig?.enabled
-                      ? 'This server needs Web Push configured on its Ticketing service. Ask an administrator to set it up.'
+                      ? 'Ticketing has not confirmed valid Web Push settings. An administrator should check all four values and recreate the service.'
                       : pushEnabled
                         ? 'Enabled on this device. Sound and badges follow device settings.'
                         : 'Receive alerts when the browser is closed; permission is required.')}
