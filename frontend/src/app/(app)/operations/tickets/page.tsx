@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { requesterOptionLabel, filterRequesterOptions } from '@/lib/utils/requester-options';
@@ -38,7 +39,6 @@ import {
   FormControlLabel,
   InputAdornment,
   Tab,
-  Tabs,
   useMediaQuery,
   useTheme,
   Collapse,
@@ -1957,9 +1957,9 @@ export default function TicketsPage({
       )}
       </>}>
 {!showEscalations && (
-        <Card sx={{ mb: 2 }}>
+        <Card className="app-sticky-tab-band" sx={{ mb: 2 }}>
           <CardContent sx={{ px: { xs: 1, sm: 2 }, py: 1, '&:last-child': { pb: 1 } }}>
-            <Tabs
+            <StickyTabs
               value={selectedTab}
               onChange={(_, value) => {
                 setSelectedTab(value);
@@ -1982,7 +1982,7 @@ export default function TicketsPage({
                   }
                 />
               ))}
-            </Tabs>
+            </StickyTabs>
           </CardContent>
         </Card>
       )}

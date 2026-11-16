@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
@@ -38,7 +39,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -1731,7 +1731,7 @@ function FocalUserManagementCard() {
   };
 
   return (
-    <Card elevation={2}>
+    <Card elevation={2} sx={{ overflow: 'visible' }}>
       <CardHeader
         avatar={<PersonAddIcon color="primary" />}
         title="User Management"
@@ -1911,6 +1911,7 @@ function FocalUserManagementCard() {
 
         {/* Controls: Tabs & Search */}
         <Box
+          className="app-sticky-tab-band app-secondary-tabs"
           sx={{
             display: 'flex',
             flexDirection: { xs: 'column', sm: 'row' },
@@ -1920,7 +1921,7 @@ function FocalUserManagementCard() {
             gap: 2,
           }}
         >
-          <Tabs
+          <StickyTabs
             value={userTab}
             variant="scrollable"
             scrollButtons="auto"
@@ -1937,7 +1938,7 @@ function FocalUserManagementCard() {
               label={`Regular Users (${focalUsers.filter((u: any) => u.role === 'user').length})`}
             />
             <Tab label="Pending Staff" />
-          </Tabs>
+          </StickyTabs>
           {userTab !== 2 && (
           <TextField
             size="small"
@@ -2699,8 +2700,8 @@ export default function SettingsPage() {
           Manage your account, theme, and user administration preferences.
         </Typography>
       </Box>
-<Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs 
+<Box className="app-sticky-tab-band" sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <StickyTabs
           value={tabIndex} 
           onChange={handleTabChange} 
           variant="scrollable"
@@ -2711,7 +2712,7 @@ export default function SettingsPage() {
           {renderedTabs.map((tab, index) => (
             <Tab key={tab.label} label={tab.label} />
           ))}
-        </Tabs>
+        </StickyTabs>
       </Box>
 <WorkspaceLayout kind="standard">
 {currentTab.label === 'Profile & Preferences' && (
@@ -2770,7 +2771,7 @@ export default function SettingsPage() {
               </Box>
             </CardContent>
           </Card>}>
-<Grid container spacing={3}>
+<Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
             <Grid item xs={12}>
               <ProfilePreferencesCard />
             </Grid>

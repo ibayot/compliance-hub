@@ -1439,7 +1439,6 @@ export default function DashboardPage() {
               <Grid item xs={12} md={4}>
                 <Card
                   sx={{
-                    borderRadius: 3,
                     boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 4px 20px rgba(237, 108, 2, 0.15)',
                     background: isDark
                       ? `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.2)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`
@@ -1470,7 +1469,6 @@ export default function DashboardPage() {
               <Grid item xs={12} md={4}>
                 <Card
                   sx={{
-                    borderRadius: 3,
                     boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 4px 20px rgba(46, 125, 50, 0.15)',
                     background: isDark
                       ? `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.2)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`

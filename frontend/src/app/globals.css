@@ -28,10 +28,51 @@ body {
 }
 
 .app-shell {
+  --app-sticky-top: 64px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   overflow-x: clip;
+}
+
+@media (max-width: 899.95px) {
+  .app-shell { --app-sticky-top: calc(64px + env(safe-area-inset-top)); }
+}
+
+@media (max-width: 599.95px) {
+  .app-shell { --app-sticky-top: calc(56px + env(safe-area-inset-top)); }
+}
+
+.app-page-content .app-sticky-tabs,
+.app-page-content .app-sticky-tab-band {
+  position: sticky;
+  top: var(--app-sticky-top);
+  z-index: 12;
+  background-color: var(--app-layout-paper);
+}
+
+.app-page-content .app-sticky-tabs.MuiTabs-vertical {
+  align-self: start;
+  max-height: calc(100dvh - var(--app-sticky-top));
+}
+
+.app-page-content .app-sticky-tab-band .app-sticky-tabs {
+  position: static;
+}
+
+.app-page-content .app-secondary-tabs {
+  top: calc(var(--app-sticky-top) + 48px);
+  z-index: 11;
+}
+
+.app-page-content .MuiCard-root:has(> .app-sticky-tabs) {
+  overflow: visible;
+}
+
+.MuiDialogContent-root .app-sticky-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .app-main {
@@ -221,7 +262,7 @@ body {
   border-left-color: var(--app-layout-primary);
 }
 
-.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root {
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root:not(:has(> .app-sticky-tabs, .app-sticky-tab-band)) {
   overflow: hidden;
 }
 

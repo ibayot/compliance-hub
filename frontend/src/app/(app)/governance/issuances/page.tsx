@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect } from 'react';
@@ -1151,8 +1152,8 @@ export default function IssuancesPage() {
           super admin roles.
         </Typography>
       )}
-<Card sx={{ mb: 2 }}>
-        <Tabs
+<Card className="app-sticky-tab-band" sx={{ mb: 2 }}>
+        <StickyTabs
           value={view}
           onChange={(_, value) => setView(value)}
           variant="scrollable"
@@ -1162,7 +1163,7 @@ export default function IssuancesPage() {
           <Tab value="official" label="Official Registers" />
           <Tab value="review" label="Review Queue" />
           <Tab value="historical" label="Historical & Excluded" />
-        </Tabs>
+        </StickyTabs>
       </Card>
 <WorkspaceLayout kind="standard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>

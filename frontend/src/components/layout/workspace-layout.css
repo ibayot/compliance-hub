@@ -53,11 +53,27 @@
 [data-app-layout-preset='sectioned-workspace'] .workspace-layout { gap: 32px; }
 [data-app-layout-preset='sectioned-workspace'] .workspace-context { padding: 24px; border-block: 1px solid var(--app-layout-divider); background: color-mix(in srgb, var(--app-layout-primary) 5%, var(--app-layout-paper)); border-radius: 16px; }
 [data-app-layout-preset='sectioned-workspace'] .workspace-content { gap: 28px; }
+[data-app-layout-preset='sectioned-workspace'] .MuiGrid-container.sectioned-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+}
+[data-app-layout-preset='sectioned-workspace'] .MuiGrid-container.sectioned-card-grid-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-app-layout-preset='sectioned-workspace'] .MuiGrid-container.sectioned-card-grid > .MuiGrid-item {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+}
 @media (min-width: 1200px) {
   [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='dashboard'] > .workspace-context,
   [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='dashboard'] > .workspace-content { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='dashboard'] > .workspace-content > .MuiGrid-container { grid-column: 1 / -1; }
-  [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='settings'] .workspace-content > .MuiGrid-container > .MuiGrid-item { flex-basis: 50%; max-width: 50%; }
+  [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='settings'] .workspace-content > .MuiGrid-container:not(.sectioned-card-grid) > .MuiGrid-item { flex-basis: 50%; max-width: 50%; }
   [data-app-layout-mode='web'][data-app-layout-preset='sectioned-workspace'] .workspace-layout[data-workspace-kind='detail'][data-has-context='true'] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 

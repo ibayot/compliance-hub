@@ -47,6 +47,7 @@ import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
 import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig } from '@/app/api/references';
+import { isAndroidBrowser, promptToInstallWebApp } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
@@ -75,7 +76,7 @@ function isAppleMobileDevice(): boolean {
 }
 
 function getAndroidApkUrl(): string | null {
-  if (Capacitor.isNativePlatform() || !/\bAndroid\b/i.test(navigator.userAgent)) return null;
+  if (!isAndroidBrowser()) return null;
   try {
     const url = new URL(import.meta.env.VITE_ANDROID_APK_URL?.trim() || '');
     return url.protocol === 'https:' && !url.username && !url.password && !url.search &&
@@ -87,6 +88,7 @@ function getAndroidApkUrl(): string | null {
 
 function isHomeScreenApp(): boolean {
   return window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
     Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
@@ -135,7 +137,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
 
   useEffect(() => {
-    setShowIosProfileDownload(isAppleMobileDevice() && !Capacitor.isNativePlatform());
+    setShowIosProfileDownload(isAppleMobileDevice() && !Capacitor.isNativePlatform() && !isHomeScreenApp());
     setAndroidApkUrl(getAndroidApkUrl());
   }, []);
 
@@ -750,6 +752,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       position="fixed"
       data-app-layout-mode={layoutMode}
       sx={{
+        position: { xs: 'sticky', md: 'fixed' },
         left: { xs: 0, md: `${drawerWidth}px` },
         width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
         bgcolor: 'background.paper',
@@ -1077,6 +1080,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   <Box>
                     <Typography variant="body2" fontWeight={600}>Download Android app</Typography>
                     <Typography variant="caption" color="text.secondary">Android installation file (APK)</Typography>
+                  </Box>
+                </MenuItem>
+                <Divider />
+              </>
+            )}
+            {!androidApkUrl && isAndroidBrowser() && !isHomeScreenApp() && (
+              <>
+                <MenuItem onClick={() => {
+                  handleProfileMenuClose();
+                  void promptToInstallWebApp().then((opened) => {
+                    if (!opened) enqueueSnackbar('Open your browser menu and choose Install app or Add to Home screen.', { variant: 'info' });
+                  });
+                }} sx={{ alignItems: 'flex-start', py: 1.25 }}>
+                  <AndroidIcon sx={{ mr: 1.25, mt: 0.25 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>Install Compliance Hub</Typography>
+                    <Typography variant="caption" color="text.secondary">Add the web app to your Home Screen</Typography>
                   </Box>
                 </MenuItem>
                 <Divider />

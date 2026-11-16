@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useState } from 'react';
@@ -237,10 +238,10 @@ export default function ReviewsPage() {
 </WorkspaceLayout>
 <Dialog open={!!selectedDocument} onClose={saving ? undefined : closeDialog} fullScreen={compact} fullWidth maxWidth="xl">
         <DialogTitle>{canManageReviews ? 'Manual Review' : 'View Document Review'}</DialogTitle>
-        {compact && canManageReviews && <Tabs value={reviewTab} onChange={(_, next) => setReviewTab(next)} variant="fullWidth" aria-label="Review steps">
+        {compact && canManageReviews && <StickyTabs value={reviewTab} onChange={(_, next) => setReviewTab(next)} variant="fullWidth" aria-label="Review steps">
           <Tab value="preview" label="Document" id="review-preview-tab" aria-controls="review-preview" />
           <Tab value="decision" label="Decision" id="review-decision-tab" aria-controls="review-decision" />
-        </Tabs>}
+        </StickyTabs>}
         <DialogContent>
           <Box display="grid" gridTemplateColumns={{ xs: 'minmax(0, 1fr)', md: 'minmax(0, 2fr) minmax(0, 1fr)' }} gap={2}>
             <Paper variant="outlined" id="review-preview" role={compact && canManageReviews ? 'tabpanel' : undefined}

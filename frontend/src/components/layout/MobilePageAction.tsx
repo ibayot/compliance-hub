@@ -58,7 +58,6 @@ export default function MobilePageAction() {
           position: 'fixed',
           right: 'max(12px, env(safe-area-inset-right))',
           bottom: 'calc(72px + env(safe-area-inset-bottom))',
-          transform: 'translateY(var(--app-mobile-nav-offset, 0px))',
           width: 48,
           height: 48,
           zIndex: theme.zIndex.appBar + 1,

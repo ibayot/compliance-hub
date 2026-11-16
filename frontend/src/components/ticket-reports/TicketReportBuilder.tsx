@@ -179,7 +179,7 @@ export default function TicketReportBuilder() {
 {report && <Card><CardContent><Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1}>
         <Typography variant="h6" component="h2">{report.configuration.title}</Typography>
-        <Button variant="outlined" startIcon={<PrintIcon />} disabled={stale || generating} onClick={() => { if (!printTicketReport(report)) setError('The print window was blocked. Allow pop-ups for this site and try again.'); }}>Print / Export PDF</Button>
+        <Button variant="outlined" startIcon={<PrintIcon />} disabled={stale || generating} onClick={() => { if (!printTicketReport(report)) setError('Could not open print preview. Please try again.'); }}>Print / Export PDF</Button>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700, fontStyle: 'italic' }}>{reportMetadata(report)}</Typography>
       {stale && <Alert severity="warning">Settings changed. Generate a new preview before exporting.</Alert>}

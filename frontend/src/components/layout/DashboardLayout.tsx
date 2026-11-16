@@ -243,6 +243,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       data-app-layout-mode={layoutMode}
       sx={{
         display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
         width: '100%',
         minWidth: 0,
         minHeight: '100vh',
@@ -361,13 +362,6 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         onAcknowledge={() => void acknowledgeChangelog()}
       />
 
-      {/* Sidebar */}
-      <Sidebar
-        mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
-        onMobileMenuOpen={() => setMobileOpen(true)}
-      />
-
       {/* Main Content */}
       <Box
         component="main"
@@ -381,14 +375,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           maxWidth: '100%',
           overflowX: 'clip',
           bgcolor: 'background.default',
-          minHeight: '100vh',
-          '@supports (height: 100dvh)': { minHeight: '100dvh' },
-          pb: {
-            xs: pageAction
-              ? 'calc(136px + env(safe-area-inset-bottom))'
-              : 'calc(80px + env(safe-area-inset-bottom))',
-            md: 0,
-          },
+          pb: { xs: pageAction ? 9 : 2, md: 0 },
           transition: (theme) =>
             theme.transitions.create(['margin', 'width'], {
               easing: theme.transitions.easing.sharp,
@@ -399,18 +386,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         {/* Toolbar spacing */}
         <Toolbar
           className="app-main-toolbar-spacer"
-          sx={{
-            height: {
-              xs: 'calc(56px + env(safe-area-inset-top))',
-              sm: 'calc(64px + env(safe-area-inset-top))',
-              md: 64,
-            },
-            minHeight: {
-              xs: 'calc(56px + env(safe-area-inset-top))',
-              sm: 'calc(64px + env(safe-area-inset-top))',
-              md: 64,
-            },
-          }}
+          sx={{ display: { xs: 'none', md: 'flex' }, minHeight: { md: 64 } }}
         />
 
         {/* Shared content frame keeps every authenticated page aligned to its appearance preset. */}
@@ -457,6 +433,12 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           )}
         </Box>
       </Box>
+      <Sidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+        onMobileMenuOpen={() => setMobileOpen(true)}
+      />
+
       <MobilePageAction />
     </Box>
   );

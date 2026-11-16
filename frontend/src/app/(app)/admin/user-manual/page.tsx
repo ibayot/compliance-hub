@@ -409,7 +409,7 @@ export default function UserManualPage() {
 
   return (
     <Box>
-<WorkspaceLayout kind="dashboard" context={<><Box mb={4}>
+<WorkspaceLayout kind="standard" context={<><Box>
         <Typography variant="h4" component="h1" gutterBottom>
           User Manual
         </Typography>
@@ -417,7 +417,7 @@ export default function UserManualPage() {
           Welcome to the application user manual. The topics below are curated specifically for your role and capabilities.
         </Typography>
       </Box></>}>
-<Grid container spacing={3}>
+<Grid container spacing={3} className="sectioned-card-grid">
         {visibleItems.map((item) => (
           <Grid item xs={12} sm={6} md={4} key={item.title}>
             <Card

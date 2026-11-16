@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -428,7 +429,7 @@ export default function KnowledgeBasePage() {
           <Box sx={{ pt: 1 }}>
             {isNarrowEditor ? (
               <>
-                <Tabs
+                <StickyTabs
                   value={editorTab}
                   onChange={(_, value: 'write' | 'preview') => setEditorTab(value)}
                   variant="fullWidth"
@@ -436,7 +437,7 @@ export default function KnowledgeBasePage() {
                 >
                   <Tab value="write" label="Write" />
                   <Tab value="preview" label="Preview" />
-                </Tabs>
+                </StickyTabs>
                 {editorTab === 'write' ? editorFields : articlePreview}
               </>
             ) : (

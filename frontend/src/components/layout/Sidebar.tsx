@@ -1,8 +1,7 @@
 'use client';
 
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Drawer,
@@ -72,54 +71,6 @@ interface NavItem {
 export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }: SidebarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const mobileNavRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const nav = mobileNavRef.current;
-    const viewport = window.visualViewport;
-    if (!isMobile || !nav || !viewport) return;
-
-    const rootStyle = document.documentElement.style;
-    let offset = 0;
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
-      const rect = nav.getBoundingClientRect();
-      const focused = document.activeElement;
-      const editing = focused?.matches('textarea, [contenteditable="true"], input:is([type="text"], [type="search"], [type="email"], [type="password"], [type="number"], [type="tel"], [type="url"], :not([type]))');
-      const keyboardOpen = editing && window.innerHeight - viewport.height > 150;
-      // Remove our previous offset before comparing Safari's fixed edge to its visible edge.
-      const fixedEdge = rect.bottom - offset;
-      const visibleEdge = viewport.offsetTop + viewport.height;
-      const nextOffset = rect.height && viewport.scale === 1 && !keyboardOpen
-        ? Math.round(visibleEdge - fixedEdge)
-        : 0;
-      if (nextOffset !== offset) {
-        offset = nextOffset;
-        rootStyle.setProperty('--app-mobile-nav-offset', `${offset}px`);
-      }
-    };
-    const schedule = () => {
-      if (!frame) frame = window.requestAnimationFrame(measure);
-    };
-    viewport.addEventListener('resize', schedule);
-    viewport.addEventListener('scroll', schedule);
-    window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule, { passive: true });
-    document.addEventListener('focusin', schedule);
-    document.addEventListener('focusout', schedule);
-    schedule();
-    return () => {
-      window.cancelAnimationFrame(frame);
-      viewport.removeEventListener('resize', schedule);
-      viewport.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-      window.removeEventListener('scroll', schedule);
-      document.removeEventListener('focusin', schedule);
-      document.removeEventListener('focusout', schedule);
-      rootStyle.removeProperty('--app-mobile-nav-offset');
-    };
-  }, [isMobile]);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, myCap } = useAuth();
@@ -551,19 +502,18 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
 
   return (
     <>
-      {createPortal(<Paper
+      <Paper
         component="nav"
-        ref={mobileNavRef}
         id="app-mobile-nav"
         aria-label="Quick navigation"
         elevation={8}
         sx={{
           display: { xs: 'block', md: 'none' },
-          position: 'fixed',
+          position: 'sticky',
+          flexShrink: 0,
           zIndex: (currentTheme) => currentTheme.zIndex.appBar,
           insetInline: 0,
           bottom: 0,
-          transform: 'translateY(var(--app-mobile-nav-offset, 0px))',
           pb: 'env(safe-area-inset-bottom)',
           paddingLeft: 'env(safe-area-inset-left)',
           paddingRight: 'env(safe-area-inset-right)',
@@ -601,7 +551,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
           })}
           <BottomNavigationAction value="more" label="More" icon={<MoreIcon />} />
         </BottomNavigation>
-      </Paper>, document.body)}
+      </Paper>
 
       <Drawer
         variant="temporary"
@@ -629,6 +579,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
         sx={{
           display: { xs: 'none', md: 'block' },
           width: drawerWidth,
+          order: -1,
           flexShrink: 0,
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',

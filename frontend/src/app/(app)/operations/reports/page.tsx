@@ -1,12 +1,17 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 import TicketReportBuilder from '@/components/ticket-reports/TicketReportBuilder';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Autocomplete,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
@@ -28,8 +33,6 @@ import {
   LinearProgress,
   useMediaQuery,
   Collapse,
-  ToggleButtonGroup,
-  ToggleButton,
   Tabs,
   Tab
 } from '@mui/material';
@@ -60,6 +63,44 @@ const Table = ({ children, ...props }: any) => (
     <MuiTable {...props}>{children}</MuiTable>
   </ResponsiveTable>
 );
+
+function ReportCards({ children }: { children: React.ReactNode }) {
+  return <Box sx={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))',
+    alignItems: 'start',
+    gap: 1.5,
+  }}>{children}</Box>;
+}
+
+function ReportRecord({ title, caption, metrics, accent, children }: {
+  title: string;
+  caption?: string;
+  metrics: ReadonlyArray<readonly [string, React.ReactNode]>;
+  accent?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Card component="article" variant="outlined" sx={{ p: 1.5, minWidth: 0, overflowWrap: 'anywhere',
+      ...(accent ? { borderInlineStart: '4px solid', borderInlineStartColor: accent } : {}) }}>
+      <Stack spacing={1}>
+        <Box>
+          {caption && <Typography variant="caption" color="text.secondary">{caption}</Typography>}
+          <Typography component="h3" variant="body2" fontWeight={700}>{title}</Typography>
+        </Box>
+        <Box component="dl" sx={{ m: 0, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+          {metrics.map(([label, value]) => (
+            <Box key={label}>
+              <Typography component="dt" variant="caption" color="text.secondary">{label}</Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 600 }}>{value}</Typography>
+            </Box>
+          ))}
+        </Box>
+        {children}
+      </Stack>
+    </Card>
+  );
+}
 
 const EMPTY_ROWS: never[] = [];
 type ReportAssignee = Awaited<ReturnType<typeof ticketsApi.getReportTechnicians>>[number];
@@ -151,9 +192,22 @@ export default function TicketReportsPage() {
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
 
   // Tabs State
-  const [tab, setTab] = useState(0);
+  const [reportSearch, setReportSearch] = useSearchParams();
+  const [normalTab, setNormalTab] = useState(0);
+  const tab = reportSearch.get('tab') === 'builder' ? 4 : normalTab;
+  const setTab = (value: number) => {
+    if (value !== 4) setNormalTab(value);
+    if ((value === 4) === (reportSearch.get('tab') === 'builder')) return;
+    setReportSearch((current) => {
+      const next = new URLSearchParams(current);
+      if (value === 4) next.set('tab', 'builder');
+      else next.delete('tab');
+      return next;
+    }, { replace: true });
+  };
   const [issuesSubTab, setIssuesSubTab] = useState(0);
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
+  const [selectedInsight, setSelectedInsight] = useState('');
   const [explanationsLoading, setExplanationsLoading] = useState(false);
   const [printError, setPrintError] = useState('');
   const activeTicketTypeFilter = chartTicketType ?? ticketType;
@@ -179,8 +233,8 @@ export default function TicketReportsPage() {
   };
 
   useEffect(() => {
-    if (!canManageReports && (tab === 1 || tab === 2)) setTab(0);
-  }, [canManageReports, tab]);
+    if (!canManageReports && (normalTab === 1 || normalTab === 2)) setNormalTab(0);
+  }, [canManageReports, normalTab]);
 
   const periodFilters = {
     year,
@@ -351,23 +405,26 @@ export default function TicketReportsPage() {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [issueCountsData]);
 
-  const catBottomMargin = React.useMemo(() => {
-    if (!categoryData.length) return 60;
-    const maxLen = Math.max(...categoryData.map(c => c.categoryName.length));
-    return Math.max(60, maxLen * 3.5);
-  }, [categoryData]);
-
   const issueBottomMargin = React.useMemo(() => {
     if (!drillDownData.length) return 60;
     const maxLen = Math.max(...drillDownData.map(i => i.issueName.length));
     return Math.max(60, maxLen * 3.5);
   }, [drillDownData]);
 
-  const slaBottomMargin = React.useMemo(() => {
-    if (!slaInsights || !slaInsights.length) return 80;
-    const maxLen = Math.max(...slaInsights.map(i => (i.issueName || '').length));
-    return Math.max(60, maxLen * 3.5);
-  }, [slaInsights]);
+  const insightColumns = slaInsights.map((insight) => {
+    const configured = insight.configuredSlaHours || 0;
+    const actual = insight.avgResolutionHours || 0;
+    const shared = Math.min(configured, actual);
+    return {
+      ...insight,
+      id: JSON.stringify([insight.categoryName, insight.issueName]),
+      label: `${insight.categoryName} — ${insight.issueName}`,
+      shared,
+      configuredRemainder: configured - shared,
+      actualRemainder: actual - shared,
+    };
+  });
+  const inspectedInsight = insightColumns.find((insight) => insight.id === selectedInsight);
   useSse(['TICKET_UPDATED'], () => {
     if (tab !== 4) void queryClient.invalidateQueries({ queryKey: reportScope }, { cancelRefetch: false });
   });
@@ -715,14 +772,14 @@ export default function TicketReportsPage() {
           Print / Export PDF
         </Button>}
       </Box>
-<Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
+<Box className="app-sticky-tab-band" sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <StickyTabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab value={0} label="Overview & Ratings" />
           {canManageReports && <Tab value={1} label="Issues" />}
           {canManageReports && <Tab value={2} label="SLA Insights" />}
           <Tab value={3} label="Performance" />
           <Tab value={4} label="Report Builder" />
-        </Tabs>
+        </StickyTabs>
       </Box>
 <WorkspaceLayout kind="report" context={<>{tab !== 4 && <Card sx={{ mb: 3, '@media print': { display: 'none' } }}>
         <CardContent>
@@ -889,26 +946,11 @@ export default function TicketReportsPage() {
 
 {tab === 0 && (
         <Box>
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            mb={3}
-            sx={{ '@media print': { display: 'none' } }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              Satisfaction ratings overview — average overall, per support type, and per assignee.
-            </Typography>
-            <ToggleButtonGroup
-              value={viewMode}
-              exclusive
-              onChange={(_, val) => val && setViewMode(val)}
-              size="small"
-            >
-              <ToggleButton value="overview">Overview</ToggleButton>
-              <ToggleButton value="detailed">Detailed Ratings</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+          <StickyTabs className="app-secondary-tabs" value={viewMode} onChange={(_, value) => setViewMode(value)}
+            aria-label="Ratings view" sx={{ mb: 3, '@media print': { display: 'none' } }}>
+            <Tab value="overview" label="Overview" />
+            <Tab value="detailed" label="Detailed Ratings" />
+          </StickyTabs>
 
           {/* ── Print header (only visible in print) ── */}
           <Box sx={{ display: 'none', '@media print': { display: 'block', mb: 2 } }}>
@@ -926,7 +968,7 @@ export default function TicketReportsPage() {
             {!loading && viewMode === 'overview' && result && (
               <>
                 {/* ── Summary Cards ── */}
-                <Grid container spacing={2} mb={3}>
+                <Grid container spacing={2} mb={3} className="sectioned-card-grid">
                   <Grid item xs={12} sm={4}>
                     <Card>
                       <CardContent>
@@ -996,7 +1038,7 @@ export default function TicketReportsPage() {
 
                 {/* ── Escalation Metrics ── */}
                 {(result.totalEscalations ?? 0) > 0 && (
-                  <Grid container spacing={2} mb={3}>
+                  <Grid container spacing={2} mb={3} className="sectioned-card-grid">
                     <Grid item xs={12}>
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                         Escalation Summary
@@ -1043,7 +1085,7 @@ export default function TicketReportsPage() {
 
                 {/* ── SLA Metrics ── */}
                 {result.slaStats && (result.slaStats.met > 0 || result.slaStats.missed > 0) && (
-                  <Grid container spacing={2} mb={3}>
+                  <Grid container spacing={2} mb={3} className="sectioned-card-grid">
                     <Grid item xs={12}>
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                         SLA & Resolution Time
@@ -1088,7 +1130,7 @@ export default function TicketReportsPage() {
                   </Grid>
                 )}
 
-                <Grid container spacing={3}>
+                <Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
                   {/* ═══════════════════════════════════════════════════════════
                 INDIVIDUAL VIEW — specific technician selected (or non-focal user's own data)
                 Shows pie charts for each parameter
@@ -1392,7 +1434,7 @@ export default function TicketReportsPage() {
             )}
 
             {!loading && viewMode === 'detailed' && detailedResult && (
-              <Grid container spacing={3}>
+              <Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
                 <Grid item xs={12} md={6}>
                   <Card>
                     <CardContent>
@@ -1461,57 +1503,16 @@ export default function TicketReportsPage() {
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                         Ratings Per Ticket
                       </Typography>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Ticket</TableCell>
-                            <TableCell>Subject</TableCell>
-                            <TableCell>Submitted At</TableCell>
-                            <TableCell align="right">Rating</TableCell>
-                            <TableCell>Comment</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {detailedResult.byTicket.map((t) => (
-                            <TableRow key={t.ticketId}>
-                              <TableCell sx={{ fontFamily: 'monospace' }}>{t.ticketNumber}</TableCell>
-                              <TableCell
-                                sx={{
-                                  maxWidth: 200,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {t.subject}
-                              </TableCell>
-                              <TableCell>{new Date(t.submittedAt).toLocaleDateString()}</TableCell>
-                              <TableCell align="right">
-                                <Chip size="small" label={t.rating} color={RATING_COLOR(t.rating)} />
-                              </TableCell>
-                              <TableCell
-                                sx={{
-                                  maxWidth: 250,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {t.comment || '—'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {detailedResult.byTicket.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={5} align="center">
-                                <Typography variant="body2" color="text.secondary" py={2}>
-                                  No rated tickets found.
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
+                      <ReportCards>
+                        {detailedResult.byTicket.map((ticket) => (
+                          <ReportRecord key={ticket.ticketId} title={ticket.subject}
+                            caption={`${ticket.ticketNumber} · ${new Date(ticket.submittedAt).toLocaleDateString()}`}
+                            metrics={[['Rating', <Chip size="small" label={`${ticket.rating} / 5`} color={RATING_COLOR(ticket.rating)} />]]}>
+                            {ticket.comment && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.comment}</Typography>}
+                          </ReportRecord>
+                        ))}
+                      </ReportCards>
+                      {!detailedResult.byTicket.length && <Typography color="text.secondary">No rated tickets found.</Typography>}
                     </CardContent>
                   </Card>
                 </Grid>
@@ -1523,7 +1524,7 @@ export default function TicketReportsPage() {
           <Box sx={{ display: 'none', '@media print': { display: 'block' } }}>
             {!loading && result && (
               <Box>
-                <Grid container spacing={2} mb={3}>
+                <Grid container spacing={2} mb={3} className="sectioned-card-grid">
                   <Grid item xs={4}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Total Tickets
@@ -1654,9 +1655,8 @@ export default function TicketReportsPage() {
                       mb={2}
                       sx={{ display: 'flex', justifyContent: 'center' }}
                     >
+                      <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        width={600}
-                        height={250}
                         data={barData}
                         margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                       >
@@ -1671,27 +1671,15 @@ export default function TicketReportsPage() {
                           isAnimationActive={false}
                         />
                       </BarChart>
+                      </ResponsiveContainer>
                     </Box>
-                    <Table size="small" sx={{ mb: 4 }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Assignee</TableCell>
-                          <TableCell align="right">Resolved Tickets</TableCell>
-                          <TableCell align="right">Rated Tickets</TableCell>
-                          <TableCell align="right">Average Rating</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.avgRatingByTechnician.map((row) => (
-                          <TableRow key={row.techId}>
-                            <TableCell>{row.techName}</TableCell>
-                            <TableCell align="right">{row.count}</TableCell>
-                            <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
-                            <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {result.avgRatingByTechnician.map((row) => (
+                        <ReportRecord key={row.techId} title={row.techName} metrics={[
+                          ['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)],
+                        ]} />
+                      ))}
+                    </ReportCards>
                   </>
                 )}
 
@@ -1738,26 +1726,13 @@ export default function TicketReportsPage() {
                     >
                       SLA Detail By Assignee
                     </Typography>
-                    <Table size="small" sx={{ mb: 4 }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Assignee</TableCell>
-                          <TableCell align="right">Met SLA</TableCell>
-                          <TableCell align="right">Missed SLA</TableCell>
-                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.slaByTechnician.map((row) => (
-                          <TableRow key={row.techId}>
-                            <TableCell>{row.techName}</TableCell>
-                            <TableCell align="right">{row.met}</TableCell>
-                            <TableCell align="right">{row.missed}</TableCell>
-                            <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {result.slaByTechnician.map((row) => (
+                        <ReportRecord key={row.techId} title={row.techName} metrics={[
+                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
+                        ]} />
+                      ))}
+                    </ReportCards>
                   </>
                 )}
               </Box>
@@ -1775,7 +1750,7 @@ export default function TicketReportsPage() {
               No performance data is available for the selected period and assignee.
             </Alert>
           )}
-          <Grid container spacing={3}>
+          <Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
             {/* SLA Pie */}
             {slaPieData.length > 0 && (
               <Grid item xs={12}>
@@ -1825,26 +1800,13 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Support Type</Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Support Type</TableCell>
-                          <TableCell align="right">Met</TableCell>
-                          <TableCell align="right">Missed</TableCell>
-                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.slaByType.map((row) => (
-                          <TableRow key={row.type}>
-                            <TableCell>{TYPE_LABELS[row.type] ?? row.type}</TableCell>
-                            <TableCell align="right">{row.met}</TableCell>
-                            <TableCell align="right">{row.missed}</TableCell>
-                            <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {result.slaByType.map((row) => (
+                        <ReportRecord key={row.type} title={TYPE_LABELS[row.type] ?? row.type} metrics={[
+                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
+                        ]} />
+                      ))}
+                    </ReportCards>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1866,43 +1828,31 @@ export default function TicketReportsPage() {
                       assignee and efficiency is capped at 100%. Compare ticket counts when reading scores.
                       {!!result.performancePeriod?.excludedTickets && ` ${result.performancePeriod.excludedTickets} ticket(s) excluded because assignee or usable SLA timing is unavailable.`}
                     </Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Rank</TableCell>
-                          <TableCell>Assignee</TableCell>
-                          <TableCell align="right">Resolved</TableCell>
-                          <TableCell align="right">SLA Rate</TableCell>
-                          <TableCell align="right">Avg Active Time</TableCell>
-                          <TableCell align="right">Score</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.weeklyTechnicianPerformance.map((row, index) => (
-                          <TableRow
-                            key={row.techId}
-                            sx={{
-                              bgcolor: index % 2 ? 'action.hover' : 'background.paper',
-                              '&:hover': { bgcolor: 'action.selected' },
-                            }}
-                          >
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell>{row.techName}</TableCell>
-                            <TableCell align="right">{row.resolvedTickets}</TableCell>
-                            <TableCell align="right">{row.slaRate.toFixed(1)}%</TableCell>
-                            <TableCell align="right">{row.avgActiveResolutionHours.toFixed(1)}h
-                              <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
-                                elapsedCalendarHours: row.avgCalendarResolutionHours,
-                                elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
-                                creditedPauseHours: row.avgCreditedPauseHours ?? 0, activeHours: row.avgActiveResolutionHours,
-                                pauseCount: row.pauseCount ?? null, estimated: !!row.estimatedTickets,
-                              }} />
-                            </TableCell>
-                            <TableCell align="right">{row.weightedScore.toFixed(1)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {result.weeklyTechnicianPerformance.map((row, index) => (
+                        <Accordion key={row.techId} disableGutters elevation={0} variant="outlined" TransitionProps={{ timeout: 0 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ textAlign: 'left' }}>
+                            <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                              <Typography fontWeight={700}>#{index + 1} {row.techName}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {row.resolvedTickets} resolved · {row.slaRate.toFixed(1)}% SLA · Score {row.weightedScore.toFixed(1)}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={600}>Avg Active Time {row.avgActiveResolutionHours.toFixed(1)}h</Typography>
+                            </Box>
+                          </AccordionSummary>
+                          <AccordionDetails sx={{ pt: 0 }}>
+                            <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
+                              elapsedCalendarHours: row.avgCalendarResolutionHours,
+                              elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
+                              creditedPauseHours: row.avgCreditedPauseHours ?? 0,
+                              activeHours: row.avgActiveResolutionHours,
+                              pauseCount: row.pauseCount ?? null,
+                              estimated: !!row.estimatedTickets,
+                            }} />
+                          </AccordionDetails>
+                        </Accordion>
+                      ))}
+                    </ReportCards>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1914,32 +1864,13 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Assignee</Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Assignee</TableCell>
-                          <TableCell align="right">Met</TableCell>
-                          <TableCell align="right">Missed</TableCell>
-                          <TableCell align="right">Avg Active Resolution (hrs)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {result.slaByTechnician.map((row, index) => (
-                          <TableRow
-                            key={row.techId}
-                            sx={{
-                              bgcolor: index % 2 ? 'action.hover' : 'background.paper',
-                              '&:hover': { bgcolor: 'action.selected' },
-                            }}
-                          >
-                            <TableCell>{row.techName}</TableCell>
-                            <TableCell align="right">{row.met}</TableCell>
-                            <TableCell align="right">{row.missed}</TableCell>
-                            <TableCell align="right">{row.avgResolutionTimeHours}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {result.slaByTechnician.map((row) => (
+                        <ReportRecord key={row.techId} title={row.techName} metrics={[
+                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
+                        ]} />
+                      ))}
+                    </ReportCards>
                   </CardContent>
                 </Card>
               </Grid>
@@ -1950,32 +1881,13 @@ export default function TicketReportsPage() {
               <Grid item xs={12}>
                 <Card><CardContent>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>Assignee Performance Detail</Typography>
-                  <Table size="small" sx={{ mb: 4 }}>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Assignee</TableCell>
-                        <TableCell align="right">Resolved Tickets</TableCell>
-                        <TableCell align="right">Rated Tickets</TableCell>
-                        <TableCell align="right">Average Rating</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {result.avgRatingByTechnician.map((row, index) => (
-                        <TableRow
-                          key={row.techId}
-                          sx={{
-                            bgcolor: index % 2 ? 'action.hover' : 'background.paper',
-                            '&:hover': { bgcolor: 'action.selected' },
-                          }}
-                        >
-                          <TableCell>{row.techName}</TableCell>
-                          <TableCell align="right">{row.count}</TableCell>
-                          <TableCell align="right">{row.ratedCount ?? 0}</TableCell>
-                          <TableCell align="right">{row.avg.toFixed(2)}</TableCell>
-                        </TableRow>
+                  <ReportCards>
+                      {result.avgRatingByTechnician.map((row) => (
+                        <ReportRecord key={row.techId} title={row.techName} metrics={[
+                          ['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)],
+                        ]} />
                       ))}
-                    </TableBody>
-                  </Table>
+                    </ReportCards>
                 </CardContent></Card>
               </Grid>
             )}
@@ -1985,15 +1897,15 @@ export default function TicketReportsPage() {
 {/* ── Tab 1: Issues ── */}
 {canManageReports && tab === 1 && !loading && !error && (
         <Box sx={{ mt: 2 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
+          <Box className="app-sticky-tab-band app-secondary-tabs" sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <StickyTabs value={issuesSubTab} onChange={(_, v) => setIssuesSubTab(v)}>
               <Tab label="Categories" />
               <Tab label="Issues" />
-            </Tabs>
+            </StickyTabs>
           </Box>
 
           {issuesSubTab === 0 && (
-            <Grid container spacing={3}>
+            <Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
               <Grid item xs={12}>
                 <Card>
                   <CardContent>
@@ -2008,43 +1920,37 @@ export default function TicketReportsPage() {
                         <Typography color="text.secondary">No categories to display.</Typography>
                       </Box>
                     ) : (
-                      <ResponsiveContainer width="100%" height={300 + catBottomMargin}>
-                        <BarChart
-                          data={categoryData}
-                          margin={{ top: 20, right: 30, left: 20, bottom: catBottomMargin }}
-                        >
-                          <XAxis
-                            dataKey="categoryName"
-                            interval={0}
-                            angle={-45}
-                            textAnchor="end"
-                            tick={{ fontSize: 11 }}
-                          />
-                          <YAxis allowDecimals={false} tickCount={5} />
-                          <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                          <Legend verticalAlign="top" />
-                          <Bar
-                            dataKey="count"
-                            name="Tickets"
-                            fill="var(--app-chart-2)"
-                            radius={[4, 4, 0, 0]}
-                            onClick={(data) => {
-                              setSelectedCategoryName(
-                                selectedCategoryName === data.categoryName ? null : data.categoryName
-                              );
-                            }}
-                            cursor="pointer"
-                          >
-                            {categoryData.map((entry: any, index: number) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={categoryColors[entry.categoryName]?.strong ?? 'var(--app-chart-2)'}
-                                opacity={selectedCategoryName && selectedCategoryName !== entry.categoryName ? 0.45 : 1}
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <>
+                        <TextField select size="small" fullWidth label="Inspect category" value={selectedCategoryName ?? ''}
+                          onChange={(event) => setSelectedCategoryName(event.target.value || null)} sx={{ mb: 1 }}>
+                          <MenuItem value="">All categories</MenuItem>
+                          {categoryData.map((entry) => <MenuItem key={entry.categoryName} value={entry.categoryName}>
+                            {entry.categoryName} ({entry.count})
+                          </MenuItem>)}
+                        </TextField>
+                        <Box sx={{ overflowX: 'auto' }}>
+                          <Box sx={{ minWidth: Math.max(0, categoryData.length * 24) }}>
+                            <ResponsiveContainer width="100%" height={292}>
+                              <BarChart data={categoryData} barCategoryGap="8%" margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
+                                onClick={(point) => {
+                                  const name = point?.activePayload?.[0]?.payload?.categoryName;
+                                  if (typeof name === 'string') setSelectedCategoryName((current) => current === name ? null : name);
+                                }}>
+                                <XAxis dataKey="categoryName" hide />
+                                <YAxis width={36} allowDecimals={false} tickCount={5} />
+                                <Tooltip cursor={{ fill: 'var(--app-layout-divider)', opacity: 0.35 }} />
+                                <Bar dataKey="count" name="Tickets" fill="var(--app-chart-2)" radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false}>
+                                  {categoryData.map((entry) => (
+                                    <Cell key={entry.categoryName}
+                                      fill={categoryColors[entry.categoryName]?.strong ?? 'var(--app-chart-2)'}
+                                      opacity={selectedCategoryName && selectedCategoryName !== entry.categoryName ? 0.45 : 1} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </Box>
+                        </Box>
+                      </>
                     )}
                   </CardContent>
                 </Card>
@@ -2140,26 +2046,13 @@ export default function TicketReportsPage() {
                       <Typography color="text.secondary">No specific issues reported in this timeframe.</Typography>
                     </Box>
                   ) : (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Category</TableCell>
-                          <TableCell>Issue</TableCell>
-                          <TableCell align="right">Tickets</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {allIssuesAggregated.map((row) => (
-                          <TableRow key={JSON.stringify([row.categoryName, row.issueName])} hover sx={{ backgroundColor: categoryColors[row.categoryName]?.light }}>
-                            <TableCell sx={{ borderLeft: `4px solid ${categoryColors[row.categoryName]?.strong ?? 'transparent'}` }}>
-                              <Chip size="small" label={row.categoryName} sx={{ backgroundColor: categoryColors[row.categoryName]?.light, color: categoryColors[row.categoryName]?.strong, fontWeight: 700 }} />
-                            </TableCell>
-                            <TableCell>{row.issueName}</TableCell>
-                            <TableCell align="right">{row.count}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <ReportCards>
+                      {allIssuesAggregated.map((row) => (
+                        <ReportRecord key={JSON.stringify([row.categoryName, row.issueName])} title={row.issueName}
+                          caption={row.categoryName} accent={categoryColors[row.categoryName]?.strong}
+                          metrics={[[row.count === 1 ? 'Ticket' : 'Tickets', row.count]]} />
+                      ))}
+                    </ReportCards>
                   )}
                 </CardContent>
               </Card>
@@ -2187,101 +2080,64 @@ export default function TicketReportsPage() {
                   <Typography color="text.secondary">No resolution data available for the selected period.</Typography>
                 </Box>
               ) : (
-                <ResponsiveContainer width="100%" height={300 + slaBottomMargin}>
-                  <BarChart
-                    data={slaInsights}
-                    margin={{ top: 20, right: 30, left: 20, bottom: slaBottomMargin }}
-                  >
-                    <XAxis
-                      dataKey="issueName"
-                      tick={{ fontSize: 11 }}
-                      interval={0}
-                      angle={-45}
-                      textAnchor="end"
-                    />
-                    <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
-                    <Tooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-                    <Legend verticalAlign="top" />
-                    <Bar dataKey="configuredSlaHours" name="Configured SLA (hrs)" fill="var(--app-chart-2)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="avgResolutionHours" name="Avg Active Resolution (hrs)" fill="var(--app-chart-3)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <>
+                  <TextField select size="small" fullWidth label="Inspect issue" value={inspectedInsight?.id ?? ''}
+                    onChange={(event) => setSelectedInsight(event.target.value)} sx={{ mb: 1 }}>
+                    <MenuItem value="">All issues</MenuItem>
+                    {insightColumns.map((insight) => <MenuItem key={insight.id} value={insight.id}>{insight.label}</MenuItem>)}
+                  </TextField>
+                  {inspectedInsight && <Typography variant="body2" role="status" sx={{ mb: 1 }}>
+                    {inspectedInsight.label} · Configured SLA: {inspectedInsight.configuredSlaHours > 0
+                      ? `${inspectedInsight.configuredSlaHours.toFixed(1)}h` : 'None'} · Avg active resolution: {inspectedInsight.avgResolutionHours == null
+                      ? '—' : `${inspectedInsight.avgResolutionHours.toFixed(1)}h`}
+                  </Typography>}
+                  <Box sx={{ overflowX: 'auto' }}>
+                    <Box sx={{ minWidth: insightColumns.length * 24 }}>
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart data={insightColumns} barCategoryGap="8%" margin={{ top: 8, left: 0, right: 0, bottom: 0 }}
+                          onClick={(point) => {
+                            const id = point?.activePayload?.[0]?.payload?.id;
+                            if (typeof id === 'string') setSelectedInsight((current) => current === id ? '' : id);
+                          }}>
+                          <XAxis dataKey="label" hide />
+                          <YAxis hide />
+                          <Tooltip content={() => null} cursor={{ fill: 'var(--app-layout-divider)', opacity: 0.35 }} />
+                          <Legend verticalAlign="top" />
+                          <Bar dataKey="shared" name="Time shared by both" stackId="comparison" fill="var(--app-chart-1)" cursor="pointer" isAnimationActive={false} />
+                          <Bar dataKey="configuredRemainder" name="Remaining SLA" stackId="comparison" fill="var(--app-chart-2)" cursor="pointer" isAnimationActive={false} />
+                          <Bar dataKey="actualRemainder" name="Active time above SLA" stackId="comparison" fill="var(--app-chart-3)" cursor="pointer" isAnimationActive={false} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </Box>
+                </>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          {slaInsights.length > 0 && <Card>
             <CardContent>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Issue</TableCell>
-                    <TableCell align="right">Resolved Tickets</TableCell>
-                    <TableCell align="right">Configured SLA</TableCell>
-                    <TableCell align="right">Avg Actual Resolution</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Interpretation</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {slaInsights.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        <Typography color="text.secondary" py={2}>
-                          No resolution data available for the selected period.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    slaInsights.map((insight: any, i: number) => (
-                      <TableRow key={i} hover>
-                        <TableCell>
-                          <Typography variant="body2">{insight.categoryName}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography fontWeight={600}>{insight.issueName}</Typography>
-                        </TableCell>
-                        <TableCell align="right">{insight.resolvedTicketsCount}</TableCell>
-                        <TableCell align="right">
-                          {insight.configuredSlaHours > 0
-                            ? `${insight.configuredSlaHours.toFixed(1)}h`
-                            : 'None'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {insight.avgResolutionHours
-                            ? `${insight.avgResolutionHours.toFixed(1)}h`
-                            : '—'}
-                        </TableCell>
-                        <TableCell>
-                          {insight.configuredSlaHours > 0 ? (
-                            <Chip
-                              size="small"
-                              label={insight.isFailingSla ? 'Failing' : 'Healthy'}
-                              color={insight.isFailingSla ? 'error' : 'success'}
-                            />
-                          ) : (
-                            <Chip size="small" label="Unmonitored" color="default" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {insight.configuredSlaHours > 0 ? (
-                            insight.isFailingSla ? (
-                              <Typography variant="caption" color="error">Consider extending SLA</Typography>
-                            ) : (insight.avgResolutionHours < insight.configuredSlaHours * 0.5) ? (
-                              <Typography variant="caption" color="success.main">SLA is very generous, consider tightening</Typography>
-                            ) : (
-                              <Typography variant="caption" color="text.secondary">SLA is balanced</Typography>
-                            )
-                          ) : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <ReportCards>
+                {slaInsights.map((insight, index) => {
+                  const monitored = insight.configuredSlaHours > 0;
+                  const interpretation = !monitored ? 'No SLA configured.' : insight.isFailingSla
+                    ? 'Consider extending SLA' : insight.avgResolutionHours < insight.configuredSlaHours * 0.5
+                      ? 'SLA is very generous, consider tightening' : 'SLA is balanced';
+                  return <ReportRecord key={`${insight.categoryName}:${insight.issueName}:${index}`}
+                    title={insight.issueName} caption={insight.categoryName}
+                    metrics={[
+                      ['Resolved tickets', insight.resolvedTicketsCount],
+                      ['Configured SLA', monitored ? `${insight.configuredSlaHours.toFixed(1)}h` : 'None'],
+                      ['Avg active resolution', insight.avgResolutionHours == null ? '—' : `${insight.avgResolutionHours.toFixed(1)}h`],
+                    ]}>
+                    <Chip size="small" label={!monitored ? 'Unmonitored' : insight.isFailingSla ? 'Failing' : 'Healthy'}
+                      color={!monitored ? 'default' : insight.isFailingSla ? 'error' : 'success'} />
+                    <Typography variant="body2">{interpretation}</Typography>
+                  </ReportRecord>;
+                })}
+              </ReportCards>
             </CardContent>
-          </Card>
+          </Card>}
         </Box>
       )}
 </WorkspaceLayout>

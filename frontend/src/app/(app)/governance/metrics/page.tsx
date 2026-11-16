@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -7,7 +8,6 @@ import {
   Typography,
   Button,
   Paper,
-  Tabs,
   Tab,
   Table,
   TableBody,
@@ -447,16 +447,16 @@ export default function MetricsPage() {
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
           Create Template
         </Button>
-      </Box>
-<Paper sx={{ mb: 3 }}>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+      </Box></>}>
+<Paper className="app-sticky-tab-band" sx={{ mb: 3 }}>
+        <StickyTabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
           <Tab label="All Templates" />
           <Tab label="Section Rules" />
           <Tab label="Keyword Rules" />
           <Tab label="Number Extraction" />
           <Tab label="Date Check" />
-        </Tabs>
-      </Paper></>}>
+        </StickyTabs>
+      </Paper>
 <Paper sx={{ p: 2 }}>
         {loading ? (
           <Box display="flex" justifyContent="center" py={6}>

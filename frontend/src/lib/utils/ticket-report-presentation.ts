@@ -75,9 +75,20 @@ export function reportBlocks(report: BuiltTicketReport): ReportBlock[] {
 
 /** Reuses the exact preview dataset. All ticket/template values enter the document as text. */
 export function printTicketReport(report: BuiltTicketReport): boolean {
-  const target = window.open('', '_blank', 'width=1100,height=800');
-  if (!target) return false;
-  const doc = target.document;
+  document.getElementById('ticket-report-print-frame')?.remove();
+  const frame = document.createElement('iframe');
+  frame.id = 'ticket-report-print-frame';
+  frame.title = 'Monthly ticket report for printing';
+  frame.tabIndex = -1;
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:0';
+  document.body.append(frame);
+  const target = frame.contentWindow;
+  const doc = frame.contentDocument;
+  if (!target || !doc) {
+    frame.remove();
+    return false;
+  }
   doc.title = report.configuration.title;
   const style = doc.createElement('style');
   style.textContent = '@page{size:A4 landscape;margin:12mm}body{font:12px Arial,sans-serif;color:#111}h1{font-size:22px}h2{font-size:16px;margin-top:22px;color:#1565c0;break-after:avoid}p{line-height:1.5}table{border-collapse:collapse;width:100%;margin-bottom:16px;overflow-wrap:anywhere}th,td{border:1px solid #bbb;padding:7px;text-align:left}th{background:#1976d2;color:white}tbody tr:nth-child(even){background:#f4f7fb}thead{display:table-header-group}tr{break-inside:avoid}.warning{border-left:3px solid #9a6700;padding-left:8px}.ticket-card{border:1px solid #bbcddd;border-radius:5px;margin:12px 0;break-inside:avoid}.ticket-id{font-size:15px;color:#1565c0;background:#eaf2fc;padding:10px;margin:0}.ticket-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;padding:12px}.ticket-field{overflow-wrap:anywhere}.ticket-label{display:block;font-weight:bold;color:#41556b;margin-bottom:4px}.ticket-value{white-space:pre-wrap}*{print-color-adjust:exact;-webkit-print-color-adjust:exact}';
@@ -122,7 +133,12 @@ export function printTicketReport(report: BuiltTicketReport): boolean {
     for (const values of block.rows) { const row = doc.createElement('tr'); for (const text of values) add('td', text, row); body.append(row); }
     if (!block.rows.length) { const row = doc.createElement('tr'); const cell = add('td', 'No matching records.', row); cell.setAttribute('colspan', String(block.headers.length)); body.append(row); }
   }
-  target.opener = null;
-  target.focus(); target.setTimeout(() => target.print(), 250);
+  target.addEventListener('afterprint', () => frame.remove(), { once: true });
+  try {
+    target.print();
+  } catch {
+    frame.remove();
+    return false;
+  }
   return true;
 }

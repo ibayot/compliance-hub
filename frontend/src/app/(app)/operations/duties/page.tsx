@@ -270,7 +270,7 @@ export default function DutiesPage() {
 {error && <Alert severity="error" sx={{ mb:2 }} onClose={() => setError('')}>{error}</Alert>}
 <Card><WorkspaceTabs value={tab} onChange={(_,v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ px:2, borderBottom:1, borderColor:'divider' }}>{tabs.map((x) => <Tab key={x} value={x} label={x === 'logs' ? 'Duty Log' : `${x.charAt(0).toUpperCase()}${x.slice(1)}`} />)}</WorkspaceTabs><CardContent>
 
-    {tab === 'overview' && <Grid container spacing={2}>{data.dashboard.map((x:any) => <Grid item xs={12} sm={6} lg={3} key={x.dutyType}><Card sx={{ height:'100%', background: dutyGradient(x.dutyType === 'OD' ? 'warning' : 'info') }}><CardContent>
+    {tab === 'overview' && <Grid container spacing={2} className="sectioned-card-grid">{data.dashboard.map((x:any) => <Grid item xs={12} sm={6} lg={3} key={x.dutyType}><Card sx={{ height:'100%', background: dutyGradient(x.dutyType === 'OD' ? 'warning' : 'info') }}><CardContent>
       <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
         <Typography variant="overline">{x.dutyType === 'OD' ? 'OFFICER OF THE DAY':x.dutyType}</Typography>
         {x.dutyPeriod && <Chip size="small" variant="outlined" label={formatType(x.dutyPeriod)} />}
@@ -411,7 +411,7 @@ export default function DutiesPage() {
       </Box>
     </>}
     {tab === 'rotation' && (
-      <Grid container spacing={2}>
+      <Grid container spacing={2} className="sectioned-card-grid">
         {TYPES.map((dutyType) => (
           <Grid item xs={12} md={6} key={dutyType}>
             <DutyRotation dutyType={dutyType} rows={data.rotation} />
@@ -484,7 +484,9 @@ interface RotationEntry {
 
 function DutyRotation({ rows, dutyType }: { rows: RotationEntry[]; dutyType: DutyType }) {
   const compact = useMediaQuery(useTheme().breakpoints.down('md'));
+  const [showAll, setShowAll] = useState(false);
   const rotation = rows.filter((row) => row.dutyType === dutyType);
+  const visibleRotation = showAll ? rotation : rotation.slice(0, 5);
   const nextBadge = <Chip label="Next" color="warning" icon={<Star />} size="small" variant="outlined" />;
 
   return (
@@ -495,7 +497,7 @@ function DutyRotation({ rows, dutyType }: { rows: RotationEntry[]; dutyType: Dut
           <Typography variant="body2" color="text.secondary">No rotation data available.</Typography>
         ) : compact ? (
           <Stack spacing={1}>
-            {rotation.map((row) => (
+            {visibleRotation.map((row) => (
               <Paper component="article" key={row.id} variant="outlined" sx={{ p: 1.25, overflowWrap: 'anywhere' }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={0.75}>
                   <Typography variant="body2" fontWeight={700}>{row.name}</Typography>
@@ -514,7 +516,7 @@ function DutyRotation({ rows, dutyType }: { rows: RotationEntry[]; dutyType: Dut
             <Table size="small">
               <TableHead><TableRow><TableCell>Name</TableCell><TableCell>Last Assigned</TableCell><TableCell>Days Since</TableCell><TableCell>Next?</TableCell></TableRow></TableHead>
               <TableBody>
-                {rotation.map((row) => (
+                {visibleRotation.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell>{row.name}{row.excluded && <Chip label="Excluded" size="small" sx={{ ml: 1 }} />}</TableCell>
                     <TableCell>{row.lastAssigned || 'Never'}</TableCell>
@@ -526,6 +528,9 @@ function DutyRotation({ rows, dutyType }: { rows: RotationEntry[]; dutyType: Dut
             </Table>
           </ResponsiveTable>
         )}
+        {rotation.length > 5 && <Button size="small" onClick={() => setShowAll(!showAll)} aria-expanded={showAll} sx={{ mt: 1 }}>
+          {showAll ? 'Show fewer' : `Show all ${rotation.length} staff`}
+        </Button>}
       </CardContent>
     </Card>
   );

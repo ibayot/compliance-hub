@@ -7,6 +7,7 @@ import { ThemeModeProvider } from '@/contexts/ThemeModeContext';
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider';
 import App from '@/App';
 import AppVersionGuard from '@/components/AppVersionGuard';
+import '@/lib/install-web-app';
 import '@/app/globals.css';
 
 const googleClientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();

@@ -18,7 +18,6 @@ import {
   Chip,
   Stack,
   CircularProgress,
-  Tabs,
   Tab,
   Tooltip,
   Select,
@@ -378,7 +377,7 @@ export default function AttendancePage() {
                   Select today or a future date to choose Office, Off, or Overtime (OT). OT attendance is optional;
                   staff without a clock-in are not automatically marked absent. Past dates remain locked.
                 </Typography>
-                <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={0.5}>
+                <Box display="grid" gridTemplateColumns="repeat(7, minmax(0, 1fr))" gap={{ xs: 0.5, sm: 1 }}>
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
                     <Box key={d} textAlign="center" py={0.5}>
                       <Typography variant="caption" fontWeight={700}>
@@ -394,6 +393,12 @@ export default function AttendancePage() {
                     const isOffice = isOfficeDayForDate(d);
                     const dStr = formatDate(d);
                     const isOvertime = !!odMap.get(dStr)?.isOvertime;
+                    const myStatus = isRICTMSStaff && isOffice
+                      ? attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status
+                      : null;
+                    const attendance = myStatus ? STATUS_CONFIG[myStatus] : null;
+                    const dayLabel = isOvertime ? 'Overtime' : isOffice ? 'Office day' : 'Off day';
+                    const dayColor = isOvertime ? 'warning' : isOffice ? 'success' : null;
                     // Past dates are not clickable; today remains editable for emergency declarations.
                     const isPast = dStr < todayStr;
                     const isToday = dStr === todayStr;
@@ -402,7 +407,7 @@ export default function AttendancePage() {
                         component="button"
                         type="button"
                         disabled={!canManageOfficeDays || isPast}
-                        aria-label={`${dStr}: ${isOvertime ? 'Overtime' : isOffice ? 'Office' : 'Off'}`}
+                        aria-label={`${dStr}: ${dayLabel}${attendance ? `, ${attendance.label}` : ''}`}
                         key={dStr}
                         data-testid={`office-day-${dStr}`}
                         data-office-day={isOffice ? 'true' : 'false'}
@@ -412,51 +417,43 @@ export default function AttendancePage() {
                             : undefined
                         }
                         sx={{
-                          textAlign: 'center',
-                          py: 1.5,
-                          borderRadius: 1,
-                          bgcolor: isOvertime ? 'warning.light' : isOffice ? 'success.light' : 'action.hover',
-                          color: isOvertime ? 'warning.contrastText' : isOffice ? 'success.contrastText' : 'text.disabled',
+                          minWidth: 0,
+                          minHeight: { xs: 44, sm: 68 },
+                          aspectRatio: { xs: '1', sm: 'auto' },
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          p: { xs: 0.5, sm: 1 },
+                          textAlign: 'left',
+                          borderRadius: 1.5,
+                          border: '1px solid',
+                          bgcolor: dayColor ? `${dayColor}.light` : 'action.hover',
+                          color: dayColor ? `${dayColor}.contrastText` : 'text.primary',
+                          borderColor: isToday ? 'primary.main' : 'divider',
+                          boxShadow: isToday ? 'inset 0 0 0 1px currentColor' : 'none',
                           cursor: canManageOfficeDays && !isPast ? 'pointer' : 'default',
-                          opacity: isPast ? 0.55 : 1,
-                          '&:hover': canManageOfficeDays && !isPast ? { opacity: 0.8 } : {},
-                          border: isToday ? '2px solid' : 'none',
-                          borderColor: 'primary.main',
                           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                         }}
                       >
-                        <Typography variant="body2" fontWeight={600}>
-                          {d.getDate()}
+                        <Typography component="span" variant="body2" fontWeight={700}>{d.getDate()}</Typography>
+                        <Typography component="span" variant="caption" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                          {dayLabel}
                         </Typography>
-                        <Typography variant="caption">{isOvertime ? 'OT' : isOffice ? 'Office' : 'Off'}</Typography>
-                        {isRICTMSStaff &&
-                          isOffice &&
-                          (() => {
-                            const myStatus =
-                              attRecordsMap.get(user?.id ?? 0)?.get(dStr)?.status ?? null;
-                            const myCfg = myStatus ? STATUS_CONFIG[myStatus] : null;
-                            return (
-                              <Box mt={0.5}>
-                                {myCfg ? (
-                                  <Chip
-                                    size="small"
-                                    icon={myCfg.icon as any}
-                                    label={myCfg.label}
-                                    color={myCfg.color}
-                                    sx={{ transform: 'scale(0.75)', transformOrigin: 'center' }}
-                                  />
-                                ) : (
-                                  <Typography variant="caption" color="inherit">
-                                    —
-                                  </Typography>
-                                )}
-                              </Box>
-                            );
-                          })()}
+                        {attendance && <Typography component="span" variant="caption" noWrap title={attendance.label}
+                          sx={{ maxWidth: '100%', display: { xs: 'none', sm: 'block' } }}>{attendance.label}</Typography>}
                       </Box>
                     );
                   })}
                 </Box>
+                <Stack direction="row" useFlexGap flexWrap="wrap" spacing={2} mt={2} aria-label="Office days legend">
+                  {[['Office day', 'success.light'], ['Off day', 'action.hover'], ['Overtime', 'warning.light']].map(([label, color]) => (
+                    <Stack key={label} direction="row" alignItems="center" gap={0.75}>
+                      <Box aria-hidden="true" sx={{ width: 12, height: 12, borderRadius: 0.5, border: 1, borderColor: 'divider', bgcolor: color }} />
+                      <Typography variant="caption">{label}</Typography>
+                    </Stack>
+                  ))}
+                </Stack>
               </Box>
             )}
           </CardContent>

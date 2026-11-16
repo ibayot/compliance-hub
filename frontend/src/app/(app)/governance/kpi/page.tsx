@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +27,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -1029,11 +1029,11 @@ export default function KpiPage() {
           Dashboard computes normalized unit performance.
         </Typography>
       </Box>
-<Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+<StickyTabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
         <Tab label="KPI Dashboard" />
         {canManage && <Tab label="KPI Master" />}
         {canManage && <Tab label="KPI Monitoring" />}
-      </Tabs>
+      </StickyTabs>
 <WorkspaceLayout kind="dashboard" context={<><Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>

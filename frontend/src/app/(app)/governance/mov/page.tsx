@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,7 +26,6 @@ import {
   Select,
   Stack,
   Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -997,8 +997,8 @@ export default function MovBuilderPage() {
         Organized workspace for register reporting, assessment reporting, plan updates, and schedule
         monitoring.
       </Typography>
-<Card sx={{ mb: 2 }}>
-        <Tabs
+<Card className="app-sticky-tab-band" sx={{ mb: 2 }}>
+        <StickyTabs
           value={tab}
           onChange={(_e, value) => setTab(value)}
           variant="scrollable"
@@ -1008,7 +1008,7 @@ export default function MovBuilderPage() {
           <Tab label="Assessment Plan" />
           <Tab label="Assessment Schedule" />
           <Tab label="Artifacts" />
-        </Tabs>
+        </StickyTabs>
       </Card>
 <WorkspaceLayout kind="report" context={<><Card sx={{ mb: 2 }}>
         <CardContent>

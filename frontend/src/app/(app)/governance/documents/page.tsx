@@ -1,4 +1,5 @@
 'use client';
+import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
 import { useState } from 'react';
@@ -12,7 +13,6 @@ import {
   TextField,
   MenuItem,
   Grid,
-  Tabs,
   Tab,
   Dialog,
   DialogTitle,
@@ -422,8 +422,8 @@ export default function DocumentsPage() {
         )}</>}>
 {/* Header */}
 {isFocal && (
-          <Paper elevation={1} sx={{ mb: 3 }}>
-            <Tabs
+          <Paper className="app-sticky-tab-band" elevation={1} sx={{ mb: 3 }}>
+            <StickyTabs
               value={documentsTab}
               onChange={(_, value) => {
                 setFilters((current) => ({ ...current, page: 1 }));
@@ -452,7 +452,7 @@ export default function DocumentsPage() {
             >
               <Tab label="Active Documents" value="active" />
               <Tab label="Archived Documents" value="archived" />
-            </Tabs>
+            </StickyTabs>
           </Paper>
         )}
 {/* Filters */}
