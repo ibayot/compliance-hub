@@ -1460,7 +1460,7 @@ export default function TicketsPage({
       onClick={() => setMobileFiltersExpanded((expanded) => !expanded)}
       startIcon={<FilterListIcon />}
       endIcon={mobileFiltersExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-      sx={{ display: { xs: 'inline-flex', sm: 'none' }, minHeight: 44, justifyContent: 'space-between' }}
+      sx={{ display: { xs: 'inline-flex', sm: 'none' }, mt: 1, minHeight: 44, justifyContent: 'space-between' }}
     >
       {activeTicketFilterCount > 0 ? `Filters (${activeTicketFilterCount})` : 'Filters'}
     </Button>
@@ -1474,14 +1474,12 @@ export default function TicketsPage({
             badgeContent={myTicketsCount}
             color="error"
             overlap="circular"
-            sx={{ width: 'auto', minWidth: 0, flex: '1 1 140px', maxWidth: 220, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
           >
             <Button
               size="small"
               variant={showMyTickets ? 'contained' : 'outlined'}
               aria-pressed={showMyTickets}
               color="primary"
-              sx={{ width: '100%', minWidth: 0, height: '100%', whiteSpace: 'nowrap', px: 1 }}
               onClick={() => {
                 setShowMyTickets((value) => !value);
                 setShowEscalatedToMe(false);
@@ -1496,14 +1494,12 @@ export default function TicketsPage({
             badgeContent={escalatedToMeCount}
             color="error"
             overlap="circular"
-            sx={{ width: 'auto', minWidth: 0, flex: '1 1 140px', maxWidth: 220, height: 40, '& .MuiBadge-badge': { zIndex: 1 } }}
           >
             <Button
               size="small"
               variant={showEscalatedToMe ? 'contained' : 'outlined'}
               color="warning"
               aria-pressed={showEscalatedToMe}
-              sx={{ width: '100%', minWidth: 0, height: '100%', whiteSpace: 'nowrap', px: 1 }}
               onClick={() => {
                 setShowEscalatedToMe((value) => !value);
                 setShowMyTickets(false);
@@ -1515,6 +1511,22 @@ export default function TicketsPage({
         )}
       </Box>
     ) : null;
+
+  const renderRatingButton = (ticket: Ticket) => (
+    <Tooltip title="Rate this resolution">
+      <IconButton
+        size="small"
+        color="success"
+        aria-label={`Rate resolution for ticket ${ticket.ticketNumber}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          openSatDialog(ticket);
+        }}
+      >
+        <SatisfactionIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
 
   return (
     <Box>
@@ -1563,7 +1575,7 @@ export default function TicketsPage({
             {isPhone && searchField}
             {mobileFilterToggle}
             <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
-              <Box sx={ticketFilterGridSx}>
+              <Box sx={{ ...ticketFilterGridSx, pt: { xs: 1.5, sm: 0 } }}>
               {!isPhone && searchField}
               <TextField
                 select
@@ -1697,7 +1709,7 @@ export default function TicketsPage({
             {isPhone && searchField}
             {mobileFilterToggle}
             <Collapse id="ticket-filter-fields" in={!isPhone || mobileFiltersExpanded}>
-              <Box sx={ticketFilterGridSx}>
+              <Box sx={{ ...ticketFilterGridSx, pt: { xs: 1.5, sm: 0 } }}>
               {!isPhone && searchField}
               <TextField
                 inputProps={{ maxLength: 255 }}
@@ -2229,8 +2241,11 @@ export default function TicketsPage({
                         </Typography>
                       </Box>
                     </Box>
-                    <Box className="ticket-mobile-actions" display="flex" justifyContent="flex-end" alignItems="center" gap={1}>
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ position: 'relative', zIndex: 1, '& .MuiIconButton-root': { minWidth: 44, minHeight: 44 } }}>
+                    <Box className="ticket-mobile-actions" display="flex" alignItems="center" gap={1}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto' }}>
+                        Tap the card to view details
+                      </Typography>
+                      <Stack direction="row" alignItems="center" gap={0.5} flexWrap="wrap" sx={{ position: 'relative', zIndex: 1, '& .MuiIconButton-root': { minWidth: 44, minHeight: 44 } }}>
                         <TicketCancelButton ticket={ticket} onCancelled={() => void refreshAfterTicketChange()} />
                         {canAssign && !['duplicate', 'cancelled'].includes(ticket.status) && (
                           <Tooltip
@@ -2273,20 +2288,7 @@ export default function TicketsPage({
                               </IconButton>
                             </Tooltip>
                           )}
-                        {hasPendingSatisfaction && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            aria-label={`Rate resolution for ticket ${ticket.ticketNumber}`}
-                            sx={{ minHeight: 44 }}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openSatDialog(ticket);
-                            }}
-                          >
-                            Rate
-                          </Button>
-                        )}
+                        {hasPendingSatisfaction && renderRatingButton(ticket)}
                         {canOverrideResolutionTime &&
                           ['resolved', 'closed'].includes(ticket.status) && (
                             <Tooltip title="Correct resolution time">
@@ -2655,19 +2657,8 @@ export default function TicketsPage({
                           {new Date(ticket.createdAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell align="right">
-                          {hasPendingSatisfaction && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              aria-label={`Rate resolution for ticket ${ticket.ticketNumber}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openSatDialog(ticket);
-                              }}
-                            >
-                              Rate
-                            </Button>
-                          )}
+                          <Box display="inline-flex" alignItems="center" gap={0.5}>
+                          {hasPendingSatisfaction && renderRatingButton(ticket)}
                           <TicketActionsMenu ticket={ticket} onCancelled={() => void refreshAfterTicketChange()}
                             actions={(() => {
                               const actions: TicketMenuAction[] = [{
@@ -2691,6 +2682,7 @@ export default function TicketsPage({
                               });
                               return actions;
                             })()} />
+                          </Box>
                         </TableCell>
                       </TableRow>
                     );

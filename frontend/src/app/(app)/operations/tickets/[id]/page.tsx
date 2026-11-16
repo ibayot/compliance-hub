@@ -74,6 +74,7 @@ import TicketImageDropzone from '@/components/TicketImageDropzone';
 import {
   ArrowBack as BackIcon,
   Star as StarIcon,
+  ThumbUp as ThumbUpIcon,
   CloudUpload as UploadIcon,
   SentimentVerySatisfied,
   SentimentSatisfied,
@@ -1351,7 +1352,7 @@ export default function TicketDetailPage() {
     } },
     escalate: { label: 'Escalate Ticket', icon: <EscalateIcon fontSize="small" />, onClick: openEscalateDialog },
     close: { label: 'Close Ticket', icon: <CloseTicketIcon fontSize="small" />, onClick: handleSelfClose },
-    rate: { label: 'Rate Resolution', icon: <StarIcon fontSize="small" />, onClick: () => {
+    rate: { label: 'Rate Resolution', icon: <ThumbUpIcon fontSize="small" />, onClick: () => {
       const assignedName = ticket.assignedTo ? formatPersonName(ticket.assignedTo, ticket.assignedTo.email) : '';
       setCsatForm({
         consentGiven: false, unitSection: user?.units?.[0]?.name || '', clientFirstName: user?.firstName || '',
@@ -1413,177 +1414,6 @@ export default function TicketDetailPage() {
               <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1 }}>
                 {ticket.ticketNumber}
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 2,
-                p: 2, mt: 2, mb: 1.5, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 2 }}>
-                {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <TextField
-                    inputProps={{ maxLength: 255 }}
-                    select
-                    size="small"
-                    label="Support Type"
-                    placeholder="Select support type"
-                    InputLabelProps={{ shrink: true }}
-                    value={ticket.ticketType}
-                    disabled={
-                      ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
-                    }
-                    onChange={async (e) => {
-                      try {
-                        await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
-                        fetchTicket();
-                        enqueueSnackbar('Ticket type updated.', { variant: 'success' });
-                      } catch (err: any) {
-                        enqueueSnackbar(
-                          err.response?.data?.message || 'Failed to update ticket type',
-                          {
-                            variant: 'error',
-                          },
-                        );
-                      }
-                    }}
-                    sx={classificationFieldSx}
-                  >
-                    {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                      <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>
-                        {label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                ) : (
-                  <Chip
-                    label={TYPE_LABELS[ticket.ticketType] ?? ticket.ticketType}
-                    color="primary"
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
-
-                {/* Category Dropdown */}
-                {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                  <SearchableSelect
-                    size="small"
-                    label="Category"
-                    placeholder="Select category"
-                    textFieldProps={{ InputLabelProps: { shrink: true } }}
-                    value={ticket.categoryId || null}
-                    options={categories.map((category: any) => ({
-                      value: category.id,
-                      label: category.name,
-                    }))}
-                    clearable={false}
-                    fullWidth={false}
-                    disabled={
-                      ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
-                    }
-                    onChange={async (categoryId) => {
-                      if (!categoryId) return;
-                      try {
-                        await ticketsApi.update(ticketId, { categoryId: String(categoryId) });
-                        fetchTicket();
-                        enqueueSnackbar('Ticket category updated.', { variant: 'success' });
-                      } catch (err: any) {
-                        enqueueSnackbar(
-                          err.response?.data?.message || 'Failed to update ticket category',
-                          {
-                            variant: 'error',
-                          },
-                        );
-                      }
-                    }}
-                    sx={classificationFieldSx}
-                  />
-                ) : ticket.category ? (
-                  <Chip
-                    label={ticket.category.name}
-                    color="secondary"
-                    size="small"
-                    variant="outlined"
-                  />
-                ) : null}
-
-                {/* Issue Dropdown */}
-                {user?.role !== 'user' &&
-                  issues.length > 0 &&
-                  (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
-                    <SearchableSelect
-                      size="small"
-                      label="Issue"
-                      placeholder="Select issue"
-                      textFieldProps={{ InputLabelProps: { shrink: true } }}
-                      value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || null}
-                      options={issues.map((issue) => ({ value: issue.id, label: issue.name }))}
-                      clearable={false}
-                      fullWidth={false}
-                      disabled={
-                        ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
-                      }
-                      onChange={async (issueTypeId) => {
-                        if (!issueTypeId) return;
-                        const newIssueTypeId = String(issueTypeId);
-                        setTicket((prev: any) =>
-                          prev
-                            ? {
-                                ...prev,
-                                issueTypeId: newIssueTypeId,
-                                issueTypeConfig: prev.issueTypeConfig
-                                  ? { ...prev.issueTypeConfig, id: newIssueTypeId }
-                                  : { id: newIssueTypeId },
-                              }
-                            : prev,
-                        );
-
-                        try {
-                          await ticketsApi.update(ticketId, { issueTypeId: newIssueTypeId });
-                          fetchTicket();
-                          enqueueSnackbar('Ticket issue updated.', { variant: 'success' });
-                        } catch (err: any) {
-                          enqueueSnackbar(
-                            err.response?.data?.message || 'Failed to update ticket issue',
-                            {
-                              variant: 'error',
-                            },
-                          );
-                          fetchTicket(); // Revert on failure
-                        }
-                      }}
-                      sx={classificationFieldSx}
-                    />
-                  ) : ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
-                    <Chip
-                      label={
-                        issues.find(
-                          (i) =>
-                            i.id === (ticket.issueTypeId || (ticket as any).issueTypeConfig?.id),
-                        )?.name || 'Unknown Issue'
-                      }
-                      color="secondary"
-                      size="small"
-                      variant="outlined"
-                    />
-                  ) : null)}
-              </Box>
-              <Box display="flex" flexWrap="wrap" gap={1}>
-                <Chip
-                  label={
-                    ticket.priority
-                      ? `Priority: ${ticket.priority.toUpperCase()}`
-                      : 'Priority: Not Set'
-                  }
-                  sx={PRIORITY_CHIP_SX[ticket.priority ?? 'unset']}
-                  size="small"
-                />
-                <Chip
-                  label={ticket.status.replace('_', ' ').toUpperCase()}
-                  sx={STATUS_CHIP_SX[ticket.status]}
-                  size="small"
-                />
-                {(() => {
-                  const slaStatus = getSlaStatus(ticket);
-                  if (!slaStatus) return null;
-                  const chipData = SLA_CHIP[slaStatus];
-                  return <Chip label={chipData.label} sx={chipData.sx} size="small" />;
-                })()}
-              </Box>
             </Box>
 
             {/* Keep the main action visible; secondary actions retain the same guards. */}
@@ -1596,7 +1426,7 @@ export default function TicketDetailPage() {
                 </Button>
               )}
               {detailActionKeys.includes('rate') && (
-                <Button variant="contained" size="small" startIcon={detailActions.rate.icon}
+                <Button variant="contained" color="success" size="small" startIcon={detailActions.rate.icon}
                   onClick={detailActions.rate.onClick} sx={{ minHeight: 44, whiteSpace: 'nowrap' }}>
                   {detailActions.rate.label}
                 </Button>
@@ -1605,6 +1435,175 @@ export default function TicketDetailPage() {
                 actions={detailActionKeys.filter(key => key !== 'updateStatus' && key !== 'rate').map(key => detailActions[key])}
                 onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
             </Box>
+          </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' }, gap: { xs: 1.5, sm: 2 },
+            p: { xs: 1.5, sm: 2 }, mt: 1.5, mb: 1.5, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 2 }}>
+            {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
+              <TextField
+                inputProps={{ maxLength: 255 }}
+                select
+                size="small"
+                label="Support Type"
+                placeholder="Select support type"
+                InputLabelProps={{ shrink: true }}
+                value={ticket.ticketType}
+                disabled={
+                  ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
+                }
+                onChange={async (e) => {
+                  try {
+                    await ticketsApi.update(ticketId, { ticketType: e.target.value as any });
+                    fetchTicket();
+                    enqueueSnackbar('Ticket type updated.', { variant: 'success' });
+                  } catch (err: any) {
+                    enqueueSnackbar(
+                      err.response?.data?.message || 'Failed to update ticket type',
+                      {
+                        variant: 'error',
+                      },
+                    );
+                  }
+                }}
+                sx={classificationFieldSx}
+              >
+                {Object.entries(TYPE_LABELS).map(([val, label]) => (
+                  <MenuItem key={val} value={val} sx={{ fontSize: '0.8125rem' }}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : (
+              <Chip
+                label={TYPE_LABELS[ticket.ticketType] ?? ticket.ticketType}
+                color="primary"
+                size="small"
+                variant="outlined"
+              />
+            )}
+
+            {/* Category Dropdown */}
+            {!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
+              <SearchableSelect
+                size="small"
+                label="Category"
+                placeholder="Select category"
+                textFieldProps={{ InputLabelProps: { shrink: true } }}
+                value={ticket.categoryId || null}
+                options={categories.map((category: any) => ({
+                  value: category.id,
+                  label: category.name,
+                }))}
+                clearable={false}
+                disabled={
+                  ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
+                }
+                onChange={async (categoryId) => {
+                  if (!categoryId) return;
+                  try {
+                    await ticketsApi.update(ticketId, { categoryId: String(categoryId) });
+                    fetchTicket();
+                    enqueueSnackbar('Ticket category updated.', { variant: 'success' });
+                  } catch (err: any) {
+                    enqueueSnackbar(
+                      err.response?.data?.message || 'Failed to update ticket category',
+                      {
+                        variant: 'error',
+                      },
+                    );
+                  }
+                }}
+                sx={classificationFieldSx}
+              />
+            ) : ticket.category ? (
+              <Chip
+                label={ticket.category.name}
+                color="secondary"
+                size="small"
+                variant="outlined"
+              />
+            ) : null}
+
+            {/* Issue Dropdown */}
+            {user?.role !== 'user' &&
+              issues.length > 0 &&
+              (!!myCap?.isTicketSettingsFocal || ticket.assignedToId === (user as any)?.id ? (
+                <SearchableSelect
+                  size="small"
+                  label="Issue"
+                  placeholder="Select issue"
+                  textFieldProps={{ InputLabelProps: { shrink: true } }}
+                  value={ticket.issueTypeId || (ticket as any).issueTypeConfig?.id || null}
+                  options={issues.map((issue) => ({ value: issue.id, label: issue.name }))}
+                  clearable={false}
+                  disabled={
+                    ['resolved', 'closed', 'cancelled'].includes(ticket.status) || isTypeLockedByEscalation
+                  }
+                  onChange={async (issueTypeId) => {
+                    if (!issueTypeId) return;
+                    const newIssueTypeId = String(issueTypeId);
+                    setTicket((prev: any) =>
+                      prev
+                        ? {
+                            ...prev,
+                            issueTypeId: newIssueTypeId,
+                            issueTypeConfig: prev.issueTypeConfig
+                              ? { ...prev.issueTypeConfig, id: newIssueTypeId }
+                              : { id: newIssueTypeId },
+                          }
+                        : prev,
+                    );
+
+                    try {
+                      await ticketsApi.update(ticketId, { issueTypeId: newIssueTypeId });
+                      fetchTicket();
+                      enqueueSnackbar('Ticket issue updated.', { variant: 'success' });
+                    } catch (err: any) {
+                      enqueueSnackbar(
+                        err.response?.data?.message || 'Failed to update ticket issue',
+                        {
+                          variant: 'error',
+                        },
+                      );
+                      fetchTicket(); // Revert on failure
+                    }
+                  }}
+                  sx={classificationFieldSx}
+                />
+              ) : ticket.issueTypeId || (ticket as any).issueTypeConfig?.id ? (
+                <Chip
+                  label={
+                    issues.find(
+                      (i) =>
+                        i.id === (ticket.issueTypeId || (ticket as any).issueTypeConfig?.id),
+                    )?.name || 'Unknown Issue'
+                  }
+                  color="secondary"
+                  size="small"
+                  variant="outlined"
+                />
+              ) : null)}
+          </Box>
+          <Box display="flex" flexWrap="wrap" gap={1}>
+            <Chip
+              label={
+                ticket.priority
+                  ? `Priority: ${ticket.priority.toUpperCase()}`
+                  : 'Priority: Not Set'
+              }
+              sx={PRIORITY_CHIP_SX[ticket.priority ?? 'unset']}
+              size="small"
+            />
+            <Chip
+              label={ticket.status.replace('_', ' ').toUpperCase()}
+              sx={STATUS_CHIP_SX[ticket.status]}
+              size="small"
+            />
+            {(() => {
+              const slaStatus = getSlaStatus(ticket);
+              if (!slaStatus) return null;
+              const chipData = SLA_CHIP[slaStatus];
+              return <Chip label={chipData.label} sx={chipData.sx} size="small" />;
+            })()}
           </Box>
 
           {ticket.status === 'cancelled' && <Alert severity="info" sx={{ mt: 2 }}>

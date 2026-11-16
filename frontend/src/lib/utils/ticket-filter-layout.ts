@@ -26,12 +26,10 @@ export const ticketSearchSx = {
 } as const;
 
 export const ticketFilterShortcutsSx = {
-  gridColumn: '1 / -1',
-  '@container (min-width: 360px)': { gridColumn: 'span 2' },
-  display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-start', alignItems: 'center', gap: 1.5, minWidth: 0,
-  '& > .MuiBadge-root': { flex: '1 1 150px', width: 'auto', minWidth: 0, height: 40, '& .MuiBadge-badge': { zIndex: 1 } },
-  '& .MuiButton-root': { width: '100%', minWidth: 0, minHeight: 40, px: 1 },
-  '@container (max-width: 359px)': {
-    '& > .MuiBadge-root, & .MuiButton-root': { width: 'auto', minWidth: 0, flex: '1 1 140px' },
+  display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1.5,
+  '& > .MuiBadge-root': {
+    flex: '1 1 150px', minWidth: 0, maxWidth: { xs: '100%', sm: 220 },
+    '& .MuiBadge-badge': { zIndex: 1 },
   },
+  '& .MuiButton-root': { width: '100%', minWidth: 0, minHeight: 44, px: 1 },
 } as const;
