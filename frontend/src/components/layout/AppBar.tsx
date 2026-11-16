@@ -30,8 +30,7 @@ import {
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
   Devices as DevicesIcon,
-  PhoneIphone as PhoneIphoneIcon,
-  Android as AndroidIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
@@ -98,6 +97,11 @@ function decodeApplicationServerKey(key: string): Uint8Array {
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
 }
 
+function applicationServerKeysMatch(actual: ArrayBuffer, expected: Uint8Array): boolean {
+  const actualBytes = new Uint8Array(actual);
+  return actualBytes.length === expected.length && actualBytes.every((value, index) => value === expected[index]);
+}
+
 export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -132,23 +136,43 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushNeedsHomeScreen, setPushNeedsHomeScreen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState('');
+  const [pushConfigCheckFailed, setPushConfigCheckFailed] = useState(false);
+  const [pushConfigChecking, setPushConfigChecking] = useState(false);
+  const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
   const notificationRequestRef = React.useRef(0);
 
   useEffect(() => {
-    setShowIosProfileDownload(isAppleMobileDevice() && !Capacitor.isNativePlatform() && !isHomeScreenApp());
-    setAndroidApkUrl(getAndroidApkUrl());
+    const updateInstallAvailability = () => {
+      const installed = isHomeScreenApp();
+      const browser = !Capacitor.isNativePlatform();
+      setShowDownloadApp(browser && !installed);
+      setShowIosProfileDownload(browser && !installed && isAppleMobileDevice());
+      setAndroidApkUrl(getAndroidApkUrl());
+    };
+    updateInstallAvailability();
+    window.addEventListener('appinstalled', updateInstallAvailability);
+    window.addEventListener('pageshow', updateInstallAvailability);
+    return () => {
+      window.removeEventListener('appinstalled', updateInstallAvailability);
+      window.removeEventListener('pageshow', updateInstallAvailability);
+    };
   }, []);
 
   useEffect(() => {
     if (!user) {
       setPushEnabled(false);
       setPushConfig(null);
+      setPushConfigCheckFailed(false);
+      setPushConfigChecking(false);
       return;
     }
     let current = true;
     const initializePush = async () => {
+      setPushConfigChecking(true);
+      setPushConfigCheckFailed(false);
+      setPushMessage('');
       const appleHomeScreenRequired = isAppleMobileDevice() && !isHomeScreenApp();
       const supported = window.isSecureContext && 'serviceWorker' in navigator &&
         'PushManager' in window && 'Notification' in window;
@@ -164,18 +188,64 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           if (!current) return;
           const enabled = !!subscription && Notification.permission === 'granted' && config.enabled;
           if (enabled && subscription) {
+            const existingKey = subscription.options.applicationServerKey;
+            const expectedKey = decodeApplicationServerKey(config.publicKey || '');
+            if (existingKey && !applicationServerKeysMatch(existingKey, expectedKey)) {
+              await notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
+              await subscription.unsubscribe().catch(() => false);
+              if (current) {
+                setPushEnabled(false);
+                setPushMessage('Browser alert security settings changed. Enable alerts again on this device.');
+              }
+              return;
+            }
             // Keep endpoint ownership aligned with the account authenticated on this device.
             await notificationsApi.savePushSubscription(subscription.toJSON());
           }
           if (current) setPushEnabled(enabled);
         }
       } catch {
-        if (current) setPushConfig({ enabled: false, publicKey: null });
+        if (current) {
+          setPushConfig({ enabled: false, publicKey: null });
+          setPushConfigCheckFailed(true);
+        }
+      } finally {
+        if (current) setPushConfigChecking(false);
       }
     };
     void initializePush();
     return () => { current = false; };
   }, [user]);
+
+  const retryPushConfigCheck = async () => {
+    if (pushConfigChecking || pushBusy) return;
+    setPushConfigChecking(true);
+    setPushConfigCheckFailed(false);
+    setPushMessage('');
+    try {
+      setPushConfig(await notificationsApi.getPushConfig());
+    } catch {
+      setPushConfig({ enabled: false, publicKey: null });
+      setPushConfigCheckFailed(true);
+    } finally {
+      setPushConfigChecking(false);
+    }
+  };
+
+  const handleDownloadApp = async () => {
+    if (showIosProfileDownload) {
+      window.location.assign('/api/ios-profile.mobileconfig');
+      return;
+    }
+    if (androidApkUrl) {
+      window.location.assign(androidApkUrl);
+      return;
+    }
+    const openedInstallPrompt = await promptToInstallWebApp();
+    if (!openedInstallPrompt) {
+      enqueueSnackbar('Open your browser menu and choose Install app or Add to Home screen.', { variant: 'info' });
+    }
+  };
 
   const handleBrowserPushToggle = async () => {
     if (pushBusy) return;
@@ -196,8 +266,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushMessage('On iPhone or iPad, add this site to the Home Screen first, then enable alerts from its icon.');
       return;
     }
+    if (pushConfigCheckFailed) {
+      setPushMessage('Could not check browser alert setup. Use Retry to check again.');
+      return;
+    }
     if (!pushSupported || !pushConfig?.enabled || !pushConfig.publicKey) {
-      setPushMessage('Browser alerts are not available on this browser or server.');
+      setPushMessage('This server needs Web Push configured on its Ticketing service before alerts can be enabled.');
       return;
     }
 
@@ -216,6 +290,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       const readyRegistration = await navigator.serviceWorker.ready;
       const activeRegistration = readyRegistration || registration;
       let subscription = await activeRegistration.pushManager.getSubscription();
+      if (subscription?.options.applicationServerKey &&
+        !applicationServerKeysMatch(subscription.options.applicationServerKey, decodeApplicationServerKey(pushConfig.publicKey))) {
+        await notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
+        await subscription.unsubscribe();
+        subscription = null;
+      }
       if (!subscription) {
         subscription = await activeRegistration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -888,6 +968,32 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           </Box>
         ) : null}
 
+        {showDownloadApp && (
+          <Button
+            className="app-download-app-cta"
+            variant="contained"
+            color="primary"
+            size="small"
+            startIcon={<DownloadIcon />}
+            onClick={() => void handleDownloadApp()}
+            aria-label="Download App"
+            sx={{
+              flexShrink: 0,
+              minWidth: 0,
+              minHeight: 44,
+              px: { xs: 0.9, sm: 1.25 },
+              fontSize: { xs: '0.68rem', sm: '0.8125rem' },
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              boxShadow: 'none',
+              '&:hover': { boxShadow: 'none' },
+              '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inline-flex' } },
+            }}
+          >
+            Download App
+          </Button>
+        )}
+
         {/* Notifications */}
         <Box sx={{ mr: { xs: 0, sm: 1.5 }, flexShrink: 0 }}>
           <IconButton color="inherit" aria-label="Notifications" onClick={handleNotifOpen} sx={{ minWidth: 44, minHeight: 44 }}>
@@ -947,10 +1053,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 <Typography variant="body2" fontWeight={600}>Browser alerts</Typography>
                 <Button
                   size="small"
-                  onClick={() => void handleBrowserPushToggle()}
-                  disabled={pushBusy || !user || (!pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
+                  onClick={() => void (pushConfigCheckFailed ? retryPushConfigCheck() : handleBrowserPushToggle())}
+                  disabled={pushBusy || pushConfigChecking || !user || (!pushConfigCheckFailed && !pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
                 >
-                  {pushBusy ? 'Working…' : pushEnabled ? 'Turn off' : 'Enable'}
+                  {pushConfigChecking ? 'Checking…' : pushConfigCheckFailed ? 'Retry' : pushBusy ? 'Working…' : pushEnabled ? 'Turn off' : 'Enable'}
                 </Button>
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
@@ -958,8 +1064,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   ? 'iPhone/iPad needs this site added to the Home Screen for alerts.'
                   : !pushSupported
                     ? 'This browser or connection does not support background alerts.'
+                    : pushConfigChecking
+                      ? 'Checking browser alert setup…'
+                      : pushConfigCheckFailed
+                        ? 'Could not check server alert settings. Tap Retry to try again.'
                     : !pushConfig?.enabled
-                      ? 'Browser alerts are not configured on this server.'
+                      ? 'This server needs Web Push configured on its Ticketing service. Ask an administrator to set it up.'
                       : pushEnabled
                         ? 'Enabled on this device. Sound and badges follow device settings.'
                         : 'Receive alerts when the browser is closed; permission is required.')}
@@ -1053,55 +1163,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </Typography>
             </Box>
             <Divider />
-            {showIosProfileDownload && (
-              <>
-                <MenuItem
-                  component="a"
-                  href="/api/ios-profile.mobileconfig"
-                  onClick={handleProfileMenuClose}
-                  sx={{ alignItems: 'flex-start', py: 1.25 }}
-                >
-                  <PhoneIphoneIcon sx={{ mr: 1.25, mt: 0.25 }} />
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>Download iOS Configuration</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Add a fullscreen Home Screen icon
-                    </Typography>
-                  </Box>
-                </MenuItem>
-                <Divider />
-              </>
-            )}
-            {androidApkUrl && (
-              <>
-                <MenuItem component="a" href={androidApkUrl} rel="noreferrer" onClick={handleProfileMenuClose}
-                  sx={{ alignItems: 'flex-start', py: 1.25 }}>
-                  <AndroidIcon sx={{ mr: 1.25, mt: 0.25 }} />
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>Download Android app</Typography>
-                    <Typography variant="caption" color="text.secondary">Android installation file (APK)</Typography>
-                  </Box>
-                </MenuItem>
-                <Divider />
-              </>
-            )}
-            {!androidApkUrl && isAndroidBrowser() && !isHomeScreenApp() && (
-              <>
-                <MenuItem onClick={() => {
-                  handleProfileMenuClose();
-                  void promptToInstallWebApp().then((opened) => {
-                    if (!opened) enqueueSnackbar('Open your browser menu and choose Install app or Add to Home screen.', { variant: 'info' });
-                  });
-                }} sx={{ alignItems: 'flex-start', py: 1.25 }}>
-                  <AndroidIcon sx={{ mr: 1.25, mt: 0.25 }} />
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>Install Compliance Hub</Typography>
-                    <Typography variant="caption" color="text.secondary">Add the web app to your Home Screen</Typography>
-                  </Box>
-                </MenuItem>
-                <Divider />
-              </>
-            )}
             <MenuItem onClick={() => void handleThemeToggle()} disabled={savingAppearance}>
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}

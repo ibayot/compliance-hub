@@ -174,7 +174,7 @@ function ChangePasswordCard() {
         subheader="Update your account password."
       />
       <CardContent>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 1, sm: 2 }}>
           <Grid item xs={12} md={4}>
               <TextField
                 label="Current Password"
@@ -384,7 +384,7 @@ function SecuritySettingsCard() {
         ) : loadError ? (
           <Alert severity="error" action={<Button onClick={() => void loadSecurityConfig()}>Retry</Button>}>Unable to load security settings.</Alert>
         ) : (
-          <Grid container spacing={2} alignItems="center">
+          <Grid container spacing={{ xs: 1, sm: 2 }} alignItems="center">
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
@@ -1633,11 +1633,14 @@ function FocalUserManagementCard() {
         )}
       </>
     );
-    const roleBadge = <Chip label={role} size="small" variant="outlined" />;
+    const roleBadge = <Chip label={role} size="small" variant="outlined" sx={{
+      maxWidth: { xs: 76, sm: 120 }, flexShrink: 1,
+      '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', px: 0.75 },
+    }} />;
     const statusBadge = <Chip
       icon={isActive ? <ActiveIcon /> : <InactiveIcon />}
       label={isActive ? 'Active' : 'Inactive'}
-      size="small" color={isActive ? 'success' : 'default'}
+      size="small" color={isActive ? 'success' : 'default'} sx={{ flexShrink: 0 }}
     />;
     const mfaBadge = user.mfaRecoveryRequired && (
       <Tooltip title={user.mfaLockExpiresAt ? `Lock expiry: ${new Date(user.mfaLockExpiresAt).toLocaleString()}` : 'OTP failures need account recovery.'}>
@@ -1709,11 +1712,13 @@ function FocalUserManagementCard() {
         )}
         {userTab === 1 && <Box mt={0.5}>{unit}</Box>}
         {mfaBadge && <Box mt={0.5}>{mfaBadge}</Box>}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="wrap" gap={0.5} mt={0.75}>
-          <Stack direction="row" alignItems="center" useFlexGap flexWrap="wrap" gap={0.5}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" useFlexGap flexWrap="nowrap" gap={0.5} mt={0.75}
+          sx={{ minWidth: 0, '@media (max-width: 359px)': { flexWrap: 'wrap' } }}>
+          <Stack direction="row" alignItems="center" useFlexGap flexWrap="nowrap" gap={0.25}
+            sx={{ minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
             {roleBadge}{statusBadge}
           </Stack>
-          <Box ml="auto">{actions}</Box>
+          <Box sx={{ ml: 'auto', flexShrink: 0 }}>{actions}</Box>
         </Stack>
       </Card>
     );
@@ -2580,7 +2585,7 @@ function ProfilePreferencesCard() {
         subheader="Update your contact, unit, and position details. A unit you select remains in effect until the personnel directory reports the same unit. Password changes are handled separately below."
       />
       <CardContent>
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 1, sm: 2 }}>
           <Grid item xs={12} md={4}>
             <TextField
               label="Phone Number"
@@ -2611,6 +2616,7 @@ function ProfilePreferencesCard() {
               options={availableUnits.map((unit) => ({ value: unit.id, label: unit.name }))}
               onChange={(unitId) => setForm((prev) => ({ ...prev, unitId: unitId ?? '' }))}
               placeholder="Search units"
+              textFieldProps={{ multiline: true, minRows: 1, maxRows: 3 }}
             />
             {unitSource.source && (
               <Stack direction="row" spacing={1} alignItems="center" mt={1} flexWrap="wrap">
@@ -2642,7 +2648,7 @@ function ProfilePreferencesCard() {
             <TextField label="Designation" value={form.designation} onChange={(e) => setForm((prev) => ({ ...prev, designation: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
           </Grid>
         </Grid>
-        <Box mt={2} display="flex" justifyContent="flex-end">
+        <Box mt={{ xs: 1.5, sm: 2 }} display="flex" justifyContent="flex-end">
           <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
             {saving ? 'Saving...' : 'Save Profile Information'}
           </Button>

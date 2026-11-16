@@ -27,6 +27,19 @@ body {
   #root { min-height: 100dvh; }
 }
 
+@keyframes app-download-attention {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.app-download-app-cta {
+  animation: app-download-attention 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-download-app-cta { animation: none; }
+}
+
 .app-shell {
   --app-sticky-top: 64px;
   width: 100%;
@@ -430,11 +443,11 @@ body {
   }
 
   .app-page-content .MuiCardContent-root {
-    padding: 14px;
+    padding: 12px;
   }
 
   .app-page-content .MuiCardContent-root:last-child {
-    padding-bottom: 14px;
+    padding-bottom: 12px;
   }
 
   .app-page-content .MuiTypography-h4 {
@@ -494,7 +507,7 @@ body {
   }
 
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-layout {
-    gap: 16px;
+    gap: 12px;
   }
 
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-context {
@@ -504,7 +517,7 @@ body {
 
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-context,
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-content {
-    gap: 14px;
+    gap: 12px;
   }
 
   .app-page-content[data-app-page-family='ticket-list'] .ticket-list-table-container {

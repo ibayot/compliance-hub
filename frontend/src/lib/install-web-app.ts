@@ -12,7 +12,7 @@ export function isAndroidBrowser(): boolean {
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
-  if (!isAndroidBrowser()) return;
+  if (Capacitor.isNativePlatform()) return;
   event.preventDefault();
   installPrompt = event as InstallPromptEvent;
 });

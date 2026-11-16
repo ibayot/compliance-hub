@@ -704,14 +704,14 @@ export default function DashboardPage() {
         </Box>
       )}
 {canViewDuties && (
-        <Card sx={{ mb: 4 }}>
-          <CardContent>
-            <Typography variant="h6" fontWeight={800} mb={2}>Today&apos;s Duty Coverage</Typography>
-            <Grid container spacing={2}>
+        <Card sx={{ mb: { xs: 2, sm: 4 } }}>
+          <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+            <Typography variant="h6" fontWeight={800} mb={{ xs: 1.25, sm: 2 }}>Today&apos;s Duty Coverage</Typography>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }}>
               {dutyCards.map((item) => (
                 <Grid item xs={12} sm={6} lg={3} key={item.dutyType}>
                   <Card sx={{ height: '100%', background: getGradient(item.dutyType === 'OD' ? 'warning' : 'info') }}>
-                    <CardContent>
+                    <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
                       <Typography variant="overline" color="text.secondary">
                         {item.dutyType === 'OD' ? 'OFFICER OF THE DAY' : item.dutyType}
                       </Typography>
