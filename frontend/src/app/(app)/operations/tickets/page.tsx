@@ -2274,19 +2274,18 @@ export default function TicketsPage({
                             </Tooltip>
                           )}
                         {hasPendingSatisfaction && (
-                          <Tooltip title="Rate this resolution">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              aria-label="Rate this resolution"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openSatDialog(ticket);
-                              }}
-                            >
-                              <SatisfactionIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            aria-label={`Rate resolution for ticket ${ticket.ticketNumber}`}
+                            sx={{ minHeight: 44 }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openSatDialog(ticket);
+                            }}
+                          >
+                            Rate
+                          </Button>
                         )}
                         {canOverrideResolutionTime &&
                           ['resolved', 'closed'].includes(ticket.status) && (
@@ -2656,6 +2655,19 @@ export default function TicketsPage({
                           {new Date(ticket.createdAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell align="right">
+                          {hasPendingSatisfaction && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              aria-label={`Rate resolution for ticket ${ticket.ticketNumber}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openSatDialog(ticket);
+                              }}
+                            >
+                              Rate
+                            </Button>
+                          )}
                           <TicketActionsMenu ticket={ticket} onCancelled={() => void refreshAfterTicketChange()}
                             actions={(() => {
                               const actions: TicketMenuAction[] = [{
@@ -2672,10 +2684,6 @@ export default function TicketsPage({
                                 !['duplicate', 'closed', 'resolved', 'cancelled'].includes(ticket.status)) actions.push({
                                 label: 'Escalate Ticket', icon: <AssignIcon fontSize="small" color="warning" />,
                                 onClick: () => openEscalateDialog(ticket),
-                              });
-                              if (hasPendingSatisfaction) actions.push({
-                                label: 'Rate this resolution', icon: <SatisfactionIcon fontSize="small" color="success" />,
-                                onClick: () => openSatDialog(ticket),
                               });
                               if (canOverrideResolutionTime && ['resolved', 'closed'].includes(ticket.status)) actions.push({
                                 label: 'Correct resolution time', icon: <ResolutionTimeIcon fontSize="small" color="secondary" />,

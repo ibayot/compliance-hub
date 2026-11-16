@@ -1587,7 +1587,7 @@ export default function TicketDetailPage() {
             </Box>
 
             {/* Keep the main action visible; secondary actions retain the same guards. */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, justifySelf: { xs: 'start', sm: 'end' } }}>
               {ticket.canClaimOvertime && <Button variant="contained" size="small" disabled={claimingOvertime} onClick={handleClaimOvertime}>{claimingOvertime ? 'Acquiring…' : 'Get Ticket'}</Button>}
               {detailActionKeys.includes('updateStatus') && (
                 <Button ref={updateStatusButtonRef} variant="contained" size="small" startIcon={<EditIcon />}
@@ -1595,8 +1595,14 @@ export default function TicketDetailPage() {
                   Update Status
                 </Button>
               )}
+              {detailActionKeys.includes('rate') && (
+                <Button variant="contained" size="small" startIcon={detailActions.rate.icon}
+                  onClick={detailActions.rate.onClick} sx={{ minHeight: 44, whiteSpace: 'nowrap' }}>
+                  {detailActions.rate.label}
+                </Button>
+              )}
               <TicketActionsMenu orientation="vertical" ticket={ticket}
-                actions={detailActionKeys.filter(key => key !== 'updateStatus').map(key => detailActions[key])}
+                actions={detailActionKeys.filter(key => key !== 'updateStatus' && key !== 'rate').map(key => detailActions[key])}
                 onCancelled={() => { void fetchTicket(); void fetchEvents(); }} />
             </Box>
           </Box>
