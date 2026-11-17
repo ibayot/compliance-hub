@@ -1,6 +1,7 @@
 import { apiClient, cancelSessionRenewal, refreshAuthentication, tokenStore } from './client';
 import { boundedGet, ReadOptions } from './bounded-read';
 import { LoginCredentials, AuthResponse, SignInResponse, User } from '../types/auth';
+import { Capacitor } from '@capacitor/core';
 
 let pendingLogout: Promise<void> | null = null;
 
@@ -52,7 +53,12 @@ export const authApi = {
   logout: async (): Promise<void> => {
     cancelSessionRenewal();
     const token = tokenStore.get('accessToken');
-    const request = apiClient.post('/auth/logout', {}, { timeout: 15_000, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const refreshToken = Capacitor.isNativePlatform() ? tokenStore.get('refreshToken') : null;
+    const revoke = () => apiClient.post('/auth/logout', refreshToken ? { refreshToken } : {}, {
+      timeout: 15_000, headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const request = !Capacitor.isNativePlatform() && navigator.locks
+      ? navigator.locks.request('compliance-hub:session-refresh', revoke) : revoke();
     const settled = request.then(() => undefined, () => undefined);
     pendingLogout = settled;
     try { await request; } finally { if (pendingLogout === settled) pendingLogout = null; }

@@ -64,7 +64,11 @@ export class AuthController {
     if (clientPlatform !== 'browser' || !result?.accessToken || !result?.refreshToken) return result;
     const options = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' };
     res.cookie(this.accessCookieName(), result.accessToken, options);
-    res.cookie(this.refreshCookieName(), result.refreshToken, { ...options, path: '/api/auth' });
+    res.cookie(this.refreshCookieName(), result.refreshToken, {
+      ...options,
+      path: '/api/auth',
+      maxAge: this.authService.refreshCookieMaxAge(result.refreshToken),
+    });
     if (result.deviceToken) {
       res.cookie(TRUSTED_DEVICE_COOKIE_NAME, result.deviceToken, {
         ...options,
@@ -133,15 +137,17 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
+  async logout(@Body('refreshToken') refreshToken: string, @Request() req: any, @Res({ passthrough: true }) res: Response) {
+    const browser = req.headers?.['x-client-platform'] === 'browser';
     const authHeader: string = req.headers?.authorization || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const cookieToken = getCookieValue(req.headers?.cookie, this.accessCookieName()) || '';
-    const result = await this.authService.logout(bearerToken || cookieToken);
-    res.clearCookie(this.accessCookieName(), { path: '/' });
-    res.clearCookie(this.refreshCookieName(), { path: '/api/auth' });
-    return result;
+    const cookieToken = browser ? getCookieValue(req.headers?.cookie, this.accessCookieName()) : null;
+    const refreshCredential = browser ? getCookieValue(req.headers?.cookie, this.refreshCookieName()) : refreshToken;
+    if (browser) {
+      res.clearCookie(this.accessCookieName(), { path: '/' });
+      res.clearCookie(this.refreshCookieName(), { path: '/api/auth' });
+    }
+    return this.authService.logout(bearerToken || cookieToken, refreshCredential);
   }
 
   @Post('change-password')

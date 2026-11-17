@@ -3,11 +3,18 @@
   "name": "RICTMS Compliance Hub",
   "short_name": "Compliance Hub",
   "description": "RICTMS compliance and help desk application",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "icons": [
+    {
+      "src": "/icons/compliance-hub-ios.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icons/app-192.png",
       "sizes": "192x192",

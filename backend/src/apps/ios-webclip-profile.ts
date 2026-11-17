@@ -23,6 +23,11 @@ export function resolveIosWebClipUrl(environment: NodeJS.ProcessEnv = process.en
     return 'http://localhost/';
   }
 
+  // Push and the browser's authentication cookies depend on the secure public origin.
+  // Use only the configured host; never build a profile from request headers.
+  if (!LOCAL_WEB_ORIGINS.has(parsedUrl.hostname.toLowerCase()) && parsedUrl.protocol === 'http:') {
+    parsedUrl.protocol = 'https:';
+  }
   return parsedUrl.toString();
 }
 
@@ -52,6 +57,7 @@ export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer): stri
   const profileUuid = stableUuid(`profile:${parsedUrl.toString()}`);
   const webClipUuid = stableUuid(`webclip:${parsedUrl.toString()}`);
   const payloadIdentifier = `com.rictms.compliancehub.webclip.${profileUuid}`;
+  const launchUrl = new URL('/dashboard', parsedUrl);
   const iconData = iconPng.toString('base64').match(/.{1,76}/g)?.join('\n') ?? '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -76,7 +82,7 @@ ${iconData}
       <key>Precomposed</key>
       <true/>
       <key>URL</key>
-      <string>${escapeXml(parsedUrl.toString())}</string>
+      <string>${escapeXml(launchUrl.toString())}</string>
       <key>PayloadDescription</key>
       <string>Adds a fullscreen Compliance Hub icon to the Home Screen.</string>
       <key>PayloadDisplayName</key>

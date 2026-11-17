@@ -283,8 +283,8 @@ export const usersApi = {
     return response.data;
   },
 
-  getSessionPolicy: async (): Promise<{ idleLockMinutes: number }> => {
-    return boundedGet('/users/security-config/session-policy');
+  getSessionPolicy: async (options?: ReadOptions): Promise<{ idleLockMinutes: number }> => {
+    return boundedGet('/users/security-config/session-policy', options);
   },
 
   updateSecurityConfig: async (payload: {

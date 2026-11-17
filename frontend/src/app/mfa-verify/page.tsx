@@ -142,7 +142,7 @@ export default function MfaVerifyPage() {
     setError(null);
     try {
       const response = await authApi.verifyMfaCode(tempToken, code, rememberDevice);
-      completeInteractiveSignIn();
+      completeInteractiveSignIn(response.user.id);
       enqueueSnackbar('MFA Verification successful.', { variant: 'success' });
       
       // Native clients receive bearer tokens; browser clients use HttpOnly cookies.

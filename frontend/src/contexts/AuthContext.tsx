@@ -37,7 +37,7 @@ import { ReadOptions } from '@/lib/api/bounded-read';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
 import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
 import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
-import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, recoveryGeneration } from '@/lib/auth/session-recovery';
+import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, readSessionActivity, recoveryGeneration, rememberSessionActivity } from '@/lib/auth/session-recovery';
 import { notificationsApi } from '@/app/api/references';
 import { clearExpiredDestination, signInDestination } from '@/lib/auth/sign-in-destination';
 
@@ -105,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [idleLockMinutes, setIdleLockMinutes] = useState(DEFAULT_IDLE_LOCK_MINUTES);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastActivityRef = useRef(Date.now());
+  const lastActivitySavedRef = useRef(0);
   const currentUserRef = useRef<User | null>(null);
   const retrySessionRef = useRef<() => void>(() => {});
   const navigate = useNavigate();
@@ -133,9 +134,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     let pending = false;
-    lastActivityRef.current = Date.now();
-    setIdleLockMinutes(DEFAULT_IDLE_LOCK_MINUTES);
-    if (!authenticatedUserId) return;
+    if (!authenticatedUserId) {
+      setIdleLockMinutes(DEFAULT_IDLE_LOCK_MINUTES);
+      return;
+    }
     const refreshPolicy = async () => {
       if (pending) return;
       pending = true;
@@ -200,8 +202,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!trimmed) {
         throw new Error('Password is required');
       }
+      // A suspended app may reach this dialog with an expired access cookie.
+      // Renew via the protected profile probe; a wrong password still fails normally.
+      const profile = await authApi.getProfile();
+      if (profile.id !== user.id) throw new Error('Your session has changed. Sign in again to continue.');
       await authApi.reauthenticate({ password: trimmed });
       lastActivityRef.current = Date.now();
+      rememberSessionActivity(user.id, lastActivityRef.current);
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       setUnlockPassword('');
@@ -283,6 +290,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const capabilities = await usersApi.getMyCapabilities({ signal: requestController.signal });
         if (!currentAttempt()) return;
         const previous = currentUserRef.current;
+        if (!previous) {
+          const lastActivity = readSessionActivity(profile.id);
+          const policy = await usersApi.getSessionPolicy({ signal: requestController.signal, timeoutMs: 5000 }).catch(() => null);
+          if (!currentAttempt()) return;
+          const minutes = isValidIdleLockMinutes(policy?.idleLockMinutes) ? policy.idleLockMinutes : DEFAULT_IDLE_LOCK_MINUTES;
+          setIdleLockMinutes(minutes);
+          lastActivityRef.current = lastActivity ?? Date.now();
+          if (lastActivity && Date.now() - lastActivity >= minutes * 60_000 && !profile.requiresPasswordChange) {
+            sessionStorage.setItem('isSessionLocked', 'true');
+            setIsSessionLocked(true);
+          } else if (!lastActivity) {
+            rememberSessionActivity(profile.id, lastActivityRef.current);
+          }
+        }
         let previousRole = previous?.role;
         try {
           if (token) previousRole = parseJwt(token)?.role || previousRole;
@@ -354,13 +375,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isSessionLocked && !requiresPasswordChange) {
         if (Date.now() < lastActivityRef.current + idleLockMinutes * 60_000) {
           lastActivityRef.current = Date.now();
+          if (lastActivityRef.current - lastActivitySavedRef.current >= 5000) {
+            rememberSessionActivity(authenticatedUserId, lastActivityRef.current);
+            lastActivitySavedRef.current = lastActivityRef.current;
+          }
         }
         scheduleInactivityLock();
       }
     };
 
+    const persistActivity = () => {
+      if (!isSessionLocked) rememberSessionActivity(authenticatedUserId, lastActivityRef.current);
+    };
     const visibilityHandler = () => {
-      if (document.visibilityState !== 'visible' || isSessionLocked || requiresPasswordChange) return;
+      if (document.visibilityState !== 'visible') { persistActivity(); return; }
+      if (isSessionLocked || requiresPasswordChange) return;
       scheduleInactivityLock();
     };
 
@@ -375,11 +404,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.addEventListener(eventName, activityHandler, { passive: true }),
     );
     document.addEventListener('visibilitychange', visibilityHandler);
+    window.addEventListener('pagehide', persistActivity);
     scheduleInactivityLock();
 
     return () => {
       events.forEach((eventName) => window.removeEventListener(eventName, activityHandler));
       document.removeEventListener('visibilitychange', visibilityHandler);
+      window.removeEventListener('pagehide', persistActivity);
       clearInactivityTimer();
     };
   }, [
@@ -410,7 +441,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('accessToken', response.accessToken);
       tokenStore.set('refreshToken', response.refreshToken);
     }
-    completeInteractiveSignIn();
+    completeInteractiveSignIn(response.user.id);
+    lastActivityRef.current = Date.now();
     clearExpiredDestination();
     queryClient.clear();
     // Set user from login response first (includes units now)
@@ -449,7 +481,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set('refreshToken', response.refreshToken);
     }
     if (!response.requiresMfa) {
-      completeInteractiveSignIn();
+      completeInteractiveSignIn(response.user.id);
+      lastActivityRef.current = Date.now();
       clearExpiredDestination();
       queryClient.clear();
     }
@@ -527,6 +560,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tokenStore.set('refreshToken', res.refreshToken);
       }
       lastActivityRef.current = Date.now();
+      if (user) rememberSessionActivity(user.id, lastActivityRef.current);
       sessionStorage.removeItem('isSessionLocked');
       setIsSessionLocked(false);
       scheduleInactivityLock();

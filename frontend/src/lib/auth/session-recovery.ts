@@ -1,4 +1,5 @@
 const SIGNED_OUT_KEY = 'compliance-hub:session-signed-out';
+const ACTIVITY_KEY = 'compliance-hub:session-activity:';
 let signedOut = false;
 let generation = 0;
 
@@ -21,11 +22,25 @@ export function markSessionSignedOut(): void {
   try { localStorage.setItem(SIGNED_OUT_KEY, String(Date.now())); } catch { /* In-memory protection remains active. */ }
 }
 
+export function readSessionActivity(userId: number): number | undefined {
+  try {
+    const at = Number(localStorage.getItem(ACTIVITY_KEY + userId));
+    return Number.isFinite(at) && at > 0 && at <= Date.now() ? at : undefined;
+  } catch { return undefined; }
+}
+
+export function rememberSessionActivity(userId: number, at = Date.now()): void {
+  try {
+    if (at > (readSessionActivity(userId) ?? 0)) localStorage.setItem(ACTIVITY_KEY + userId, String(at));
+  } catch { /* Continue enforcing the in-memory idle deadline when storage is unavailable. */ }
+}
+
 /** Called only after a successful interactive sign-in, including MFA completion. */
-export function completeInteractiveSignIn(): void {
+export function completeInteractiveSignIn(userId: number): void {
   signedOut = false;
   generation++;
   try { localStorage.removeItem(SIGNED_OUT_KEY); } catch { /* Storage may be unavailable. */ }
+  rememberSessionActivity(userId);
 }
 
 export function recoveryGeneration(): number { return generation; }

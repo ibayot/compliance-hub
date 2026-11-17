@@ -11,6 +11,11 @@ import {
   Link,
   Menu,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
   Avatar,
   Divider,
   Badge,
@@ -46,7 +51,7 @@ import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
 import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig } from '@/app/api/references';
-import { isAndroidBrowser, promptToInstallWebApp } from '@/lib/install-web-app';
+import { isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp, registerWebPushWorker } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
@@ -83,12 +88,6 @@ function getAndroidApkUrl(): string | null {
   } catch {
     return null;
   }
-}
-
-function isHomeScreenApp(): boolean {
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: fullscreen)').matches ||
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
 function decodeApplicationServerKey(key: string): Uint8Array {
@@ -141,6 +140,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
+  const [appInstallAnchor, setAppInstallAnchor] = useState<HTMLElement | null>(null);
+  const [installHelp, setInstallHelp] = useState<'ios' | 'android' | 'browser' | null>(null);
   const notificationRequestRef = React.useRef(0);
 
   useEffect(() => {
@@ -232,18 +233,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     }
   };
 
-  const handleDownloadApp = async () => {
+  const handleInstallWebApp = async () => {
+    setAppInstallAnchor(null);
     if (showIosProfileDownload) {
-      window.location.assign('/api/ios-profile.mobileconfig');
+      setInstallHelp('ios');
       return;
     }
-    if (androidApkUrl) {
-      window.location.assign(androidApkUrl);
-      return;
-    }
-    const openedInstallPrompt = await promptToInstallWebApp();
-    if (!openedInstallPrompt) {
-      enqueueSnackbar('Open your browser menu and choose Install app or Add to Home screen.', { variant: 'info' });
+    if (!await promptToInstallWebApp()) {
+      setInstallHelp(isAndroidBrowser() ? 'android' : 'browser');
     }
   };
 
@@ -263,7 +260,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       return;
     }
     if (pushNeedsHomeScreen) {
-      setPushMessage('On iPhone or iPad, add this site to the Home Screen first, then enable alerts from its icon.');
+      setPushMessage('In Safari, add Compliance Hub to the Home Screen as a web app, then enable alerts from its icon.');
       return;
     }
     if (pushConfigCheckFailed) {
@@ -282,13 +279,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         setPushMessage(permission === 'denied'
-          ? 'Notifications are blocked in browser settings. Allow them for this site to continue.'
+          ? isAppleMobileDevice()
+            ? 'iOS denied notifications for this Home Screen icon. If it is listed in Settings → Notifications, allow alerts there. If the profile icon is absent from Settings and no prompt appears, use the Safari-installed web app for alerts.'
+            : 'Notifications are blocked in browser settings. Allow them for this site to continue.'
           : 'Notification permission was not granted.');
         return;
       }
-      const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
-      const readyRegistration = await navigator.serviceWorker.ready;
-      const activeRegistration = readyRegistration || registration;
+      await registerWebPushWorker();
+      const activeRegistration = await navigator.serviceWorker.ready;
       let subscription = await activeRegistration.pushManager.getSubscription();
       if (subscription?.options.applicationServerKey &&
         !applicationServerKeysMatch(subscription.options.applicationServerKey, decodeApplicationServerKey(pushConfig.publicKey))) {
@@ -975,8 +973,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             color="primary"
             size="small"
             startIcon={<SmartphoneIcon className="app-download-app-icon" sx={{ fontSize: { xs: 18, sm: 20 } }} />}
-            onClick={() => void handleDownloadApp()}
-            aria-label="Download App"
+            id="app-install-button"
+            onClick={(event) => setAppInstallAnchor(event.currentTarget)}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(appInstallAnchor)}
+            aria-controls={appInstallAnchor ? 'app-install-menu' : undefined}
             sx={{
               flexShrink: 0,
               minWidth: 0,
@@ -993,6 +994,45 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             Download App
           </Button>
         )}
+        <Menu
+          anchorEl={appInstallAnchor}
+          open={showDownloadApp && Boolean(appInstallAnchor)}
+          onClose={() => setAppInstallAnchor(null)}
+          MenuListProps={{ id: 'app-install-menu', 'aria-labelledby': 'app-install-button' }}
+        >
+          <MenuItem onClick={() => void handleInstallWebApp()}>Install web app</MenuItem>
+          {showIosProfileDownload && (
+            <MenuItem component="a" href="/api/ios-profile.mobileconfig" onClick={() => setAppInstallAnchor(null)}>
+              Download iOS profile (shortcut)
+            </MenuItem>
+          )}
+          {androidApkUrl && (
+            <MenuItem component="a" href={androidApkUrl} onClick={() => setAppInstallAnchor(null)}>
+              Download Android APK
+            </MenuItem>
+          )}
+        </Menu>
+        <Dialog
+          open={installHelp !== null}
+          onClose={() => setInstallHelp(null)}
+          aria-labelledby="app-install-help-title"
+          aria-describedby="app-install-help-description"
+        >
+          <DialogTitle id="app-install-help-title">Install Compliance Hub</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="app-install-help-description">
+              {installHelp === 'ios'
+                ? 'Open Compliance Hub in Safari. From Share, choose Add to Home Screen and turn on Open as Web App if shown. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
+                : installHelp === 'android'
+                  ? 'Open Compliance Hub in Chrome. In the ⋮ menu, choose Add to Home screen, then Install if offered. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
+                  : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            {installHelp === 'ios' && <Button href="/install-ios.html">Open Safari install page</Button>}
+            <Button onClick={() => setInstallHelp(null)} autoFocus>Done</Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Notifications */}
         <Box sx={{ mr: { xs: 0, sm: 1.5 }, flexShrink: 0 }}>
@@ -1061,7 +1101,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
                 {pushMessage || (pushNeedsHomeScreen
-                  ? 'iPhone/iPad needs this site added to the Home Screen for alerts.'
+                  ? 'In Safari, add Compliance Hub to the Home Screen as a web app to use alerts.'
+                  : !window.isSecureContext
+                    ? 'Open Compliance Hub at its HTTPS address before enabling browser alerts.'
                   : !pushSupported
                     ? 'This browser or connection does not support background alerts.'
                     : pushConfigChecking

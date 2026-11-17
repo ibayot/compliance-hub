@@ -93,6 +93,32 @@ server { \
         add_header Expires "0"; \
         try_files $uri =404; \
     } \
+    location = /manifest.webmanifest { \
+        include /etc/nginx/security-headers.conf; \
+        types { application/manifest+json webmanifest; } \
+        default_type application/manifest+json; \
+        add_header Cache-Control "no-cache"; \
+        try_files $uri =404; \
+    } \
+    location = /service-worker.js { \
+        include /etc/nginx/security-headers.conf; \
+        default_type application/javascript; \
+        add_header Cache-Control "no-cache"; \
+        try_files $uri =404; \
+    } \
+    location ~ ^/install-ios(?:\.html|-launch\.js)$ { \
+        include /etc/nginx/security-headers.conf; \
+        add_header Cache-Control "no-cache"; \
+        try_files $uri =404; \
+    } \
+    location = /apple-touch-icon.png { \
+        include /etc/nginx/security-headers.conf; \
+        try_files $uri =404; \
+    } \
+    location ^~ /icons/ { \
+        include /etc/nginx/security-headers.conf; \
+        try_files $uri =404; \
+    } \
     location = /api/docs { \
         return 301 /api/docs/; \
     } \

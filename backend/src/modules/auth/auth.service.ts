@@ -495,6 +495,12 @@ export class AuthService {
     }
   }
 
+  refreshCookieMaxAge(token: string): number {
+    // This is called only with a newly signed refresh token from this service.
+    const payload = this.jwtService.decode(token) as { exp?: number } | null;
+    return payload?.exp ? Math.max(0, payload.exp * 1000 - Date.now()) : 0;
+  }
+
   async getProfile(userId: number): Promise<Record<string, any>> {
     const user = await this.usersService.findOne(userId);
     const securityConfig = await this.securityConfigService.getConfig();
@@ -568,19 +574,29 @@ export class AuthService {
     return { message: 'Re-authentication successful' };
   }
 
-  async logout(token: string): Promise<{ message: string }> {
-    try {
-      const decoded = this.jwtService.decode(token) as any;
-      if (decoded && decoded.jti && decoded.exp) {
-        const blacklistEntry = this.tokenBlacklistRepo.create({
-          tokenJti: decoded.jti,
-          expiresAt: new Date(decoded.exp * 1000),
-        });
-        // We catch errors to prevent throwing on duplicate jti
-        await this.tokenBlacklistRepo.save(blacklistEntry).catch(() => {});
+  async logout(accessToken?: string | null, refreshToken?: string | null): Promise<{ message: string }> {
+    const credentials = [
+      { token: refreshToken, secret: this.configService.get<string>('JWT_REFRESH_SECRET') },
+      { token: accessToken, secret: this.configService.get<string>('JWT_SECRET') },
+    ];
+    const revoked = new Map<string, Date>();
+    for (const { token, secret } of credentials) {
+      if (typeof token !== 'string' || !token) continue;
+      const claims = await this.jwtService.verifyAsync(token, {
+        secret, issuer: this.jwtIssuer, audience: this.jwtAudience,
+      }).catch(() => null);
+      if (!claims?.jti || !claims.exp) continue;
+      const expiresAt = new Date(claims.exp * 1000);
+      if (!revoked.has(claims.jti) || revoked.get(claims.jti)!.getTime() < expiresAt.getTime()) {
+        revoked.set(claims.jti, expiresAt);
       }
-    } catch (e) {
-      // If token decoding fails, do nothing
+    }
+    for (const [tokenJti, expiresAt] of revoked) {
+      try {
+        await this.tokenBlacklistRepo.insert({ tokenJti, expiresAt });
+      } catch (error) {
+        if (error?.driverError?.code !== 'ER_DUP_ENTRY') throw error;
+      }
     }
     return { message: 'Logged out successfully' };
   }
