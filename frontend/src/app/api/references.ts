@@ -244,6 +244,7 @@ interface AttendanceTechnicianRecord {
   openCount: number;
   attendanceStatus?: AttendanceStatus | null;
   isUnavailable?: boolean;
+  canReceiveEscalation?: boolean;
 }
 
 interface StaffLoginRecord {

@@ -430,6 +430,14 @@ export class RoleCapabilitiesService implements OnModuleInit {
     return this.cache.get(roleValue);
   }
 
+  /** Read one persisted role row and refresh its local authorization cache entry. */
+  async findOneFromDatabase(roleValue: string): Promise<RoleCapability | null> {
+    const row = await this.repo.findOne({ where: { roleValue } });
+    if (row) this.cache.set(roleValue, row);
+    else this.cache.delete(roleValue);
+    return row;
+  }
+
   /**
    * Persist updated capability flags for a role and reload the cache.
    * Only the fields present in dto are updated (partial update).

@@ -42,14 +42,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload) {
     if (payload.isTemp) throw new UnauthorizedException('Complete MFA verification before accessing the application.');
-    // Check that the user still exists and is active on every request.
-    // This ensures that deactivated or deleted accounts are forced out immediately
-    // without waiting for the JWT to expire.
-    const user = await this.usersService.findByIdSafe(payload.sub);
-    if (!user || !user.active) {
-      throw new UnauthorizedException('Account not found or has been deactivated');
-    }
-
     // Enforce server-side token revocation: if this token's jti has been blacklisted
     // (e.g., the user logged out), reject it immediately.
     if (payload.jti) {
@@ -61,7 +53,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
-    await this.outboundEmailPolicy.assertAccountAccess(user.id);
+    // The Users service combines the current user, active-unit, and persisted
+    // capability checks into one narrow query. Keep the fallback for older
+    // strategy adapters/test doubles; the registered service always provides
+    // authorizeRequestAccount.
+    const authorizeRequestAccount = (this.outboundEmailPolicy as any).authorizeRequestAccount;
+    let user: any;
+    if (typeof authorizeRequestAccount === 'function') {
+      user = await authorizeRequestAccount.call(this.outboundEmailPolicy, payload.sub);
+    } else {
+      user = await this.usersService.findByIdSafe(payload.sub);
+      if (!user || !user.active) {
+        throw new UnauthorizedException('Account not found or has been deactivated');
+      }
+      await this.outboundEmailPolicy.assertAccountAccess(user.id);
+    }
+
+    if (!user || !user.active) {
+      throw new UnauthorizedException('Account not found or has been deactivated');
+    }
 
     return {
       id: user.id,

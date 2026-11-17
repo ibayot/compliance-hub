@@ -2,6 +2,12 @@ import { apiClient, cancelSessionRenewal, refreshAuthentication, tokenStore } fr
 import { boundedGet, ReadOptions } from './bounded-read';
 import { LoginCredentials, AuthResponse, SignInResponse, User } from '../types/auth';
 import { Capacitor } from '@capacitor/core';
+import type { RoleCapabilityRecord } from './users';
+
+export interface SessionProfile extends User {
+  capabilities?: RoleCapabilityRecord | null;
+  idleLockMinutes?: number;
+}
 
 let pendingLogout: Promise<void> | null = null;
 
@@ -91,12 +97,12 @@ export const authApi = {
     return response.data;
   },
 
-  getProfile: async (options?: ReadOptions): Promise<User> => {
+  getProfile: async (options?: ReadOptions): Promise<SessionProfile> => {
     // AuthProvider calls this during application bootstrap, including when a
     // browser has no access token but may still have an HttpOnly session
     // cookie. Bound that probe so a stalled API cannot leave every route on a
     // permanent loading spinner.
-    return boundedGet<User>('/auth/me', options);
+    return boundedGet<SessionProfile>('/auth/me', options);
   },
 
   refresh: async (_refreshToken: string): Promise<{ accessToken?: string; refreshToken?: string }> => {

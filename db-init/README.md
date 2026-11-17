@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.4 (from application version 1.1.3)
+
+There is no schema migration. Verify the Users database target and apply `20261117-add-application-changelog-v1.1.4-users.sql` before deployment. It publishes the capability-scoped staff and separate End User notes and preserves existing acknowledgment history on repeat. The local Docker Users database is updated during implementation; staging and production remain operator-managed. Rebuild/recreate the backend services and frontend together so their embedded application versions match. No Android APK rebuild is needed for these web application updates.
+
 ## For release 1.1.3 (from application version 1.1.1)
 
 1. Verify the database names configured for the running services and take the normal database backup. Pause Compliance document writes. Check duplicate version numbers and orphaned document versions, reviews and comparisons before any Compliance DDL. Stop to reconcile affected historical records if a check reports a conflict.

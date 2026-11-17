@@ -352,6 +352,7 @@ export class TicketCronService implements OnModuleInit {
             {
               automaticStatusChange: true,
               automaticSource: 'pause_limit_reached',
+              expectedInterruption: { status: TicketStatus.PAUSE, pausedAt: ticket.slaPausedAt },
             },
           );
 
@@ -400,6 +401,7 @@ export class TicketCronService implements OnModuleInit {
             {
               automaticStatusChange: true,
               automaticSource: 'freeze_limit_reached',
+              expectedInterruption: { status: TicketStatus.FREEZE, pausedAt: ticket.slaPausedAt },
             },
           );
 

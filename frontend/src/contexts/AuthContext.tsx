@@ -10,7 +10,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -30,6 +30,7 @@ import { CredentialResponse, GoogleLogin } from '@react-oauth/google';
 import { closeSnackbar, useSnackbar } from 'notistack';
 import { User } from '@/lib/types/auth';
 import { authApi } from '@/lib/api/auth';
+import type { SessionProfile } from '@/lib/api/auth';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
@@ -65,6 +66,26 @@ function parseJwt(token: string) {
     console.error('JWT parse error:', e);
     return null;
   }
+}
+
+async function loadSessionExtras(profile: SessionProfile, options?: ReadOptions) {
+  const capabilitiesPromise = profile.capabilities !== undefined
+    ? Promise.resolve(profile.capabilities)
+    : usersApi.getMyCapabilities(options).catch(() => null);
+  const idleLockMinutesPromise = isValidIdleLockMinutes(profile.idleLockMinutes)
+    ? Promise.resolve(profile.idleLockMinutes)
+    : usersApi.getSessionPolicy(options)
+      .then((policy) => policy.idleLockMinutes)
+      .catch(() => null);
+  const [capabilities, idleLockMinutes] = await Promise.all([
+    capabilitiesPromise,
+    idleLockMinutesPromise,
+  ]);
+
+  return {
+    capabilities: capabilities ?? null,
+    idleLockMinutes: isValidIdleLockMinutes(idleLockMinutes) ? idleLockMinutes : null,
+  };
 }
 
 interface AuthContextType {
@@ -115,13 +136,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { currentUserRef.current = user; }, [user]);
   const retrySession = useCallback(() => retrySessionRef.current(), []);
 
-  const refreshSession = useCallback(async (options?: ReadOptions): Promise<User> => {
+  const refreshSession = useCallback(async (options?: ReadOptions): Promise<SessionProfile> => {
     const generation = recoveryGeneration();
     await authApi.refresh(tokenStore.get('refreshToken') || '');
     if (options?.signal?.aborted) throw new Error('Session recovery cancelled.');
     const profile = await authApi.getProfile(options);
     if (options?.signal?.aborted || !canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
+    const extras = await loadSessionExtras(profile, options);
+    if (options?.signal?.aborted || !canRecoverSession() || generation !== recoveryGeneration()) throw new Error('Session recovery cancelled.');
     setUser(profile);
+    setMyCap(extras.capabilities);
+    if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
     return profile;
   }, []);
 
@@ -131,31 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setGoogleSignInEnabled(false));
   }, [isSessionLocked]);
 
-  useEffect(() => {
-    let active = true;
-    let pending = false;
-    if (!authenticatedUserId) {
-      setIdleLockMinutes(DEFAULT_IDLE_LOCK_MINUTES);
-      return;
-    }
-    const refreshPolicy = async () => {
-      if (pending) return;
-      pending = true;
-      try {
-        const policy = await usersApi.getSessionPolicy();
-        if (active) setIdleLockMinutes(isValidIdleLockMinutes(policy.idleLockMinutes)
-          ? policy.idleLockMinutes : DEFAULT_IDLE_LOCK_MINUTES);
-      } catch { /* Retain the last known policy; initial failures keep the 15-minute default. */ }
-      finally { pending = false; }
-    };
-    const onVisible = () => { if (document.visibilityState === 'visible') void refreshPolicy(); };
-    void refreshPolicy();
-    const interval = setInterval(() => void refreshPolicy(), 60_000);
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { active = false; clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
-  }, [authenticatedUserId]);
-
-  
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       // Older native builds wrote duplicate tokens here and never restored them.
@@ -231,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.clear();
       setUser(null);
       setMyCap(null);
+      setIdleLockMinutes(DEFAULT_IDLE_LOCK_MINUTES);
       setIsSessionLocked(false);
       setRequiresMfa(false);
       setRequiresPasswordChange(false);
@@ -287,14 +288,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token = tokenStore.get('accessToken');
         let profile = await authApi.getProfile({ signal: requestController.signal });
         if (!currentAttempt()) return;
-        const capabilities = await usersApi.getMyCapabilities({ signal: requestController.signal });
+        let extras = await loadSessionExtras(profile, { signal: requestController.signal });
         if (!currentAttempt()) return;
         const previous = currentUserRef.current;
         if (!previous) {
           const lastActivity = readSessionActivity(profile.id);
-          const policy = await usersApi.getSessionPolicy({ signal: requestController.signal, timeoutMs: 5000 }).catch(() => null);
-          if (!currentAttempt()) return;
-          const minutes = isValidIdleLockMinutes(policy?.idleLockMinutes) ? policy.idleLockMinutes : DEFAULT_IDLE_LOCK_MINUTES;
+          const minutes = extras.idleLockMinutes ?? DEFAULT_IDLE_LOCK_MINUTES;
           setIdleLockMinutes(minutes);
           lastActivityRef.current = lastActivity ?? Date.now();
           if (lastActivity && Date.now() - lastActivity >= minutes * 60_000 && !profile.requiresPasswordChange) {
@@ -319,11 +318,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (oldUnits !== newUnits) {
             profile = await refreshSession({ signal: requestController.signal });
             if (!currentAttempt()) return;
+            extras = await loadSessionExtras(profile, { signal: requestController.signal });
+            if (!currentAttempt()) return;
             enqueueSnackbar('Your unit access was updated from the personnel directory.', { variant: 'info' });
           }
         }
-        setUser(profile);
-        setMyCap(capabilities);
+        // Keep equal values stable so a successful recheck does not rerun reads
+        // for unchanged identity and capabilities in the workspace.
+        setUser((currentProfile) => replaceEqualDeep(currentProfile, profile));
+        setMyCap((currentCapabilities) => replaceEqualDeep(currentCapabilities, extras.capabilities));
+        if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
         setRequiresPasswordChange(!!profile.requiresPasswordChange);
         setRequiresMfa(!!profile.requiresMfa);
         setLoading(false);
@@ -451,16 +455,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRequiresPasswordChange(true);
     }
     // Then fetch full profile to guarantee units and all relations are populated
+    let profileSnapshotLoaded = false;
     try {
       const profile = await authApi.getProfile();
+      const extras = await loadSessionExtras(profile);
       setUser(profile);
+      setMyCap(extras.capabilities);
+      if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
+      profileSnapshotLoaded = true;
     } catch (err) {
       // Non-blocking: login response user data is still valid
     }
-    await usersApi
-      .getMyCapabilities()
-      .then(setMyCap)
-      .catch(() => { setMyCap(null); });
+    if (!profileSnapshotLoaded) {
+      const [capabilities, policy] = await Promise.all([
+        usersApi.getMyCapabilities().catch(() => null),
+        usersApi.getSessionPolicy().catch(() => null),
+      ]);
+      setMyCap(capabilities);
+      if (isValidIdleLockMinutes(policy?.idleLockMinutes)) setIdleLockMinutes(policy.idleLockMinutes);
+    }
 
     navigate(signInDestination(redirectTo) ?? '/dashboard', { replace: true });
   };
@@ -493,14 +506,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (response.requiresMfa) {
       setRequiresMfa(true);
     }
+    let profileSnapshotLoaded = false;
     try {
       const profile = await authApi.getProfile();
+      const extras = await loadSessionExtras(profile);
       setUser(profile);
+      setMyCap(extras.capabilities);
+      if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
+      profileSnapshotLoaded = true;
     } catch (err) { /* ignore */ }
-    await usersApi
-      .getMyCapabilities()
-      .then(setMyCap)
-      .catch(() => { setMyCap(null); });
+    if (!profileSnapshotLoaded) {
+      const [capabilities, policy] = await Promise.all([
+        usersApi.getMyCapabilities().catch(() => null),
+        usersApi.getSessionPolicy().catch(() => null),
+      ]);
+      setMyCap(capabilities);
+      if (isValidIdleLockMinutes(policy?.idleLockMinutes)) setIdleLockMinutes(policy.idleLockMinutes);
+    }
 
     if (response.requiresMfa) {
       navigate('/mfa-verify', { replace: true, state: { returnTo: signInDestination(redirectTo) } });
@@ -666,8 +688,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           open={requiresPasswordChange}
           onClose={() => {
             // Re-fetch profile to confirm password was actually changed server-side
-            authApi.getProfile().then((profile) => {
+            authApi.getProfile().then(async (profile) => {
+              const extras = await loadSessionExtras(profile);
               setUser(profile);
+              setMyCap(extras.capabilities);
+              if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
               if (!profile.requiresPasswordChange) {
                 setRequiresPasswordChange(false);
               }

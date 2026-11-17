@@ -1349,7 +1349,10 @@ export default function TicketsPage({
       );
 
       const allowedValues = new Set(focals.map((f) => String(f.userId)));
-      setEscalationFocalUsers(mergedUsers.filter((t) => allowedValues.has(String(t.id))));
+      setEscalationFocalUsers(mergedUsers.filter(
+        (t) => allowedValues.has(String(t.id)) &&
+          (t.canReceiveEscalation ?? t.attendanceStatus === 'present'),
+      ));
     } catch {
       setEscalationFocalUsers([]);
     }

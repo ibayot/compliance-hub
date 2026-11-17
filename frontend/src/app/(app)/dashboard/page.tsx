@@ -216,10 +216,11 @@ export default function DashboardPage() {
     usersApi.getAppMode().then((res: any) => setAppMode(res.appMode || 'full')).catch(() => setAppMode('full'));
   }, [myCap?.isGlobalSettingsAccess, ticketingEnabled]);
 
-  const silentFetchDashboardData = useCallback(async () => {
+  const silentFetchDashboardData = useCallback(async (ticketOnly = false) => {
     if (!user?.id) return;
     if (appMode === 'loading') return;
     if (!capabilitiesReady) return;
+    if (ticketOnly && !ticketingEnabled) return;
 
     try {
       if (isRequesterDashboard && ticketingEnabled) {
@@ -240,6 +241,7 @@ export default function DashboardPage() {
         return;
       }
 
+      const refreshCompliance = complianceEnabled && !ticketOnly;
       const [
         docsResponse,
         metricsResult,
@@ -248,13 +250,21 @@ export default function DashboardPage() {
         kpiSummaryResult,
         userDashStatsResult,
       ] = await Promise.allSettled([
-        complianceEnabled && canViewDocuments ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
-        complianceEnabled && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
-        complianceEnabled && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
+        refreshCompliance && canViewDocuments ? documentsApi.listDocuments({ limit: 1000 }) : Promise.resolve({ data: [], total: 0 }),
+        refreshCompliance && canViewCybersecurityMetrics ? cybersecurityApi.getAll() : Promise.resolve(null),
+        refreshCompliance && canViewSecurityIncidents ? incidentsApi.getTodayStats() : Promise.resolve(null),
         ticketingEnabled && isComplianceOfficer ? ticketsApi.getStatistics() : Promise.resolve(null),
-        complianceEnabled ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
+        refreshCompliance ? kpiApi.dashboardSummary(periodYear, periodMonth) : Promise.resolve(null),
         ticketingEnabled ? ticketsApi.getDashboardStats() : Promise.resolve(null),
       ]);
+
+      if (userDashStatsResult.status === 'fulfilled') setUserTicketStats(userDashStatsResult.value);
+      const ticketStats = ticketStatsResult.status === 'fulfilled' ? ticketStatsResult.value : null;
+      const openTickets = (ticketStats?.byStatus as Record<string, number> | undefined)?.open ?? 0;
+      if (ticketOnly) {
+        if (ticketStats) setStats((current) => ({ ...current, openTickets }));
+        return;
+      }
 
       const docs = docsResponse.status === 'fulfilled' ? docsResponse.value.data : [];
       const totalDocsCount = docsResponse.status === 'fulfilled' ? docsResponse.value.total : docs.length;
@@ -264,13 +274,12 @@ export default function DashboardPage() {
       if (metricsResult.status === 'fulfilled' && metricsResult.value) setCyberMetrics(metricsResult.value);
       if (incidentsResult.status === 'fulfilled') setIncidentStats(incidentsResult.value);
       if (kpiSummaryResult.status === 'fulfilled') setKpiSummary(kpiSummaryResult.value);
-      if (userDashStatsResult.status === 'fulfilled') setUserTicketStats(userDashStatsResult.value);
 
       setStats({
         totalDocuments: totalDocsCount,
         compliantDocuments: compliant,
         pendingDocuments: pending,
-        openTickets: (ticketStatsResult.status === 'fulfilled' ? (ticketStatsResult.value as any)?.byStatus?.open : 0) || 0,
+        openTickets,
         recentDocuments: docs.slice(0, 5),
       });
     } catch (err) {
@@ -292,11 +301,16 @@ export default function DashboardPage() {
   }, [appMode, canViewAssignedTickets, user?.id, ticketingEnabled, techStatsYear, techStatsMonth]);
 
   const dashboardSseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
+  const needsFullDashboardRefresh = useRef(false);
+  useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], (_payload, eventType) => {
+    // A later ticket event must not narrow a pending reconnect or system refresh.
+    if (eventType !== 'TICKET_UPDATED') needsFullDashboardRefresh.current = true;
     if (dashboardSseTimer.current) clearTimeout(dashboardSseTimer.current);
     dashboardSseTimer.current = setTimeout(() => {
       dashboardSseTimer.current = null;
-      void silentFetchDashboardData();
+      const ticketOnly = !needsFullDashboardRefresh.current;
+      needsFullDashboardRefresh.current = false;
+      void silentFetchDashboardData(ticketOnly);
       void refreshTechAssignedStats(false);
       if (myCap?.isTicketSettingsFocal) {
         ticketsApi.getSlaSummary().then(setSlaSummary).catch(() => undefined);
@@ -304,7 +318,10 @@ export default function DashboardPage() {
     }, 750);
   });
   useEffect(() => () => { if (dashboardSseTimer.current) clearTimeout(dashboardSseTimer.current); }, []);
-  useSse(['INCIDENT_SNAPSHOT_CREATED'], silentFetchDashboardData);
+  useSse(['INCIDENT_SNAPSHOT_CREATED'], (_payload, eventType) => {
+    // The other dashboard subscription already reconciles on reconnect.
+    if (eventType === 'INCIDENT_SNAPSHOT_CREATED') void silentFetchDashboardData();
+  });
 
   useEffect(() => {
     if (!user?.id) return;

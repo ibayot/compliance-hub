@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, HttpStatus, Optional, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, BadRequestException, HttpStatus, Optional, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -18,6 +18,7 @@ import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { TicketingHttpClient } from '../../common/http-clients/ticketing.http-client';
 import { MFA_CODE_TTL_MS, MFA_RESEND_INTERVAL_SECONDS, mfaFailure } from './mfa-policy';
 import { OutboundEmailPolicyService } from '../users/outbound-email-policy.service';
+import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 
 export function isTrustedDeviceActive(
   expiresAt: Date | string | null | undefined,
@@ -31,6 +32,7 @@ export function isTrustedDeviceActive(
 @Injectable()
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
+  private readonly logger = new Logger(AuthService.name);
 
   constructor(
     @InjectRepository(TokenBlacklist)
@@ -42,6 +44,7 @@ export class AuthService {
     private readonly securityConfigService: SecurityConfigService,
     private readonly ticketingHttpClient: TicketingHttpClient,
     private readonly outboundEmailPolicy: OutboundEmailPolicyService,
+    @Optional() private readonly roleCapabilitiesService?: RoleCapabilitiesService,
     @Optional() private readonly emailService?: EmailService,
   ) {}
 
@@ -502,8 +505,16 @@ export class AuthService {
   }
 
   async getProfile(userId: number): Promise<Record<string, any>> {
-    const user = await this.usersService.findOne(userId);
-    const securityConfig = await this.securityConfigService.getConfig();
+    const user = await this.usersService.findForAuthProfile(userId);
+    const [securityConfig, capabilities] = await Promise.all([
+      this.securityConfigService.getAuthProfileSettings(),
+      this.roleCapabilitiesService
+        ? this.roleCapabilitiesService.findOneFromDatabase(user.role).catch(() => {
+          this.logger.warn('Current role capabilities could not be loaded for the authenticated profile.');
+          return null;
+        })
+        : Promise.resolve(null),
+    ]);
     const requiresPasswordChange = await bcrypt.compare(
       securityConfig.defaultPassword,
       user.passwordHash,
@@ -529,6 +540,8 @@ export class AuthService {
         name: u.name,
         hasReportorialRequirements: u.hasReportorialRequirements,
       })) || [],
+      capabilities,
+      idleLockMinutes: securityConfig.idleLockMinutes,
     };
   }
 

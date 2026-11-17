@@ -25,6 +25,7 @@ import {
 import { SseService } from './sse.service';
 import { auditContext } from '../../../shared/audit/audit.context';
 import { DutyService } from './duty.service';
+import { attendanceShiftEnd } from './attendance-shift';
 
 // --- DTOs ------------------------------------------------------------------
 
@@ -95,6 +96,9 @@ export class TechnicianListItemDto {
   @IsString()
   @ApiProperty()
   role: string;
+
+  @ApiProperty()
+  canReceiveEscalation: boolean;
 }
 
 // --- Service ----------------------------------------------------------------
@@ -181,6 +185,20 @@ export class AttendanceService implements OnModuleInit {
   /** Get attendance for a single date */
   async getAttendanceForDate(date: string): Promise<TechAttendance[]> {
     return this.getAttendance(date, date);
+  }
+
+  private permitsManualEscalation(record: TechAttendance | undefined, officerId: number | null): boolean {
+    return record?.status === AttendanceStatus.PRESENT ||
+      (record?.status === AttendanceStatus.OUT_OF_OFFICE &&
+        record.userId === officerId && record.notes === 'OD DUTY');
+  }
+
+  async canReceiveManualEscalation(userId: number, date: string): Promise<boolean> {
+    const [record, officerId] = await Promise.all([
+      this.attendanceRepo.findOne({ where: { userId, date } }),
+      this.dutyService?.activeOfficerOfDayId(date),
+    ]);
+    return this.permitsManualEscalation(record ?? undefined, officerId ?? null);
   }
 
   /** Set (upsert) attendance for a single user on a date */
@@ -522,15 +540,16 @@ export class AttendanceService implements OnModuleInit {
     }
 
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-    const attendanceRows = merged.length
-      ? await this.attendanceRepo.find({ where: { date: today, userId: In(merged.map((u) => u.id)) } })
-      : [];
-    const attendanceMap = new Map<number, AttendanceStatus>(
-      attendanceRows.map((record) => [record.userId, record.status]),
-    );
+    if (merged.length === 0) return [];
+    const [attendanceRows, officerId] = await Promise.all([
+      this.attendanceRepo.find({ where: { date: today, userId: In(merged.map((u) => u.id)) } }),
+      this.dutyService?.activeOfficerOfDayId(today),
+    ]);
+    const attendanceMap = new Map(attendanceRows.map((record) => [record.userId, record]));
 
     return merged.map((u) => {
-      const attendanceStatus = attendanceMap.get(u.id) ?? null;
+      const record = attendanceMap.get(u.id);
+      const attendanceStatus = record?.status ?? null;
       return {
         id: u.id,
         email: u.email,
@@ -539,6 +558,7 @@ export class AttendanceService implements OnModuleInit {
         role: u.role,
         attendanceStatus,
         isUnavailable: attendanceStatus !== AttendanceStatus.PRESENT,
+        canReceiveEscalation: this.permitsManualEscalation(record, officerId ?? null),
       };
     });
   }
@@ -688,45 +708,11 @@ export class AttendanceService implements OnModuleInit {
 
     const clockIn = attendanceRecord.clockInTime;
     const config = await this.configRepo.findOne({ where: { id: 1 } });
-    const isCWW = config?.scheduleMode === 'CWW';
-    
-    if (isCWW) {
-      const clockInStartStr = config?.cwwClockinStart || '07:00:00';
-      const [startH, startM] = clockInStartStr.split(':').map(Number);
-      const clockInStart = new Date(clockIn);
-      clockInStart.setHours(startH, startM, 0, 0);
-
-      const clockInEndStr = config?.cwwClockinEnd || '08:00:00';
-      const [endH, endM] = clockInEndStr.split(':').map(Number);
-      const clockInEnd = new Date(clockIn);
-      clockInEnd.setHours(endH, endM, 0, 0);
-
-      if (clockIn < clockInStart) {
-        // Super early bird - shift ends exactly at official clock-out start
-        const clockOutStartStr = config?.cwwClockoutStart || '18:00:00';
-        const [outH, outM] = clockOutStartStr.split(':').map(Number);
-        const clockOut = new Date(clockIn);
-        clockOut.setHours(outH, outM, 0, 0);
-        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
-      } else if (clockIn <= clockInEnd) {
-        // Within sliding window - exactly 11 hours from actual clock in
-        const clockOut = new Date(clockIn.getTime() + 11 * 3600 * 1000);
-        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
-      } else {
-        // Late clock in - shift ends exactly at official clock-out end
-        const clockOut = new Date(clockIn);
-        const clockOutEndStr = config?.cwwClockoutEnd || '19:00:00';
-        const [outH, outM] = clockOutEndStr.split(':').map(Number);
-        clockOut.setHours(outH, outM, 0, 0);
-        return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
-      }
-    } else {
-      const clockOut = new Date();
-      const stdClockOutStr = config?.officeClockout || '17:00:00';
-      const [hours, minutes] = stdClockOutStr.split(':').map(Number);
-      clockOut.setHours(hours, minutes, 0, 0);
-      return { clockIn, clockOut, attendanceStatus: attendanceRecord.status };
-    }
+    return {
+      clockIn,
+      clockOut: attendanceShiftEnd(todayStr, clockIn, config),
+      attendanceStatus: attendanceRecord.status,
+    };
   }
 
   getDtrSystemStatus(): { isOnline: boolean; lastSuccessfulSyncDate: string | null } {

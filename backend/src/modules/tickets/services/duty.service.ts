@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cron } from '@nestjs/schedule';
-import { EntityManager, In, Repository } from 'typeorm';
+import { EntityManager, In, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
 import { formatPersonName } from '../../../shared/utils/person-name';
 import {
@@ -32,6 +32,7 @@ import { AttendanceStatus, TechAttendance } from '../entities/tech-attendance.en
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { SseService } from './sse.service';
+import { attendanceShiftEnd } from './attendance-shift';
 
 type Actor = { id: number; role: string };
 const DUTY_PRIORITY = [DutyType.OD, DutyType.ROC, DutyType.CONFERENCE, DutyType.OPCEN];
@@ -1088,6 +1089,13 @@ export class DutyService {
     return [...new Set([...coverageUserIds, ...relievers.map((reliever) => reliever.userId)])];
   }
 
+  async activeOfficerOfDayId(date: string): Promise<number | null> {
+    const coverage = await this.coverageRepo.findOne({
+      where: { dutyDate: date, dutyType: DutyType.OD, status: DutyCoverageStatus.ACTIVE },
+    });
+    return coverage?.assignedUserId ?? null;
+  }
+
   private coverageCandidateUserId(coverage: DutyDailyCoverage): number | null {
     if (coverage.status === DutyCoverageStatus.ACTIVE) return coverage.assignedUserId;
     if (coverage.status === DutyCoverageStatus.INTERVENTION_REQUIRED) return coverage.primaryUserId;
@@ -1144,6 +1152,12 @@ export class DutyService {
     let currentCoverage = await this.coverageRepo.findOne({
       where: { dutyDate: date, dutyType: type, dutyPeriod },
     });
+    // The OD finalizer owns the end of activated coverage. Rotation must not
+    // cancel a serving officer or reopen an already completed daily assignment.
+    if (type === DutyType.OD && currentCoverage &&
+      [DutyCoverageStatus.ACTIVE, DutyCoverageStatus.COMPLETED].includes(currentCoverage.status)) {
+      return currentCoverage;
+    }
     if (type !== DutyType.OD) {
       const activeReservations = reservations.filter((reservation) => reservation.status !== DutyReservationStatus.CANCELLED);
       const relievers = await this.relieversForReservationIds(activeReservations.map((reservation) => reservation.id));
@@ -1461,10 +1475,16 @@ export class DutyService {
     }
     const completedCoverage = { ...coverage } as DutyDailyCoverage;
     const releasedUserId = coverage.assignedUserId;
-    await this.restoreAttendance(coverage);
     coverage.status = DutyCoverageStatus.RELEASED;
     coverage.releasedAt = new Date();
-    await this.coverageRepo.save(coverage);
+    const release = await this.coverageRepo.update(
+      { id, status: DutyCoverageStatus.ACTIVE },
+      { status: coverage.status, releasedAt: coverage.releasedAt },
+    );
+    if (release.affected !== 1) {
+      throw new BadRequestException('Duty coverage changed. Refresh before returning it to Ticket Assignment.');
+    }
+    await this.restoreAttendance(coverage);
     try {
       const replacement = await this.reconcileCoverage(
         coverage.dutyDate,
@@ -1568,6 +1588,54 @@ export class DutyService {
     return { page: safePage, limit: safeLimit };
   }
 
+  @Cron('* * * * *', { timeZone: DUTY_TIME_ZONE })
+  async finalizeOfficerOfDay() {
+    const date = this.today();
+    const now = new Date();
+    const [config, active] = await Promise.all([
+      this.configRepo.findOne({ where: { id: 1 } }),
+      this.coverageRepo.find({
+        where: { dutyType: DutyType.OD, status: DutyCoverageStatus.ACTIVE, dutyDate: LessThanOrEqual(date) },
+      }),
+    ]);
+    for (const candidate of active) {
+      const result = await this.coverageRepo.manager.transaction(async (manager) => {
+        const coverageRepo = manager.getRepository(DutyDailyCoverage);
+        const coverage = await coverageRepo.findOne({
+          where: { id: candidate.id }, lock: { mode: 'pessimistic_write' },
+        });
+        if (coverage?.status !== DutyCoverageStatus.ACTIVE || !coverage.assignedUserId) return null;
+        const attendanceRepo = manager.getRepository(TechAttendance);
+        const attendance = await attendanceRepo.findOne({
+          where: { date: coverage.dutyDate, userId: coverage.assignedUserId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        const ownsAttendance = coverage.attendanceOverridden &&
+          attendance?.status === AttendanceStatus.OUT_OF_OFFICE && attendance.notes === 'OD DUTY';
+        const shiftEnd = attendanceShiftEnd(coverage.dutyDate, attendance?.clockInTime, config);
+        const attendanceEnded = !ownsAttendance && attendance?.status !== AttendanceStatus.PRESENT;
+        if (coverage.dutyDate === date && now < shiftEnd && !attendanceEnded) return null;
+
+        await this.recordCompletedCoverage(coverage, manager);
+        coverage.status = DutyCoverageStatus.COMPLETED;
+        coverage.releasedAt = now < shiftEnd ? now : shiftEnd;
+        coverage.attendanceOverridden = false;
+        await coverageRepo.save(coverage);
+        if (ownsAttendance) {
+          attendance.status = (coverage.previousAttendanceStatus as AttendanceStatus) || AttendanceStatus.PRESENT;
+          attendance.notes = coverage.previousAttendanceNotes;
+          attendance.isManualOverride = attendance.setById != null;
+          await attendanceRepo.save(attendance);
+        }
+        return { attendanceRestored: ownsAttendance };
+      });
+      if (result) {
+        this.sse.emitDutyUpdated();
+        if (result.attendanceRestored) this.sse.emitAttendanceUpdated();
+      }
+    }
+  }
+
   @Cron('* * * * 1-5', { timeZone: 'Asia/Manila' })
   async finalizeToday() {
     const date = this.today();
@@ -1597,13 +1665,12 @@ export class DutyService {
         await this.recordRelieverAssignment(manager, current, reliever, `Immediate reliever: ${reliever.reason}`, reliever.createdById);
       });
     }
-    const coverages = await this.coverageRepo.find({ where: { dutyDate: date, status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED]) } });
+    const coverages = await this.coverageRepo.find({ where: { dutyDate: date, dutyType: Not(DutyType.OD), status: In([DutyCoverageStatus.ACTIVE, DutyCoverageStatus.RELEASED]) } });
     for (const coverage of coverages) {
       const reservation = coverage.reservationId
         ? await this.reservationRepo.findOne({ where: { id: coverage.reservationId } })
         : null;
-      const dutyOccurred = coverage.dutyType === DutyType.OD
-        || Boolean(reservation && [DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status));
+      const dutyOccurred = reservation && [DutyReservationStatus.CONFIRMED, DutyReservationStatus.COMPLETED].includes(reservation.status);
       if (coverage.assignedUserId && dutyOccurred) {
         if (!(await this.recordCompletedCoverage(coverage))) continue;
         coverage.status = DutyCoverageStatus.COMPLETED;

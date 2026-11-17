@@ -195,8 +195,7 @@ export class UsersController {
    */
   @Get('role-capabilities/me')
   async getMyCapabilities(@Request() req: any) {
-    await this.roleCapabilitiesService.reload();
-    return this.roleCapabilitiesService.findOne(req.user.role) ?? null;
+    return this.roleCapabilitiesService.findOneFromDatabase(req.user.role);
   }
 
   /** Updates capability flags for a specific role. Super admin or Section Head only for Admin cap. */

@@ -35,7 +35,7 @@ const SSE_STALE_MS = 75_000; // Server heartbeat is every 20 seconds.
 
 type SseListener = {
   types: SseEventType[];
-  callback: (payload?: any) => void;
+  callback: (payload?: any, eventType?: SseEventType) => void;
 };
 const activeListeners = new Set<SseListener>();
 
@@ -152,7 +152,7 @@ async function connectSse(authKey: string, accessToken?: string, force = false) 
         }
 
         try {
-          listener.callback(data.payload);
+          listener.callback(data.payload, data.type);
         } catch (err) {
           console.error(`[SSE] Listener failed for ${data.type}:`, err);
         }
@@ -251,7 +251,7 @@ if (typeof window !== 'undefined') {
 /**
  * useSse (Hardened Singleton Version)
  */
-export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => void) {
+export function useSse(eventTypes: SseEventType[], callback: SseListener['callback']) {
   const { isSessionLocked, requiresPasswordChange, user } = useAuth();
   
   const callbackRef = useRef(callback);
@@ -275,7 +275,7 @@ export function useSse(eventTypes: SseEventType[], callback: (payload?: any) => 
     // Register this component's listener
     const listener: SseListener = {
       types: typesString.split(',') as SseEventType[],
-      callback: (payload) => callbackRef.current(payload),
+      callback: (payload, eventType) => callbackRef.current(payload, eventType),
     };
 
     activeListeners.add(listener);

@@ -679,12 +679,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [fetchNotificationSummary]);
 
   // Live updates – listen for SSE changes
-  useSse(['NOTIFICATION_CREATED'], (payload) => {
-    if (!payload?.reconnected && !pushEnabled) playNotificationSound();
+  useSse(['NOTIFICATION_CREATED', 'NOTIFICATIONS_READ'], (payload, eventType) => {
+    if (eventType === 'NOTIFICATION_CREATED' && !payload?.reconnected && !pushEnabled) {
+      playNotificationSound();
+    }
     void fetchNotificationSummary();
   });
-
-  useSse(['NOTIFICATIONS_READ'], () => { void fetchNotificationSummary(); });
 
   useEffect(() => {
     if (!pushEnabled || !('setAppBadge' in navigator)) return;

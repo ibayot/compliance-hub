@@ -574,8 +574,6 @@ export class TicketService implements OnModuleInit {
     private readonly resolutionOverrideRepo: Repository<TicketResolutionTimeOverride>,
     @InjectRepository(TicketingConfig)
     private readonly configRepo: Repository<TicketingConfig>,
-    @InjectRepository(TicketStatusJustification)
-    private readonly justificationRepo: Repository<TicketStatusJustification>,
     private readonly usersHttpClient: UsersHttpClient,
     @InjectRepository(TicketEvent)
     private readonly eventRepo: Repository<TicketEvent>,
@@ -3116,16 +3114,107 @@ export class TicketService implements OnModuleInit {
     });
   }
 
-  private async persistTicketUpdate(ticket: Ticket, expectedUpdatedAt: Date): Promise<Ticket> {
-    return this.dataSource.transaction(async manager => {
+  private async persistTicketUpdate(
+    ticket: Ticket,
+    expectedUpdatedAt: Date,
+    interruption?: { from: TicketStatus; actorId: number; justification: string },
+  ): Promise<Ticket> {
+    let promotedId: string | null = null;
+    const saved = await this.dataSource.transaction(async manager => {
       const repo = manager.getRepository(Ticket);
       const current = await repo.findOne({ where: { id: ticket.id }, lock: { mode: 'pessimistic_write' } });
       if (!current || current.status === TicketStatus.CANCELLED)
         throw new ConflictException('This ticket is no longer editable. Refresh the ticket.');
       if (new Date(current.updatedAt).getTime() !== new Date(expectedUpdatedAt).getTime())
         throw new ConflictException('This ticket changed. Refresh it before saving.');
-      return repo.save(ticket);
+      if (!interruption) {
+        const savedTicket = await repo.save(ticket);
+        if (ticket.status === TicketStatus.IN_PROGRESS && ticket.assignedToId &&
+          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(current.status)) {
+          // Let the returning ticket run alongside already-started work. Only
+          // tickets still Assigned can be put back into SLA waiting.
+          await repo.createQueryBuilder()
+            .update(Ticket)
+            .set({ isSlaWaiting: true, slaPausedAt: () => 'COALESCE(sla_paused_at, :pausedAt)' })
+            .setParameter('pausedAt', new Date())
+            .where('assigned_to_id = :assignee AND status = :assigned AND is_sla_waiting = :waiting', {
+              assignee: ticket.assignedToId, assigned: TicketStatus.ASSIGNED, waiting: false,
+            })
+            .execute();
+        }
+        return savedTicket;
+      }
+      const escalations = manager.getRepository(TicketEscalation);
+      if (current.status !== interruption.from || current.assignedToId !== ticket.assignedToId ||
+        await escalations.exist({ where: { ticketId: ticket.id, status: EscalationStatus.PENDING } })) {
+        throw new ConflictException('This ticket changed. Refresh it before saving.');
+      }
+
+      const savedTicket = await repo.save(ticket);
+      const justifications = manager.getRepository(TicketStatusJustification);
+      await justifications.save(justifications.create({
+        ticketId: ticket.id,
+        status: ticket.status,
+        justification: interruption.justification,
+        createdBy: interruption.actorId,
+      }));
+      const events = manager.getRepository(TicketEvent);
+      await events.save(events.create({
+        ticketId: ticket.id,
+        eventType: 'status_changed',
+        actorId: interruption.actorId,
+        meta: JSON.stringify({ from: interruption.from, to: ticket.status, justification: interruption.justification }),
+      }));
+
+      if (interruption.from !== TicketStatus.IN_PROGRESS || !ticket.assignedToId) return savedTicket;
+      const next = await repo.createQueryBuilder('candidate')
+        .where('candidate.assignedToId = :assignee AND candidate.status = :assigned', {
+          assignee: ticket.assignedToId, assigned: TicketStatus.ASSIGNED,
+        })
+        .andWhere((qb) => {
+          const pending = qb.subQuery().select('1').from(TicketEscalation, 'escalation')
+            .where('escalation.ticketId = candidate.id AND escalation.status = :pending').getQuery();
+          return `NOT EXISTS ${pending}`;
+        }, { pending: EscalationStatus.PENDING })
+        .orderBy('candidate.createdAt', 'ASC')
+        .addOrderBy('candidate.id', 'ASC')
+        .limit(1)
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!next) return savedTicket;
+
+      const startedAt = new Date();
+      if (!next.slaStartedAt) {
+        next.slaStartedAt = startedAt;
+        next.accumulatedPauseSeconds = 0;
+        next.slaDeadline = await this.calculateTicketSlaDeadline(next, startedAt);
+        next.slaPausedAt = null;
+      } else if (next.isSlaWaiting && next.slaPausedAt) {
+        const config = await this.configRepo.findOne({ where: { id: 1 } });
+        const elapsed = await this.calculateBusinessSeconds(
+          next.slaPausedAt, startedAt, this.ticketCalendar(config, next) as TicketingConfig,
+        );
+        creditTicketPause(next, next.slaPausedAt, startedAt, elapsed);
+        next.slaDeadline = await this.calculateTicketSlaDeadline(next, next.slaStartedAt, next.accumulatedPauseSeconds);
+        next.slaPausedAt = null;
+      }
+      next.status = TicketStatus.IN_PROGRESS;
+      next.isSlaWaiting = false;
+      await repo.save(next);
+      await events.save(events.create({
+        ticketId: next.id,
+        eventType: 'queue_promoted',
+        actorId: null,
+        meta: JSON.stringify({
+          technicianId: ticket.assignedToId, source: 'interrupted_ticket_handoff', automatic: true,
+          fromStatus: TicketStatus.ASSIGNED, toStatus: TicketStatus.IN_PROGRESS,
+        }),
+      }));
+      promotedId = next.id;
+      return savedTicket;
     });
+    if (promotedId) this.sseService.emitTicketUpdated(promotedId);
+    return saved;
   }
 
   private async persistDuplicateTicket(
@@ -3228,10 +3317,16 @@ export class TicketService implements OnModuleInit {
       automaticClosure?: boolean;
       automaticStatusChange?: boolean;
       automaticSource?: string;
+      expectedInterruption?: { status: TicketStatus; pausedAt: Date };
     } = {},
   ): Promise<Ticket> {
     const ticket = await this.getTicketById(id, actorRole, actorId);
     if (ticket.status === TicketStatus.CANCELLED) throw new ForbiddenException('Cancelled tickets cannot be updated.');
+    if (options.expectedInterruption &&
+      (ticket.status !== options.expectedInterruption.status ||
+        ticket.slaPausedAt?.getTime() !== options.expectedInterruption.pausedAt.getTime())) {
+      throw new ConflictException('The ticket interruption changed before it could be resumed.');
+    }
     if (dto.status === TicketStatus.CANCELLED) throw new BadRequestException('Use Cancel Ticket and supply a cancellation reason.');
     if (dto.status === TicketStatus.DUPLICATE) {
       const extraFields = Object.keys(dto).filter(
@@ -3589,7 +3684,9 @@ export class TicketService implements OnModuleInit {
           TicketStatus.CLOSED,
           ...(canCorrectResolvedDuplicate ? [TicketStatus.DUPLICATE] : []),
         ],
-        [TicketStatus.FREEZE]: isTicketStatusAdmin
+        [TicketStatus.FREEZE]: frozenReturnStatus === TicketStatus.IN_PROGRESS
+          ? [TicketStatus.IN_PROGRESS, ...(isTicketStatusAdmin ? [TicketStatus.RESOLVED] : [])]
+          : isTicketStatusAdmin
           ? [
               TicketStatus.OPEN,
               TicketStatus.ASSIGNED,
@@ -3616,8 +3713,11 @@ export class TicketService implements OnModuleInit {
         );
       }
 
-      // QA #5: Priority is mandatory before moving to In Progress
-      if (dto.status === TicketStatus.IN_PROGRESS) {
+      // A resume continues a ticket that already started, including legacy
+      // tickets that were started automatically without an explicit priority.
+      const resumesActiveInterruption = ticket.status === TicketStatus.PAUSE ||
+        frozenReturnStatus === TicketStatus.IN_PROGRESS;
+      if (dto.status === TicketStatus.IN_PROGRESS && !resumesActiveInterruption) {
         const effectivePriority = dto.priority ?? ticket.priority;
         if (!effectivePriority) {
           throw new BadRequestException(
@@ -3673,13 +3773,6 @@ export class TicketService implements OnModuleInit {
               `A justification is required when setting the status to ${dto.status.toUpperCase()}.`,
             );
           }
-          const justif = this.justificationRepo.create({
-            ticketId: ticket.id,
-            status: dto.status,
-            justification: dto.statusJustification.trim(),
-            createdBy: actorId,
-          });
-          await this.justificationRepo.save(justif);
         }
 
         const wasPaused =
@@ -3737,34 +3830,6 @@ export class TicketService implements OnModuleInit {
           ticket.slaPausedAt = null;
         }
 
-        // Preemptive Queue Pushback (Unfreeze/Unpause Priority)
-        // We only push back ASSIGNED tickets so that multiple IN_PROGRESS tickets can run concurrently.
-        if (
-          dto.status === TicketStatus.IN_PROGRESS &&
-          [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(originalStatusForLogging) &&
-          ticket.assignedToId
-        ) {
-          const currentActiveTickets = await this.ticketRepo.find({
-            where: {
-              assignedToId: ticket.assignedToId,
-              status: TicketStatus.ASSIGNED,
-              id: Not(ticket.id),
-              isSlaWaiting: false,
-            },
-          });
-          for (const activeT of currentActiveTickets) {
-            activeT.isSlaWaiting = true;
-            if (!activeT.slaPausedAt) {
-              activeT.slaPausedAt = new Date();
-            }
-          }
-          if (currentActiveTickets.length > 0) {
-            await this.ticketRepo.save(currentActiveTickets);
-            this.logger.log(
-              `Pushed back ${currentActiveTickets.length} active ticket(s) to queue due to preemptive resume.`,
-            );
-          }
-        }
         // QA: When transitioning back to OPEN, remove the assigned technician
         if (dto.status === TicketStatus.OPEN) {
           ticket.assignedToId = null;
@@ -3928,9 +3993,14 @@ export class TicketService implements OnModuleInit {
     }
 
     recordInterruptionTransition(ticket, originalStatusForLogging, ticket.status);
+    const interruption = [TicketStatus.PAUSE, TicketStatus.FREEZE].includes(dto.status as TicketStatus)
+      ? { from: originalStatusForLogging, actorId, justification: dto.statusJustification!.trim() }
+      : undefined;
     const saved = dto.status === TicketStatus.DUPLICATE
       ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
-      : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
+      : interruption
+        ? await this.withAutoAssignmentLock(() => this.persistTicketUpdate(ticket, expectedUpdatedAt, interruption))
+        : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
     this.sseService.emitTicketUpdated(saved.id);
 
     if (automaticAssignmentDuringUpdate) {
@@ -3987,7 +4057,7 @@ export class TicketService implements OnModuleInit {
           },
           false,
         ).catch(() => {});
-      } else if (dto.status !== TicketStatus.DUPLICATE) {
+      } else if (dto.status !== TicketStatus.DUPLICATE && !interruption) {
         this.logEvent(
           saved.id,
           'status_changed',
@@ -4064,6 +4134,7 @@ export class TicketService implements OnModuleInit {
         TicketStatus.FREEZE,
       ].includes(dto.status as TicketStatus) &&
       saved.assignedToId &&
+      !(dto.status === TicketStatus.FREEZE && originalStatusForLogging === TicketStatus.IN_PROGRESS) &&
       !(dto.status === TicketStatus.DUPLICATE && originalStatusForLogging === TicketStatus.RESOLVED)
     ) {
       const assignedTechnicianId = saved.assignedToId;
@@ -6691,20 +6762,10 @@ export class TicketService implements OnModuleInit {
       );
     }
 
-    // QA #9: Verify that the selected focal is actually PRESENT today
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-    // Escalation focals are not necessarily ticket technicians (for example,
-    // a section head), so the technician-only availability query can never
-    // prove that they are present. Check the attendance record directly while
-    // retaining the explicit PRESENT requirement.
-    const presentAttendance = await this.attendanceService.getAttendanceForDate(today);
-    const isPresent = presentAttendance.some(
-      (record) =>
-        Number(record.userId) === Number(focal.id) && record.status === AttendanceStatus.PRESENT,
-    );
-    if (!isPresent) {
+    if (!await this.attendanceService.canReceiveManualEscalation(Number(focal.id), today)) {
       throw new BadRequestException(
-        'The selected escalation focal is not currently marked as present or available today.',
+        'The selected escalation focal must be present or serving as Officer of the Day.',
       );
     }
 
@@ -7430,9 +7491,11 @@ export class TicketService implements OnModuleInit {
   private async calculateTicketSlaDeadline(
     ticket: Partial<Ticket>,
     start: Date,
+    creditedPauseSeconds = 0,
   ): Promise<Date | null> {
-    const slaHours = await this.getTicketSlaHours(ticket);
-    if (!slaHours) return null;
+    const allowance = await this.getTicketSlaHours(ticket);
+    if (!allowance) return null;
+    const slaHours = getSlaHoursIncludingCreditedPause(allowance, creditedPauseSeconds);
 
     const config = await this.configRepo.findOne({ where: { id: 1 } }).catch(() => null);
     if (config) return this.calculateSlaDeadline(start, slaHours, this.ticketCalendar(config, ticket));

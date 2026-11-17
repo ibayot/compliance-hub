@@ -1242,11 +1242,11 @@ export default function TicketDetailPage() {
       const mergedUsers = candidateUsers.filter(
         (u, idx, arr) => arr.findIndex((x) => x.id === u.id) === idx,
       );
-      // From all techs, keep only those whose user ID or role matches the configured escalation focals
       const allowedValues = new Set(focals.map((f) => String(f.userId)));
       setEscalationFocalUsers(
         mergedUsers.filter(
-          (t) => allowedValues.has(String(t.id)) && t.attendanceStatus === 'present',
+          (t) => allowedValues.has(String(t.id)) &&
+            (t.canReceiveEscalation ?? t.attendanceStatus === 'present'),
         ),
       );
     } catch {
@@ -1669,8 +1669,10 @@ export default function TicketDetailPage() {
                     break;
                   case 'freeze': {
                     if (myCap?.isTicketSettingsFocal || myCap?.isTicketFocal) {
-                      const freezeValues = ['assigned', 'in_progress', 'resolved'];
-                      if (myCap?.isTicketSettingsFocal) {
+                      const freezeValues = frozenReturnStatus === 'in_progress'
+                        ? ['in_progress', 'resolved']
+                        : ['assigned', 'in_progress', 'resolved'];
+                      if (frozenReturnStatus !== 'in_progress' && myCap?.isTicketSettingsFocal) {
                         freezeValues.push('open');
                       }
                       allowedValues = freezeValues;
@@ -1690,8 +1692,11 @@ export default function TicketDetailPage() {
                 const effectivePriority = newPriority || ticket?.priority;
                 const activeIssueTypeId =
                   ticket?.issueTypeId || (ticket as any)?.issueTypeConfig?.id;
+                const resumesActiveInterruption = ticket?.status === 'pause' ||
+                  (ticket?.status === 'freeze' && frozenReturnStatus === 'in_progress');
                 const needsPriority =
-                  newStatus === 'in_progress' && (!effectivePriority || !activeIssueTypeId);
+                  newStatus === 'in_progress' && !resumesActiveInterruption &&
+                  (!effectivePriority || !activeIssueTypeId);
                 const isStatusUnchanged =
                   newStatus === ticket?.status &&
                   (newPriority || '') === (ticket?.priority || '') &&
@@ -1726,11 +1731,11 @@ export default function TicketDetailPage() {
                         inputProps={{ maxLength: 255 }}
                         select
                         fullWidth
-                        label={newStatus === 'in_progress' ? 'Priority *' : 'Priority'}
+                        label={newStatus === 'in_progress' && !resumesActiveInterruption ? 'Priority *' : 'Priority'}
                         value={newPriority || ticket?.priority || ''}
                         onChange={(e) => setNewPriority(e.target.value)}
                         size="small"
-                        required={newStatus === 'in_progress'}
+                        required={newStatus === 'in_progress' && !resumesActiveInterruption}
                         error={needsPriority}
                         helperText={
                           needsPriority

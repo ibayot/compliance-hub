@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, EntityManager } from 'typeorm';
+import { Repository, In, EntityManager, FindOptionsSelect } from 'typeorm';
 import { staffNameKey } from '../../shared/staff-directory/staff-directory.store';
 import * as bcrypt from 'bcrypt';
 import {
@@ -753,6 +753,54 @@ const previousValue = value;
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    return user;
+  }
+
+  /** Load only fields needed to build the current user's authenticated profile. */
+  async findForAuthProfile(id: number): Promise<User> {
+    const profileFields: FindOptionsSelect<User> = {
+      id: true,
+      email: true,
+      passwordHash: true,
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      suffix: true,
+      phoneNumber: true,
+      sex: true,
+      staffId: true,
+      position: true,
+      positionFull: true,
+      designation: true,
+      authProvider: true,
+      role: true,
+    };
+    const profileWithUnits: FindOptionsSelect<User> = {
+      ...profileFields,
+      units: {
+        id: true,
+        name: true,
+        hasReportorialRequirements: true,
+      },
+    };
+
+    let user: User | null;
+    try {
+      user = await this.usersRepository.findOne({
+        where: { id },
+        relations: { units: true },
+        select: profileWithUnits,
+      });
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) throw error;
+      user = await this.usersRepository.findOne({
+        where: { id },
+        select: profileFields,
+      });
+      if (user) user.units = [];
+    }
+
+    if (!user) throw new NotFoundException(`User with ID ${id} not found`);
     return user;
   }
 
