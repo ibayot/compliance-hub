@@ -107,6 +107,12 @@ function applicationServerKeysMatch(actual: ArrayBuffer, expected: Uint8Array): 
   return actualBytes.length === expected.length && actualBytes.every((value, index) => value === expected[index]);
 }
 
+function getHttpErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const status = (error as { response?: { status?: unknown } }).response?.status;
+  return typeof status === 'number' && Number.isInteger(status) ? status : null;
+}
+
 export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -286,6 +292,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
     setPushBusy(true);
     let newSubscription: PushSubscription | null = null;
+    let pushStep: 'permission' | 'service-worker' | 'subscription' | 'server-save' = 'permission';
     try {
       // Call the permission API directly from this button gesture, as required by browsers.
       const permission = await Notification.requestPermission();
@@ -297,8 +304,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           : 'Notification permission was not granted.');
         return;
       }
+      pushStep = 'service-worker';
       await registerWebPushWorker();
       const activeRegistration = await navigator.serviceWorker.ready;
+      pushStep = 'subscription';
       let subscription = await activeRegistration.pushManager.getSubscription();
       if (subscription?.options.applicationServerKey &&
         !applicationServerKeysMatch(subscription.options.applicationServerKey, decodeApplicationServerKey(pushConfig.publicKey))) {
@@ -317,12 +326,34 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       if (!payload.endpoint || !payload.keys?.auth || !payload.keys?.p256dh) {
         throw new Error('The browser returned an incomplete push subscription.');
       }
+      pushStep = 'server-save';
       await notificationsApi.savePushSubscription(payload);
       setPushEnabled(true);
       setPushMessage('Browser alerts are enabled on this device.');
-    } catch {
+    } catch (error) {
       await newSubscription?.unsubscribe().catch(() => false);
-      setPushMessage('Could not enable browser alerts. Check your connection and try again.');
+      if (pushStep === 'service-worker') {
+        setPushMessage('This app could not prepare its notification service. Close and reopen the app, then try again.');
+      } else if (pushStep === 'subscription') {
+        setPushMessage('Android could not create a notification subscription for this app. Check that notifications are allowed for Compliance Hub in Android settings, then try again.');
+      } else if (pushStep === 'server-save') {
+        const status = getHttpErrorStatus(error);
+        if (status === 401) {
+          setPushMessage('Your sign-in expired before alerts could be enabled. Sign in again, then retry.');
+        } else if (status === 503) {
+          setPushMessage('The Ticketing service is not ready for browser alerts. Ask an administrator to check its Web Push settings.');
+        } else if (status === 500) {
+          setPushMessage('The phone created its alert subscription, but the Ticketing service could not save it (HTTP 500). Ask an administrator to check the service logs and web_push_subscriptions table.');
+        } else if (status === 404) {
+          setPushMessage('The Ticketing service does not recognize the alert registration endpoint (HTTP 404). Ask an administrator to update the service.');
+        } else if (status !== null) {
+          setPushMessage(`The Ticketing service rejected the alert subscription (HTTP ${status}). Ask an administrator to check the service.`);
+        } else {
+          setPushMessage('The app could not reach the Ticketing service to save this device. Check the connection, then retry.');
+        }
+      } else {
+        setPushMessage('The browser could not request notification permission. Check Android notification settings, then retry.');
+      }
     } finally { setPushBusy(false); }
   };
 
