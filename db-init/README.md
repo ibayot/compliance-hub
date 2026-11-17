@@ -1,5 +1,23 @@
 # Database initialization order
 
+## For release 1.1.5
+
+Rebuild and recreate the frontend, Gateway, Users, Ticketing, and Compliance services together. Verify the frontend manifest and gateway health both report `1.1.5`. This patch uses the existing schema. After the staging smoke checks pass, apply the environment-managed `20261117-add-application-changelog-v1.1.5-users.sql` with the verified **Users** database selected. Repeat application preserves release timestamps and user acknowledgments. The SQL is ignored by Git and travels separately. The installed Android launcher follows the web version independently.
+
+**Rollback:** Before deployment, record and retain the image IDs or immutable tags of all five running application services. Redeploy that matching set with the same environment and volumes if staging fails. To remove the load changes while keeping the 1.1.4 duty and ticket updates, rebuild from `b1d8dd2` on `codex/rollback-db-load-1.1.5`. Both stock 1.1.4 and 1.1.5 include the load changes. The full pre-change source is `080146c` (1.1.3).
+
+If 1.1.5 notes were already published in the rollback environment, the following optional SQL hides only those notes and retains user acknowledgments. Run it in the verified Users database. Reapplying the publication SQL restores the notes and their audience settings.
+
+```sql
+START TRANSACTION;
+UPDATE app_release_notes AS note
+JOIN app_releases AS release_row ON release_row.id = note.release_id
+SET note.capability_keys = '[]'
+WHERE release_row.version = '1.1.5';
+UPDATE app_releases SET status = 'draft' WHERE version = '1.1.5';
+COMMIT;
+```
+
 ## For release 1.1.4 (from application version 1.1.3)
 
 There is no schema migration. Verify the Users database target and apply `20261117-add-application-changelog-v1.1.4-users.sql` before deployment. It publishes the capability-scoped staff and separate End User notes and preserves existing acknowledgment history on repeat. The local Docker Users database is updated during implementation; staging and production remain operator-managed. Rebuild/recreate the backend services and frontend together so their embedded application versions match. No Android APK rebuild is needed for these web application updates.
