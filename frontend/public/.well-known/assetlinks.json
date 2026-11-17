@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.dswd.compliancehub.launcher",
+      "sha256_cert_fingerprints": [
+        "6F:0A:2E:7F:F3:94:1C:BA:6C:8A:C2:08:39:17:55:44:00:E8:83:1B:69:D5:24:2A:56:42:C2:41:5C:CE:88:93"
+      ]
+    }
+  }
+]
