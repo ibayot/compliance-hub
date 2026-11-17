@@ -111,6 +111,19 @@ server { \
         add_header Cache-Control "no-cache"; \
         try_files $uri =404; \
     } \
+    location = /downloads/Compliance-Hub.apk { \
+        include /etc/nginx/security-headers.conf; \
+        types { application/vnd.android.package-archive apk; } \
+        add_header Content-Disposition "attachment; filename=Compliance-Hub.apk"; \
+        add_header Cache-Control "no-cache"; \
+        try_files $uri =404; \
+    } \
+    location = /.well-known/assetlinks.json { \
+        include /etc/nginx/security-headers.conf; \
+        types { application/json json; } \
+        add_header Cache-Control "no-cache"; \
+        try_files $uri =404; \
+    } \
     location = /apple-touch-icon.png { \
         include /etc/nginx/security-headers.conf; \
         try_files $uri =404; \

@@ -82,7 +82,27 @@ npm install
 npm run dev
 ```
 
-## Android App (Hybrid WebView)
+## Android APK download
+
+The Android launcher opens the deployed Compliance Hub website in a Trusted Web Activity and uses the website's Web Push setup through the supported browser. It needs no Firebase project or Play Store listing. Android asks the user to confirm installation after downloading the file.
+
+Build from the repository root with JDK 17, Android SDK Platform 36 and Build Tools 36.0.0. Set `HUB_ANDROID_ORIGIN` to the deployment's HTTPS origin as opened on the phone, without a path. Use a certificate trusted by the target phones. Set `HUB_ANDROID_KEYSTORE` and `HUB_ANDROID_KEY_ALIAS` for the organization release key, and supply `HUB_ANDROID_KEYSTORE_PASSWORD` and, if different, `HUB_ANDROID_KEY_PASSWORD` through the build environment. Keep the key and passwords outside the repository.
+
+If this is the first rollout and the organization has no launcher signing key, create one with an interactive password prompt and keep the file for future updates:
+
+```bash
+keytool -genkeypair -keystore /secure/path/compliance-hub.p12 -alias compliance-hub -keyalg RSA -keysize 3072 -validity 10000
+```
+
+```bash
+node frontend/scripts/build-android-launcher.mjs
+```
+
+The build emits `output/android-launcher/Compliance-Hub.apk` and its matching `assetlinks.json`. For a deployment with matching staging files and settings, rerun with `--stage-web-assets` to put both files in the frontend build context. If the build machine is separate, copy the APK to `frontend/public/downloads/Compliance-Hub.apk` and the statement to `frontend/public/.well-known/assetlinks.json` on that deployment. Rebuild the frontend container. Existing deployments may continue using `VITE_ANDROID_APK_URL` for an externally hosted APK.
+
+Verify that the HTTPS origin serves the exact statement at `/.well-known/assetlinks.json` without redirecting and that an Android browser offers **Download App → Download Android APK**. Install on a phone over the office network or VPN, confirm it opens full screen, then enable alerts from the bell and test a notification after closing the app. Use the same organization key and a higher app version for future APK updates. Website updates take effect without reinstalling the launcher.
+
+## Capacitor development build
 
 The Android app is a Capacitor hybrid shell around the same responsive frontend. End users can sign in, submit and view tickets, follow ticket status, and rate resolved technicians without maintaining a separate Android UI implementation.
 
@@ -101,8 +121,6 @@ VITE_API_URL=https://your-deployed-host/api npm run android:release
 ```
 
 The release APK must be signed with the organization’s Android keystore before distribution. Do not distribute the debug APK to end users. iOS packaging is intentionally deferred until the Android hybrid flow is accepted.
-
-For an internal rollout, verify the release signature, install and update it on an approved Android device over the office VPN, and host the signed `.apk` on the office HTTPS download server. Set `VITE_ANDROID_APK_URL` to that file's absolute HTTPS URL in the deployment environment and rebuild the frontend. Android browsers then show **Download Android app** in the signed-in profile menu. Leave the variable unset until the file is ready. Use the same organization signing key and an increasing Android version code for updates.
 
 The release build requires an explicit HTTPS `VITE_API_URL`. Verify internal DNS, certificate trust, API CORS for the packaged app, and reconnect after VPN loss on a physical phone. Native sign-in tokens are scoped to the WebView session; an app process restart can require signing in again.
 

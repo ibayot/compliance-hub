@@ -9,6 +9,7 @@ Dockerfile*
 dist
 dist-phone-preview
 android
+android-launcher
 ios
 test-results
 playwright-report

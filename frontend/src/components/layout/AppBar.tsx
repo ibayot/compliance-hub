@@ -79,15 +79,21 @@ function isAppleMobileDevice(): boolean {
     (/Mac/i.test(`${navigator.platform} ${navigator.userAgent}`) && navigator.maxTouchPoints > 1);
 }
 
-function getAndroidApkUrl(): string | null {
-  if (!isAndroidBrowser()) return null;
+const hostedAndroidApk = '/downloads/Compliance-Hub.apk';
+
+async function getAndroidApkUrl(signal: AbortSignal): Promise<string | null> {
+  const configured = import.meta.env.VITE_ANDROID_APK_URL?.trim();
   try {
-    const url = new URL(import.meta.env.VITE_ANDROID_APK_URL?.trim() || '');
-    return url.protocol === 'https:' && !url.username && !url.password && !url.search &&
-      !url.hash && /\.apk$/i.test(url.pathname) ? url.href : null;
-  } catch {
-    return null;
-  }
+    const url = configured ? new URL(configured) : null;
+    if (url?.protocol === 'https:' && !url.username && !url.password && !url.search &&
+      !url.hash && /\.apk$/i.test(url.pathname)) return url.href;
+  } catch { /* Check the same-origin download if the override is invalid. */ }
+
+  try {
+    const response = await fetch(hostedAndroidApk, { method: 'HEAD', redirect: 'error', cache: 'no-store', signal });
+    const mimeType = response.headers.get('Content-Type')?.split(';')[0];
+    return response.ok && mimeType === 'application/vnd.android.package-archive' ? hostedAndroidApk : null;
+  } catch { return null; }
 }
 
 function decodeApplicationServerKey(key: string): Uint8Array {
@@ -145,17 +151,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
 
   useEffect(() => {
+    const availabilityCheck = new AbortController();
     const updateInstallAvailability = () => {
       const installed = isHomeScreenApp();
       const browser = !Capacitor.isNativePlatform();
       setShowDownloadApp(browser && !installed);
       setShowIosProfileDownload(browser && !installed && isAppleMobileDevice());
-      setAndroidApkUrl(getAndroidApkUrl());
     };
     updateInstallAvailability();
+    if (isAndroidBrowser() && !isHomeScreenApp() && window.location.protocol === 'https:') {
+      void getAndroidApkUrl(availabilityCheck.signal).then((url) => {
+        if (!availabilityCheck.signal.aborted) setAndroidApkUrl(url);
+      });
+    }
     window.addEventListener('appinstalled', updateInstallAvailability);
     window.addEventListener('pageshow', updateInstallAvailability);
     return () => {
+      availabilityCheck.abort();
       window.removeEventListener('appinstalled', updateInstallAvailability);
       window.removeEventListener('pageshow', updateInstallAvailability);
     };
@@ -1000,15 +1012,23 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           onClose={() => setAppInstallAnchor(null)}
           MenuListProps={{ id: 'app-install-menu', 'aria-labelledby': 'app-install-button' }}
         >
+          {androidApkUrl && (
+            <MenuItem
+              component="a"
+              href={androidApkUrl}
+              download="Compliance-Hub.apk"
+              onClick={() => {
+                setAppInstallAnchor(null);
+                enqueueSnackbar('When the download finishes, open Compliance-Hub.apk from Downloads to install.', { variant: 'info' });
+              }}
+            >
+              Download Android APK
+            </MenuItem>
+          )}
           <MenuItem onClick={() => void handleInstallWebApp()}>Install web app</MenuItem>
           {showIosProfileDownload && (
             <MenuItem component="a" href="/api/ios-profile.mobileconfig" onClick={() => setAppInstallAnchor(null)}>
               Download iOS profile (shortcut)
-            </MenuItem>
-          )}
-          {androidApkUrl && (
-            <MenuItem component="a" href={androidApkUrl} onClick={() => setAppInstallAnchor(null)}>
-              Download Android APK
             </MenuItem>
           )}
         </Menu>

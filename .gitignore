@@ -115,6 +115,8 @@ docker-compose.staging.yml
 # Automatically loaded local-only Docker transport settings; never deploy these.
 /docker-compose.override.yml
 /frontend/dist-phone-preview/
+/frontend/android-launcher/build/
+/frontend/public/downloads/Compliance-Hub.apk
 
 # Tests and Playwright runner files are local-only and must not be committed.
 **/*.spec.ts
