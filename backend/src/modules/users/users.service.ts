@@ -757,6 +757,69 @@ const previousValue = value;
     return user;
   }
 
+  /** Query only the profile fields used by trusted service-to-service enrichment. */
+  private async queryInternalStubs(ids?: number[], includePhoneNumber = false): Promise<User[]> {
+    if (ids && ids.length === 0) return [];
+    const buildQuery = (includeUnits: boolean) => {
+      const query = this.usersRepository.createQueryBuilder('user');
+      if (includeUnits) query.leftJoin('user.units', 'unit');
+      query.select([
+        'user.id', 'user.email', 'user.firstName', 'user.middleName', 'user.lastName',
+        'user.suffix', 'user.staffId', 'user.role', 'user.active',
+        'user.autoAssignmentEligible',
+      ]);
+      if (includePhoneNumber) query.addSelect('user.phoneNumber');
+      if (includeUnits) {
+        query.addSelect([
+          'unit.id', 'unit.name', 'unit.description', 'unit.active',
+          'unit.hasReportorialRequirements', 'unit.createdAt',
+        ]);
+      }
+      if (ids) query.where('user.id IN (:...ids)', { ids });
+      query.orderBy('user.id', 'ASC');
+      if (includeUnits) query.addOrderBy('unit.id', 'ASC');
+      return query;
+    };
+
+    try {
+      return await buildQuery(true).getMany();
+    } catch (error) {
+      if (!this.isMissingUserUnitAccessError(error)) throw error;
+      const users = await buildQuery(false).getMany();
+      users.forEach((user) => { user.units = []; });
+      return users;
+    }
+  }
+
+  /**
+   * Return only the profile fields used by trusted internal service enrichment.
+   * Keep this as one projected query so callers do not read credential or MFA
+   * columns, and multiple IDs do not become one request/query per user.
+   */
+  async findInternalStubsByIds(ids: number[], includePhoneNumber = false): Promise<User[]> {
+    return this.queryInternalStubs(ids, includePhoneNumber);
+  }
+
+  /** Same narrow projection for internal directory consumers, with live role flags. */
+  async findAllInternalStubs(): Promise<Array<User & { attendanceEligible: boolean; technicianEligible: boolean }>> {
+    const [users, capabilityRows] = await Promise.all([
+      this.queryInternalStubs(),
+      this.roleCapabilitiesRepository.find({
+        select: ['roleValue', 'isAttendanceEligible', 'isDesktop', 'isItSupport', 'isPantawidIct'],
+      }),
+    ]);
+    const capabilityByRole = new Map(capabilityRows.map((row) => [row.roleValue, row]));
+    return users.map((user) => {
+      const capability = capabilityByRole.get(user.role);
+      return Object.assign(user, {
+        attendanceEligible: Boolean(capability?.isAttendanceEligible),
+        technicianEligible: Boolean(
+          capability?.isDesktop || capability?.isItSupport || capability?.isPantawidIct,
+        ),
+      });
+    });
+  }
+
   /** Read the profile, live capabilities and session settings together. */
   async findForAuthProfile(id: number) {
     type ProfileRow = User & { sessionSettings?: SecurityConfig; sessionCapabilities?: RoleCapability | null };

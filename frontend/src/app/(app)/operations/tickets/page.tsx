@@ -274,13 +274,22 @@ export default function TicketsPage({
   const [allUsers, setAllUsers] = useState<UserRecord[]>([]);
   const [requesterOptionsLoading, setRequesterOptionsLoading] = useState(false);
   const [requesterOptionsError, setRequesterOptionsError] = useState(false);
+  const [requesterPickerOpen, setRequesterPickerOpen] = useState(false);
   const requesterOptionsRequestRef = useRef(0);
+  const requesterOptionsStaleRef = useRef(true);
+  const requesterPickerOpenRef = useRef(false);
+  const requesterOptionsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingRequesterEmail, setPendingRequesterEmail] = useState('');
   const [categories, setCategories] = useState<TicketCategory[]>([]);
   const [issues, setIssues] = useState<TicketIssueType[]>([]);
   const [kbSuggestions, setKbSuggestions] = useState<any[]>([]);
   const [loadingKb, setLoadingKb] = useState(false);
   const [expandedKbId, setExpandedKbId] = useState<number | null>(null);
+  const [createTechnicians, setCreateTechnicians] = useState<TechnicianOption[]>([]);
+  const [createTechniciansLoading, setCreateTechniciansLoading] = useState(false);
+  const [createTechniciansError, setCreateTechniciansError] = useState(false);
+  const [createTechnicianPickerOpen, setCreateTechnicianPickerOpen] = useState(false);
+  const createTechnicianOptionsRequestRef = useRef(0);
 
   // Assign dialog
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -722,18 +731,26 @@ export default function TicketsPage({
     selectedTab, showMyTickets, showEscalatedToMe, showEscalations, escalationSearch]);
 
   useEffect(() => {
-    if (!newDialogOpen || !isTicketAdmin) return;
-    ticketsApi
-      .getTechnicians(form.ticketType)
-      .then((rows) =>
-        setTechnicians(
-          rows.filter(
-            (row) => row.attendanceStatus === 'present' || row.attendanceStatus === 'out_of_office',
-          ),
-        ),
-      )
-      .catch(() => setTechnicians([]));
-  }, [newDialogOpen, isTicketAdmin, form.ticketType]);
+    if (!newDialogOpen || !isTicketAdmin || !createTechnicianPickerOpen) return;
+    const requestId = ++createTechnicianOptionsRequestRef.current;
+    setCreateTechniciansLoading(true);
+    setCreateTechniciansError(false);
+    ticketsApi.getTechnicians(form.ticketType)
+      .then((rows) => {
+        if (requestId !== createTechnicianOptionsRequestRef.current) return;
+        setCreateTechnicians(rows.filter(
+          (row) => row.attendanceStatus === 'present' || row.attendanceStatus === 'out_of_office',
+        ));
+      })
+      .catch(() => {
+        if (requestId !== createTechnicianOptionsRequestRef.current) return;
+        setCreateTechnicians([]);
+        setCreateTechniciansError(true);
+      })
+      .finally(() => {
+        if (requestId === createTechnicianOptionsRequestRef.current) setCreateTechniciansLoading(false);
+      });
+  }, [newDialogOpen, isTicketAdmin, createTechnicianPickerOpen, form.ticketType]);
 
   const tabFilteredTickets = frontendFilteredTickets;
 
@@ -1062,6 +1079,7 @@ export default function TicketsPage({
       const users = await usersApi.listTicketRequesters();
       if (requestId !== requesterOptionsRequestRef.current) return;
       setAllUsers(users.filter((u) => u.active && u.role !== 'super_admin'));
+      requesterOptionsStaleRef.current = false;
     } catch {
       if (requestId !== requesterOptionsRequestRef.current) return;
       setAllUsers([]);
@@ -1071,20 +1089,43 @@ export default function TicketsPage({
     }
   }, [restrictedAssignedOnly, personalRequestedOnly, user?.id]);
 
-  useEffect(() => {
-    // Wait for the authenticated session before loading the proxy requester list.
-    // A page refresh can render this component before AuthContext finishes restoring
-    // the user; including user.id in the callback dependencies guarantees a retry.
-    void refreshRequesterOptions();
+  const openRequesterPicker = useCallback(() => {
+    requesterPickerOpenRef.current = true;
+    setRequesterPickerOpen(true);
+    if (requesterOptionsStaleRef.current) void refreshRequesterOptions();
   }, [refreshRequesterOptions]);
 
-  useEffect(() => {
-    // Refresh again when the form opens so a transient startup/authentication failure
-    // cannot leave the Requested For selector empty for the rest of the session.
-    if (newDialogOpen) void refreshRequesterOptions();
-  }, [newDialogOpen, refreshRequesterOptions]);
+  const closeRequesterPicker = useCallback(() => {
+    requesterPickerOpenRef.current = false;
+    setRequesterPickerOpen(false);
+    if (requesterOptionsRefreshTimerRef.current) {
+      clearTimeout(requesterOptionsRefreshTimerRef.current);
+      requesterOptionsRefreshTimerRef.current = null;
+    }
+  }, []);
 
-  useSse(['USER_DIRECTORY_UPDATED'], refreshRequesterOptions);
+  useEffect(() => {
+    if (newDialogOpen) return;
+    closeRequesterPicker();
+    setCreateTechnicianPickerOpen(false);
+  }, [newDialogOpen, closeRequesterPicker]);
+
+  useSse(['USER_DIRECTORY_UPDATED'], () => {
+    requesterOptionsStaleRef.current = true;
+    if (!requesterPickerOpenRef.current) return;
+    if (requesterOptionsRefreshTimerRef.current) clearTimeout(requesterOptionsRefreshTimerRef.current);
+    requesterOptionsRefreshTimerRef.current = setTimeout(() => {
+      requesterOptionsRefreshTimerRef.current = null;
+      if (!requesterPickerOpenRef.current) return;
+      void refreshRequesterOptions();
+    }, 500);
+  });
+
+  useEffect(() => () => {
+    if (requesterOptionsRefreshTimerRef.current) clearTimeout(requesterOptionsRefreshTimerRef.current);
+    requesterOptionsRequestRef.current++;
+    createTechnicianOptionsRequestRef.current++;
+  }, []);
 
   // Fetch categories when the New Ticket dialog opens or support type changes
   // Pass activeOnly=true so only active categories appear in the creation dropdown
@@ -3241,6 +3282,9 @@ export default function TicketsPage({
             />
             <Autocomplete
               options={allUsers.filter((u) => u.role !== 'super_admin')}
+              open={requesterPickerOpen}
+              onOpen={openRequesterPicker}
+              onClose={closeRequesterPicker}
               loading={requesterOptionsLoading}
               disabled={requesterUnitMissing}
               noOptionsText={
@@ -3290,25 +3334,30 @@ export default function TicketsPage({
             )}
             {isTicketAdmin && (
               <Autocomplete
-                options={technicians}
+                options={createTechnicians}
+                loading={createTechniciansLoading}
                 getOptionLabel={(technician) =>
                   `${formatPersonName(technician, technician.email)} (${technician.openCount ?? 0} Active${technician.attendanceStatus === 'out_of_office' ? ', OOO' : ''})`
                 }
                 value={
-                  technicians.find((technician) => technician.id === form.assignedToId) ?? null
+                  createTechnicians.find((technician) => technician.id === form.assignedToId) ?? null
                 }
                 onChange={(_, technician) => setForm({ ...form, assignedToId: technician?.id })}
+                onOpen={() => setCreateTechnicianPickerOpen(true)}
+                onClose={() => setCreateTechnicianPickerOpen(false)}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 openOnFocus
                 clearOnEscape
                 fullWidth
-                noOptionsText="No eligible staff available"
+                noOptionsText={createTechniciansError ? 'Unable to load technician options' : 'No eligible staff available'}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Assignment"
                     helperText={
-                      form.ticketType === 'specialized_concerns'
+                      createTechniciansError
+                        ? 'Could not load technicians. Close and reopen this list to retry.'
+                        : form.ticketType === 'specialized_concerns'
                         ? 'Leave blank for manual assignment later.'
                         : 'Leave blank to use automatic assignment.'
                     }

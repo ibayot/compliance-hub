@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException, Query } from '@nestjs/common';
 import { OutboundEmailPolicyService, OutboundEmailRecipientDto } from '../users/outbound-email-policy.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
@@ -7,6 +7,7 @@ import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 import { ACCOUNT_ACCESS_BATCH_SIZE } from '../../common/auth/account-access-batch';
 import { AuthorizeAccountAccessDto } from './dto/authorize-account-access.dto';
+import { USER_STUB_BATCH_SIZE } from '../../common/http-clients/user-stub-batch';
 
 /**
  * InternalController — inter-service API endpoints for users-service.
@@ -16,7 +17,7 @@ import { AuthorizeAccountAccessDto } from './dto/authorize-account-access.dto';
  * the INTERNAL_SERVICE_SECRET environment variable.
  *
  * Routes:
- *  GET /api/internal/users                 All users (basic stub fields)
+ *  GET /api/internal/users                 All users, or up to 100 IDs via ?ids=1,2
  *  GET /api/internal/users/:id             Single user by ID
  *  GET /api/internal/units                 All active units
  *  GET /api/internal/units/:id             Single unit by ID
@@ -65,30 +66,53 @@ export class InternalController {
   }
 
   @Get('users')
-  async getUsers() {
-    const users = await this.usersService.findAll();
-    return users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      first_name: u.firstName,
-      last_name: u.lastName,
-      middle_name: u.middleName ?? null,
-      suffix: u.suffix ?? null,
-      role: u.role,
-      active: u.active,
-      autoAssignmentEligible: u.autoAssignmentEligible !== false,
-      attendanceEligible: (u as any).attendanceEligible === true,
-      technicianEligible: (u as any).technicianEligible === true,
-      staff_id: u.staffId ?? null,
+  async getUsers(@Query('ids') ids?: string, @Query('include_phone') includePhone?: string) {
+    if (includePhone !== undefined && includePhone !== 'true' && includePhone !== 'false') {
+      throw new BadRequestException('include_phone must be true or false.');
+    }
+    if (includePhone === 'true' && ids === undefined) {
+      throw new BadRequestException('include_phone requires a bounded ids query.');
+    }
+    const users = ids === undefined
+      ? await this.usersService.findAllInternalStubs()
+      : await this.usersService.findInternalStubsByIds(this.parseUserIds(ids), includePhone === 'true');
+    return users.map((u) => {
+      const result: Record<string, unknown> = {
+        id: u.id,
+        email: u.email,
+        first_name: u.firstName,
+        last_name: u.lastName,
+        middle_name: u.middleName ?? null,
+        suffix: u.suffix ?? null,
+        role: u.role,
+        active: u.active,
+        autoAssignmentEligible: u.autoAssignmentEligible !== false,
+        attendanceEligible: (u as any).attendanceEligible === true,
+        technicianEligible: (u as any).technicianEligible === true,
+        staff_id: u.staffId ?? null,
 
-      units: u.units || [],
-    }));
+        units: u.units || [],
+      };
+      if (includePhone === 'true') result.phone_number = u.phoneNumber ?? null;
+      return result;
+    });
+  }
+
+  private parseUserIds(value: string): number[] {
+    const parts = value.split(',');
+    if (parts.length > USER_STUB_BATCH_SIZE || parts.some((part) => !/^\d+$/.test(part.trim()))) {
+      throw new BadRequestException(`Supply between 1 and ${USER_STUB_BATCH_SIZE} valid user IDs.`);
+    }
+    const ids = [...new Set(parts.map((part) => Number(part.trim())))];
+    if (ids.some((id) => !Number.isSafeInteger(id) || id < 1)) {
+      throw new BadRequestException(`Supply between 1 and ${USER_STUB_BATCH_SIZE} valid user IDs.`);
+    }
+    return ids;
   }
 
   @Get('users/:id')
   async getUserById(@Param('id', ParseIntPipe) id: number) {
-    // using findOne instead of findByIdSafe because findOne explicitly loads the units relation
-    const user = await this.usersService.findOne(id).catch(() => null);
+    const [user] = await this.usersService.findInternalStubsByIds([id], true);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }

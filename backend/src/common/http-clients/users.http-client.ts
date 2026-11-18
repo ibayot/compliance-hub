@@ -1,5 +1,6 @@
 import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { OutboundEmailDecision } from '../../modules/users/outbound-email-policy.service';
+import { USER_STUB_BATCH_SIZE } from './user-stub-batch';
 
 export interface UserStub {
   id: number;
@@ -235,6 +236,36 @@ export class UsersHttpClient {
    */
   async getUserById(id: number): Promise<UserStub | null> {
     return this.fetchWithRetry<UserStub>(`${this.baseUrl}/api/internal/users/${id}`);
+  }
+
+  /** Fetch a bounded set of user stubs without issuing one HTTP/SQL read per ID. */
+  async getUsersByIds(ids: number[], options: { includePhoneNumber?: boolean } = {}): Promise<Map<number, UserStub | null>> {
+    const uniqueIds = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))];
+    const usersById = new Map<number, UserStub | null>(uniqueIds.map((id) => [id, null]));
+    if (uniqueIds.length === 0) return usersById;
+
+    const batches: number[][] = [];
+    for (let index = 0; index < uniqueIds.length; index += USER_STUB_BATCH_SIZE) {
+      batches.push(uniqueIds.slice(index, index + USER_STUB_BATCH_SIZE));
+    }
+
+    for (const batch of batches) {
+      const params = new URLSearchParams({ ids: batch.join(',') });
+      if (options.includePhoneNumber) params.set('include_phone', 'true');
+      // Older Users images ignore the optional ids query and return the existing
+      // full stub list. Filtering here keeps mixed-version deployments functional.
+      const users = await this.fetchWithRetry<UserStub[]>(
+        `${this.baseUrl}/api/internal/users?${params.toString()}`,
+      );
+      if (!Array.isArray(users)) continue;
+      const requested = new Set(batch);
+      for (const user of users) {
+        const id = Number(user?.id);
+        if (requested.has(id)) usersById.set(id, { ...user, id });
+      }
+    }
+
+    return usersById;
   }
 
   /** Read-only policy command: keep mailbox data out of URLs and bound body reads too. */

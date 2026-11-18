@@ -44,6 +44,8 @@ import { clearExpiredDestination, signInDestination } from '@/lib/auth/sign-in-d
 
 export { tokenStore } from '@/lib/api/client';
 
+const SESSION_CHECK_INTERVAL_MS = 2 * 60_000;
+
 function parseJwt(token: string) {
   try {
     const base64Url = token.split('.')[1];
@@ -349,16 +351,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profileRevision = undefined;
         if (isRejectedSession(error)) { await logout('session_expired'); return; }
         setReconnecting(true);
-        retryTimer = setTimeout(() => void verifySession(), retryDelay);
+        retryTimer = setTimeout(() => {
+          if (document.visibilityState === 'visible') void verifySession();
+        }, retryDelay);
         retryDelay = Math.min(retryDelay * 2, 30_000);
       } finally { if (attempt === attemptId) { pending = false; controller = null; } }
     };
     const retry = () => { void verifySession(); };
     retrySessionRef.current = retry;
     void verifySession();
-    const heartbeat = setInterval(() => void verifySession(), 60_000);
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible') void verifySession();
+    }, SESSION_CHECK_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') retry();
+    };
     window.addEventListener('online', retry);
     window.addEventListener('focus', retry);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       disposed = true;
       ++attemptId;
@@ -367,6 +377,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearInterval(heartbeat);
       window.removeEventListener('online', retry);
       window.removeEventListener('focus', retry);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       if (retrySessionRef.current === retry) retrySessionRef.current = () => {};
     };
   }, [insideApplication, enqueueSnackbar, logout, refreshSession]);

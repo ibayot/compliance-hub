@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Incident, IncidentStatus, IncidentSeverity } from '../entities/incident.entity';
-import { UsersHttpClient, UserStub } from '../../../common/http-clients/users.http-client';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 
 @Injectable()
 export class IncidentsService {
@@ -23,13 +23,7 @@ export class IncidentsService {
       }
     });
 
-    const userMap = new Map<number, UserStub | null>();
-    await Promise.all(
-      [...ids].map(async (id) => {
-        const user = await this.usersHttpClient.getUserById(id);
-        userMap.set(id, user);
-      }),
-    );
+    const userMap = await this.usersHttpClient.getUsersByIds([...ids]);
 
     incidents.forEach((incident) => {
       incident.reported_by = userMap.get(Number(incident.reported_by_id)) ?? null;

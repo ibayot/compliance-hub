@@ -7377,23 +7377,22 @@ export class TicketService implements OnModuleInit {
 
     const userMap = new Map<number, any>();
     const contactNumberByUserId = new Map<number, string | null>();
-    await Promise.all(
-      Array.from(userIds).map(async (id) => {
-        const user = await this.usersHttpClient.getUserById(id);
-        if (user) {
-          contactNumberByUserId.set(id, user.phone_number?.trim() || null);
-          const { phone_number: _phoneNumber, ...safeUser } = user;
-          userMap.set(id, {
-            ...safeUser,
-            firstName: user.first_name,
-            middleName: user.middle_name,
-            lastName: user.last_name,
-            suffix: user.suffix,
-            staffId: user.staff_id,
-          });
-        }
-      }),
-    );
+    const usersById = await this.usersHttpClient.getUsersByIds([...userIds], {
+      includePhoneNumber: includeRequesterContact,
+    });
+    for (const [id, user] of usersById) {
+      if (!user) continue;
+      contactNumberByUserId.set(id, user.phone_number?.trim() || null);
+      const { phone_number: _phoneNumber, ...safeUser } = user;
+      userMap.set(id, {
+        ...safeUser,
+        firstName: user.first_name,
+        middleName: user.middle_name,
+        lastName: user.last_name,
+        suffix: user.suffix,
+        staffId: user.staff_id,
+      });
+    }
 
     for (const t of tickets) {
       if (t.requesterId) {
@@ -7419,20 +7418,17 @@ export class TicketService implements OnModuleInit {
     for (const e of events) if (e.actorId) userIds.add(e.actorId);
     if (userIds.size === 0) return events;
     const userMap = new Map<number, any>();
-    await Promise.all(
-      Array.from(userIds).map(async (id) => {
-        const user = await this.usersHttpClient.getUserById(id);
-        if (user) {
-          userMap.set(id, {
-            ...user,
-            firstName: user.first_name,
-            middleName: user.middle_name,
-            lastName: user.last_name,
-            suffix: user.suffix,
-          });
-        }
-      }),
-    );
+    const usersById = await this.usersHttpClient.getUsersByIds([...userIds]);
+    for (const [id, user] of usersById) {
+      if (!user) continue;
+      userMap.set(id, {
+        ...user,
+        firstName: user.first_name,
+        middleName: user.middle_name,
+        lastName: user.last_name,
+        suffix: user.suffix,
+      });
+    }
     for (const e of events) {
       if (e.actorId) e.actor = userMap.get(e.actorId);
     }

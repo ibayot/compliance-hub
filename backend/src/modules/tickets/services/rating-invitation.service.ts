@@ -553,10 +553,7 @@ export class RatingInvitationService {
     const assigneeIds = [
       ...new Set(tickets.map((ticket) => ticket.assignedToId).filter((id): id is number => !!id)),
     ];
-    const assignees = await Promise.all(
-      assigneeIds.map(async (id) => [id, await this.usersHttpClient.getUserById(id)] as const),
-    );
-    const assigneeById = new Map<number, UserStub | null>(assignees);
+    const assigneeById = await this.usersHttpClient.getUsersByIds(assigneeIds);
     const ticketById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
     await this.logEvent(invitation.id, 'rating_page_viewed', metadata);
 

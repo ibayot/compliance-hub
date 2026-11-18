@@ -145,14 +145,7 @@ export class DocumentService implements OnModuleInit {
     const uniqueIds = Array.from(
       new Set(userIds.filter((id) => Number.isFinite(Number(id))).map((id) => Number(id))),
     );
-    const map = new Map<number, UserStub | null>();
-    await Promise.all(
-      uniqueIds.map(async (id) => {
-        const user = await this.usersHttpClient.getUserById(id);
-        map.set(id, user);
-      }),
-    );
-    return map;
+    return this.usersHttpClient.getUsersByIds(uniqueIds);
   }
 
   private async enrichAssignmentsUsers(
