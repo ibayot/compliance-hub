@@ -271,13 +271,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let controller: AbortController | null = null;
     let retryDelay = 2000;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let profileRevision: string | undefined;
     const generation = recoveryGeneration();
     const current = () => !disposed && canRecoverSession() && generation === recoveryGeneration();
     if (!currentUserRef.current) setLoading(true);
     if (sessionStorage.getItem('isSessionLocked') === 'true') setIsSessionLocked(true);
-    const verifySession = async (force = false) => {
-      if (!current() || (pending && !force)) return;
-      controller?.abort();
+    const verifySession = async () => {
+      if (!current() || pending) return;
       const attempt = ++attemptId;
       const requestController = new AbortController();
       controller = requestController;
@@ -286,11 +286,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(retryTimer);
       try {
         const token = tokenStore.get('accessToken');
-        let profile = await authApi.getProfile({ signal: requestController.signal });
+        const previous = currentUserRef.current;
+        const session = await authApi.checkSession(previous ? profileRevision : undefined, { signal: requestController.signal });
         if (!currentAttempt()) return;
+        let profile = session.profile;
+        if (!profile) {
+          if (!previous || !profileRevision || session.revision !== profileRevision) throw new Error('Invalid session profile response.');
+          setLoading(false);
+          setReconnecting(false);
+          retryDelay = 2000;
+          return;
+        }
+        let nextRevision = session.revision;
         let extras = await loadSessionExtras(profile, { signal: requestController.signal });
         if (!currentAttempt()) return;
-        const previous = currentUserRef.current;
         if (!previous) {
           const lastActivity = readSessionActivity(profile.id);
           const minutes = extras.idleLockMinutes ?? DEFAULT_IDLE_LOCK_MINUTES;
@@ -317,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const newUnits = (profile.units || []).map(unit => Number(unit.id)).sort((a, b) => a - b).join(',');
           if (oldUnits !== newUnits) {
             profile = await refreshSession({ signal: requestController.signal });
+            nextRevision = undefined;
             if (!currentAttempt()) return;
             extras = await loadSessionExtras(profile, { signal: requestController.signal });
             if (!currentAttempt()) return;
@@ -325,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         // Keep equal values stable so a successful recheck does not rerun reads
         // for unchanged identity and capabilities in the workspace.
+        profileRevision = nextRevision;
         setUser((currentProfile) => replaceEqualDeep(currentProfile, profile));
         setMyCap((currentCapabilities) => replaceEqualDeep(currentCapabilities, extras.capabilities));
         if (extras.idleLockMinutes !== null) setIdleLockMinutes(extras.idleLockMinutes);
@@ -335,13 +346,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         retryDelay = 2000;
       } catch (error) {
         if (!currentAttempt()) return;
+        profileRevision = undefined;
         if (isRejectedSession(error)) { await logout('session_expired'); return; }
         setReconnecting(true);
         retryTimer = setTimeout(() => void verifySession(), retryDelay);
         retryDelay = Math.min(retryDelay * 2, 30_000);
       } finally { if (attempt === attemptId) { pending = false; controller = null; } }
     };
-    const retry = () => { void verifySession(true); };
+    const retry = () => { void verifySession(); };
     retrySessionRef.current = retry;
     void verifySession();
     const heartbeat = setInterval(() => void verifySession(), 60_000);

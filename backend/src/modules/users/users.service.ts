@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   ConflictException,
   BadRequestException,
   ForbiddenException,
@@ -756,52 +757,35 @@ const previousValue = value;
     return user;
   }
 
-  /** Load only fields needed to build the current user's authenticated profile. */
-  async findForAuthProfile(id: number): Promise<User> {
-    const profileFields: FindOptionsSelect<User> = {
-      id: true,
-      email: true,
-      passwordHash: true,
-      firstName: true,
-      middleName: true,
-      lastName: true,
-      suffix: true,
-      phoneNumber: true,
-      sex: true,
-      staffId: true,
-      position: true,
-      positionFull: true,
-      designation: true,
-      authProvider: true,
-      role: true,
-    };
-    const profileWithUnits: FindOptionsSelect<User> = {
-      ...profileFields,
-      units: {
-        id: true,
-        name: true,
-        hasReportorialRequirements: true,
-      },
-    };
+  /** Read the profile, live capabilities and session settings together. */
+  async findForAuthProfile(id: number) {
+    type ProfileRow = User & { sessionSettings?: SecurityConfig; sessionCapabilities?: RoleCapability | null };
+    const buildQuery = () => this.usersRepository.createQueryBuilder('user')
+      .leftJoinAndMapOne('user.sessionSettings', SecurityConfig, 'settings', 'settings.id = 1')
+      .leftJoinAndMapOne('user.sessionCapabilities', RoleCapability, 'capability', 'capability.roleValue = user.role')
+      .select([
+        'user.id', 'user.email', 'user.passwordHash', 'user.firstName', 'user.middleName',
+        'user.lastName', 'user.suffix', 'user.phoneNumber', 'user.sex', 'user.staffId',
+        'user.position', 'user.positionFull', 'user.designation', 'user.authProvider', 'user.role',
+        'settings.id', 'settings.defaultPassword', 'settings.idleLockMinutes', 'capability',
+      ])
+      .where('user.id = :id', { id });
 
-    let user: User | null;
+    let user: ProfileRow | null;
     try {
-      user = await this.usersRepository.findOne({
-        where: { id },
-        relations: { units: true },
-        select: profileWithUnits,
-      });
+      user = await buildQuery().leftJoin('user.units', 'unit')
+        .addSelect(['unit.id', 'unit.name', 'unit.hasReportorialRequirements'])
+        .orderBy('unit.id', 'ASC')
+        .getOne();
     } catch (error) {
       if (!this.isMissingUserUnitAccessError(error)) throw error;
-      user = await this.usersRepository.findOne({
-        where: { id },
-        select: profileFields,
-      });
+      user = await buildQuery().getOne();
       if (user) user.units = [];
     }
 
     if (!user) throw new NotFoundException(`User with ID ${id} not found`);
-    return user;
+    if (!user.sessionSettings) throw new ServiceUnavailableException('Session settings could not be verified.');
+    return { user, settings: user.sessionSettings, capabilities: user.sessionCapabilities ?? null };
   }
 
   async getUiPreferences(id: number): Promise<UserUiPreferences | null> {

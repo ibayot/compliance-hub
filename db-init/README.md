@@ -1,5 +1,11 @@
 # Database initialization order
 
+## For release 1.1.7 (from 1.1.6)
+
+Rebuild and recreate the matching frontend, Gateway, Users, Ticketing and Compliance images. Verify that the frontend manifest and Gateway health show `1.1.7`. The patch uses the existing schema. After staging validation, select and verify the Users database and apply the environment-managed `20261118-add-application-changelog-v1.1.7-users.sql`. Applying it again preserves the publication timestamp and acknowledgments. For rollout validation, compare timestamped statement deltas by schema and digest and have the database administrator measure audit bytes in the same windows.
+
+Before deployment, retain the previous image IDs or immutable tags for all five services. Redeploy that matching image set with its existing environment and volumes for rollback. The 1.1.6 source for this patch is `0bd3fce`. If the 1.1.7 changelog was published, use `UPDATE app_releases SET status = 'draft' WHERE version = '1.1.7'` in the verified Users database to hide the release while preserving acknowledgments. Reapplying the release SQL republishes it.
+
 ## For release 1.1.6 (from 1.1.5)
 
 This release uses the existing schema. Select and verify the Users database, then apply the environment-managed `20261118-add-application-changelog-v1.1.6-users.sql`. It publishes staff notes and a separately curated End User note while preserving publication and acknowledgment history on repeat. The local Docker Users database must be updated during implementation; staging and production remain operator-managed.

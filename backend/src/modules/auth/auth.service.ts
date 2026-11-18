@@ -505,21 +505,14 @@ export class AuthService {
   }
 
   async getProfile(userId: number): Promise<Record<string, any>> {
-    const user = await this.usersService.findForAuthProfile(userId);
-    const [securityConfig, capabilities] = await Promise.all([
-      this.securityConfigService.getAuthProfileSettings(),
-      this.roleCapabilitiesService
-        ? this.roleCapabilitiesService.findOneFromDatabase(user.role).catch(() => {
-          this.logger.warn('Current role capabilities could not be loaded for the authenticated profile.');
-          return null;
-        })
-        : Promise.resolve(null),
-    ]);
-    const requiresPasswordChange = await bcrypt.compare(
-      securityConfig.defaultPassword,
-      user.passwordHash,
-    );
-    return {
+    const { profile } = await this.getSessionProfile(userId);
+    return profile!;
+  }
+
+  async getSessionProfile(userId: number, knownRevision?: string) {
+    const { user, settings, capabilities } = await this.usersService.findForAuthProfile(userId);
+    this.roleCapabilitiesService?.rememberDatabaseRole(user.role, capabilities);
+    const profile = {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
@@ -534,14 +527,24 @@ export class AuthService {
       designation: user.designation,
       authProvider: user.authProvider,
       role: user.role,
-      requiresPasswordChange,
       units: user.units?.map((u) => ({
         id: u.id,
         name: u.name,
         hasReportorialRequirements: u.hasReportorialRequirements,
       })) || [],
       capabilities,
-      idleLockMinutes: securityConfig.idleLockMinutes,
+      idleLockMinutes: Number.isInteger(settings.idleLockMinutes) &&
+        settings.idleLockMinutes >= 1 && settings.idleLockMinutes <= 1440 ? settings.idleLockMinutes : 15,
+    };
+
+    // Include credential-policy changes without sending raw credential data to the browser.
+    const revision = crypto.createHmac('sha256', this.configService.get<string>('JWT_SECRET')!)
+      .update(JSON.stringify(['session-profile-v1', profile, settings.defaultPassword, user.passwordHash]))
+      .digest('base64url');
+    if (revision === knownRevision) return { revision, profile: null };
+    return {
+      revision,
+      profile: { ...profile, requiresPasswordChange: await bcrypt.compare(settings.defaultPassword, user.passwordHash) },
     };
   }
 

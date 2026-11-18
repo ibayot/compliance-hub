@@ -7,7 +7,7 @@ export interface ReadOptions {
 }
 
 /** Bound the entire read, including shared authentication/refresh waits. */
-export async function boundedGet<T>(url: string, options: ReadOptions = {}): Promise<T> {
+export async function boundedGet<T>(url: string, options: ReadOptions = {}, headers?: Record<string, string>): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancel: (() => void) | undefined;
@@ -24,7 +24,7 @@ export async function boundedGet<T>(url: string, options: ReadOptions = {}): Pro
         reject(new AxiosError('Request timed out.', 'ECONNABORTED'));
         controller.abort();
       }, timeout);
-      apiClient.get<T>(url, { timeout, signal: controller.signal })
+      apiClient.get<T>(url, { timeout, signal: controller.signal, headers })
         .then(response => resolve(response.data), reject);
     });
   } finally {

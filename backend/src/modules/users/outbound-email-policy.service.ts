@@ -5,6 +5,7 @@ import { IsEmail, IsIn, IsOptional, MaxLength } from 'class-validator';
 import { SecurityConfig } from './entities/security-config.entity';
 import { User } from './entities/user.entity';
 import { RoleCapability } from './entities/role-capability.entity';
+import { TokenBlacklist } from '../auth/entities/token-blacklist.entity';
 
 export class OutboundEmailRecipientDto {
   @IsEmail() @MaxLength(255) recipientEmail: string;
@@ -29,6 +30,7 @@ export type AuthorizedAccount = {
 type AccountAccessSnapshot = {
   user: AuthorizedAccount | null;
   decision: OutboundEmailDecision;
+  tokenRevoked?: boolean;
 };
 
 function databaseBoolean(value: unknown): boolean | null {
@@ -82,14 +84,31 @@ export class OutboundEmailPolicyService {
     return (await this.readAccountAccess(userId)).decision;
   }
 
+  async decideAccountAccessBatch(accountIds: number[]) {
+    if (accountIds.length === 0) return [];
+    const rows = await this.queryAccountAccess(accountIds).getRawMany<Record<string, unknown>>();
+    const rowsByAccount = new Map<number, Record<string, unknown>[]>();
+    for (const row of rows) {
+      if (row.userId == null) continue;
+      const id = Number(row.userId);
+      const accountRows = rowsByAccount.get(id);
+      if (accountRows) accountRows.push(row);
+      else rowsByAccount.set(id, [row]);
+    }
+    return accountIds.map(accountId => ({
+      accountId,
+      decision: this.evaluateAccountAccess(rowsByAccount.get(accountId) ?? [], rows[0]).decision,
+    }));
+  }
+
   /**
    * Load the current account and access policy in one narrow SQL statement.
    * This is used by the Users JWT guard and the other services' access check.
    * It deliberately selects no password, MFA, Google subject, or profile data.
    */
-  private async readAccountAccess(userId: number): Promise<AccountAccessSnapshot> {
-    const rows = await this.configRepository.createQueryBuilder('policy')
-      .leftJoin(User, 'user', 'user.id = :userId', { userId })
+  private queryAccountAccess(accountIds: number[]) {
+    return this.configRepository.createQueryBuilder('policy')
+      .leftJoin(User, 'user', 'user.id IN (:...accountIds)', { accountIds })
       .leftJoin(
         'user.units',
         'unit',
@@ -113,18 +132,31 @@ export class OutboundEmailPolicyService {
       .addSelect('unit.id', 'unitId')
       .addSelect('unit.active', 'unitActive')
       .addSelect('capability.isSecuritySettingsAccess', 'securitySettingsAccess')
-      .where('policy.id = :policyId', { policyId: 1 })
-      .getRawMany<Record<string, unknown>>();
+      .where('policy.id = :policyId', { policyId: 1 });
+  }
 
-    if (rows.length === 0) {
+  private async readAccountAccess(userId: number, tokenJti?: string): Promise<AccountAccessSnapshot> {
+    const query = this.queryAccountAccess([userId]);
+    if (tokenJti) {
+      query.leftJoin(TokenBlacklist, 'revoked', 'revoked.tokenJti = :tokenJti', { tokenJti })
+        .addSelect('revoked.id', 'revokedId');
+    }
+    const rows = await query.getRawMany<Record<string, unknown>>();
+    return this.evaluateAccountAccess(rows, rows[0]);
+  }
+
+  private evaluateAccountAccess(rows: Record<string, unknown>[], policy?: Record<string, unknown>): AccountAccessSnapshot {
+    if (!policy) {
       return {
         user: null,
         decision: { allowed: false, reason: 'policy_unavailable' },
       };
     }
 
-    const first = rows[0];
-    const restrictionEnabled = databaseBoolean(first.restrictionEnabled);
+    if (policy.revokedId != null) {
+      return { user: null, decision: { allowed: false, reason: 'recipient_not_eligible' }, tokenRevoked: true };
+    }
+    const restrictionEnabled = databaseBoolean(policy.restrictionEnabled);
     if (restrictionEnabled === null) {
       return {
         user: null,
@@ -132,8 +164,9 @@ export class OutboundEmailPolicyService {
       };
     }
 
-    const id = Number(first.userId);
-    const activeValue = databaseBoolean(first.userActive);
+    const first = rows[0];
+    const id = Number(first?.userId);
+    const activeValue = databaseBoolean(first?.userActive);
     const user: AuthorizedAccount | null = Number.isSafeInteger(id) && id > 0 && activeValue !== null
       ? {
         id,
@@ -177,7 +210,7 @@ export class OutboundEmailPolicyService {
       };
     }
 
-    const allowedUnitIds = databaseJsonArray(first.allowedUnitIds);
+    const allowedUnitIds = databaseJsonArray(policy.allowedUnitIds);
     if (!allowedUnitIds) {
       return {
         user,
@@ -203,14 +236,15 @@ export class OutboundEmailPolicyService {
   }
 
   /** Revalidate and return only the current identity projection used by JWT guards. */
-  async authorizeRequestAccount(userId: number): Promise<AuthorizedAccount> {
+  async authorizeRequestAccount(userId: number, tokenJti?: string): Promise<AuthorizedAccount> {
     let snapshot: AccountAccessSnapshot;
     try {
-      snapshot = await this.readAccountAccess(userId);
+      snapshot = await this.readAccountAccess(userId, tokenJti);
     } catch {
       throw new ServiceUnavailableException('Application access could not be verified. Please try again.');
     }
 
+    if (snapshot.tokenRevoked) throw new UnauthorizedException('Token has been revoked. Please log in again.');
     if (snapshot.decision.reason === 'policy_unavailable') {
       this.assertDecisionAllowed(snapshot.decision);
     }

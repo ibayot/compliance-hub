@@ -1,10 +1,11 @@
-import { Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { OutboundEmailPolicyService, OutboundEmailRecipientDto } from '../users/outbound-email-policy.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
 import { UnitsService } from '../units/units.service';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
+import { ACCOUNT_ACCESS_BATCH_SIZE } from '../../common/auth/account-access-batch';
 
 /**
  * InternalController — inter-service API endpoints for users-service.
@@ -44,6 +45,16 @@ export class InternalController {
   decideAccountAccess(@Param('id', ParseIntPipe) id: number) {
     if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Application access policy is unavailable.');
     return this.outboundEmailPolicy.decideAccountAccess(id);
+  }
+
+  @Post('account-access/batch')
+  decideAccountAccessBatch(@Body('accountIds') accountIds: unknown) {
+    if (!Array.isArray(accountIds) || accountIds.length < 1 || accountIds.length > ACCOUNT_ACCESS_BATCH_SIZE ||
+        accountIds.some(id => !Number.isSafeInteger(id) || id < 1)) {
+      throw new BadRequestException(`Supply between 1 and ${ACCOUNT_ACCESS_BATCH_SIZE} valid account IDs.`);
+    }
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Application access policy is unavailable.');
+    return this.outboundEmailPolicy.decideAccountAccessBatch([...new Set<number>(accountIds)]);
   }
 
   @Get('users')

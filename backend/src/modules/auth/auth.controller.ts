@@ -3,6 +3,8 @@ import {
   Post,
   Body,
   Get,
+  Header,
+  Headers,
   UseGuards,
   UseInterceptors,
   ClassSerializerInterceptor,
@@ -110,6 +112,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getProfile(@CurrentUser() user: User) {
     return this.authService.getProfile(user.id);
+  }
+
+  @Get('session')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(JwtAuthGuard)
+  getSessionProfile(@CurrentUser() user: User, @Headers('x-session-profile-revision') revision?: string) {
+    return this.authService.getSessionProfile(user.id, revision);
   }
 
   @Post('mfa/send')

@@ -285,6 +285,43 @@ export class UsersHttpClient {
     });
   }
 
+  /** A stream may stay open only when the batch explicitly approves its account. */
+  async getApprovedStreamAccounts(accountIds: number[]): Promise<Set<number>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/internal/account-access/batch`, {
+        method: 'POST',
+        headers: { ...this.buildHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds }),
+        signal: controller.signal,
+      });
+      if (response.status === 404) {
+        // A previous Users image still has the live single-account endpoint.
+        await response.body?.cancel();
+        const results = await Promise.allSettled(accountIds.map(id => this.requireAccountAccess(id)));
+        return new Set(accountIds.filter((_, index) => results[index].status === 'fulfilled'));
+      }
+      if (!response.ok) return new Set();
+      const results: Array<{ accountId: number; decision: OutboundEmailDecision }> = await response.json();
+      if (!Array.isArray(results) || results.length !== accountIds.length) return new Set();
+      const requested = new Set(accountIds);
+      const approved = new Set<number>();
+      for (const result of results) {
+        if (!requested.delete(result?.accountId)) return new Set();
+        if (result.decision?.allowed === true && result.decision.recipientUserId === result.accountId &&
+            ['restriction_disabled', 'unit_allowed', 'security_admin_exempt'].includes(result.decision.reason)) {
+          approved.add(result.accountId);
+        }
+      }
+      return approved;
+    } catch {
+      return new Set();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /**
    * Fetch all users (basic stub fields only) from users-service.
    * Returns an empty array on error.

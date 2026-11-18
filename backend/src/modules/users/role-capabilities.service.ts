@@ -433,9 +433,13 @@ export class RoleCapabilitiesService implements OnModuleInit {
   /** Read one persisted role row and refresh its local authorization cache entry. */
   async findOneFromDatabase(roleValue: string): Promise<RoleCapability | null> {
     const row = await this.repo.findOne({ where: { roleValue } });
+    this.rememberDatabaseRole(roleValue, row);
+    return row;
+  }
+
+  rememberDatabaseRole(roleValue: string, row: RoleCapability | null): void {
     if (row) this.cache.set(roleValue, row);
     else this.cache.delete(roleValue);
-    return row;
   }
 
   /**

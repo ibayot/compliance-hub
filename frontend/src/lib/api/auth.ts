@@ -2,6 +2,7 @@ import { apiClient, cancelSessionRenewal, refreshAuthentication, tokenStore } fr
 import { boundedGet, ReadOptions } from './bounded-read';
 import { LoginCredentials, AuthResponse, SignInResponse, User } from '../types/auth';
 import { Capacitor } from '@capacitor/core';
+import { isAxiosError } from 'axios';
 import type { RoleCapabilityRecord } from './users';
 
 export interface SessionProfile extends User {
@@ -103,6 +104,16 @@ export const authApi = {
     // cookie. Bound that probe so a stalled API cannot leave every route on a
     // permanent loading spinner.
     return boundedGet<SessionProfile>('/auth/me', options);
+  },
+
+  checkSession: async (revision?: string, options?: ReadOptions): Promise<{ revision?: string; profile: SessionProfile | null }> => {
+    try {
+      return await boundedGet('/auth/session', options, revision ? { 'X-Session-Profile-Revision': revision } : undefined);
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 404) throw error;
+      // A previous Users image can still serve the full profile during rollback.
+      return { profile: await boundedGet<SessionProfile>('/auth/me', options) };
+    }
   },
 
   refresh: async (_refreshToken: string): Promise<{ accessToken?: string; refreshToken?: string }> => {

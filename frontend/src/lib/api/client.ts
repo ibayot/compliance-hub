@@ -166,8 +166,9 @@ class ApiClient {
 
         if (typeof window === 'undefined') return Promise.reject(error);
         const path = new URL(originalRequest.url || '', window.location.origin).pathname;
-        // Password/MFA/login errors never renew a session. The profile probe may renew once.
-        if ((path.includes('/auth/') && !path.endsWith('/auth/me')) || !canRecoverSession()) {
+        // Password/MFA/login errors never renew a session. Session probes may renew once.
+        const sessionProbe = path.endsWith('/auth/me') || path.endsWith('/auth/session');
+        if ((path.includes('/auth/') && !sessionProbe) || !canRecoverSession()) {
           return Promise.reject(error);
         }
         if (originalRequest._retry) {

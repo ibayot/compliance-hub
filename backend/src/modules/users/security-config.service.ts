@@ -50,29 +50,6 @@ export class SecurityConfigService {
     return config;
   }
 
-  /** Minimal settings used by the authenticated profile/session projection. */
-  async getAuthProfileSettings(): Promise<Pick<SecurityConfig, 'defaultPassword' | 'idleLockMinutes'>> {
-    const config = await this.configRepository.findOne({
-      where: { id: 1 },
-      select: { id: true, defaultPassword: true, idleLockMinutes: true },
-    });
-    if (!config) {
-      const defaults = await this.getConfig();
-      return {
-        defaultPassword: defaults.defaultPassword,
-        idleLockMinutes: defaults.idleLockMinutes,
-      };
-    }
-
-    return {
-      defaultPassword: config.defaultPassword,
-      idleLockMinutes: Number.isInteger(config.idleLockMinutes) &&
-        config.idleLockMinutes >= 1 && config.idleLockMinutes <= 1440
-        ? config.idleLockMinutes
-        : 15,
-    };
-  }
-
   async getEmailUnitOptions(): Promise<Array<Pick<Unit, 'id' | 'name' | 'active'>>> {
     return this.configRepository.manager.getRepository(Unit).find({ select: { id: true, name: true, active: true }, order: { name: 'ASC' } });
   }
