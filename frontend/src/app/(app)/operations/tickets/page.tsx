@@ -1630,7 +1630,7 @@ export default function TicketsPage({
         </Box>
         <TicketPageActions
           createButtonRef={createTicketButtonRef}
-          canCreate={!restrictedAssignedOnly && !personalRequestedOnly && !showEscalations}
+          canCreate={!!myCap?.isTicketModuleAccess && !restrictedAssignedOnly && !showEscalations && (!personalRequestedOnly || user?.role === 'user')}
           canInvite={canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations}
           canViewEscalations={canViewEscalatedQueue}
           showingEscalations={showEscalations}

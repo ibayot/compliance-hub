@@ -258,15 +258,22 @@ export class UsersHttpClient {
   }
 
   /** Current approval is an authorization dependency, never optional cached enrichment. */
-  async requireAccountAccess(userId: number): Promise<void> {
+  async requireAccountAccess(userId: number, tokenJti?: string): Promise<void> {
     if (!Number.isSafeInteger(userId) || userId < 1) throw new UnauthorizedException('Invalid account.');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     let decision: OutboundEmailDecision;
     try {
-      const response = await fetch(`${this.baseUrl}/api/internal/account-access/${userId}`, {
-        headers: this.buildHeaders(), signal: controller.signal,
-      });
+      const response = tokenJti
+        ? await fetch(`${this.baseUrl}/api/internal/account-access/authorize`, {
+          method: 'POST',
+          headers: { ...this.buildHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, tokenJti }),
+          signal: controller.signal,
+        })
+        : await fetch(`${this.baseUrl}/api/internal/account-access/${userId}`, {
+          headers: this.buildHeaders(), signal: controller.signal,
+        });
       if (!response.ok) throw new Error('Policy unavailable.');
       decision = await response.json() as OutboundEmailDecision;
       const allowedReasons = ['restriction_disabled', 'unit_allowed', 'security_admin_exempt'];

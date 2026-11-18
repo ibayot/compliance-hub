@@ -305,7 +305,7 @@ export default function App() {
       <Route
         path="/operations/my-tickets"
         element={
-          <ProtectedDashboard>
+          <ProtectedDashboard requiredCapability="isTicketModuleAccess">
             <TicketsPage personalRequestedOnly />
           </ProtectedDashboard>
         }

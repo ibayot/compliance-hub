@@ -30,7 +30,8 @@ export class TicketingJwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: any) {
     if (payload.isTemp) throw new UnauthorizedException('Complete MFA verification before accessing the application.');
-    await this.usersHttpClient.requireAccountAccess(payload.sub);
+    if (typeof payload.jti !== 'string' || payload.jti.length === 0) throw new UnauthorizedException('Session identifier is missing.');
+    await this.usersHttpClient.requireAccountAccess(payload.sub, payload.jti);
     return {
       id: payload.sub,
       email: payload.email,

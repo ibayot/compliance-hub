@@ -6,6 +6,7 @@ import { UnitsService } from '../units/units.service';
 import { RoleCapabilitiesService } from '../users/role-capabilities.service';
 import { InternalServiceGuard } from '../../common/guards/internal-service.guard';
 import { ACCOUNT_ACCESS_BATCH_SIZE } from '../../common/auth/account-access-batch';
+import { AuthorizeAccountAccessDto } from './dto/authorize-account-access.dto';
 
 /**
  * InternalController — inter-service API endpoints for users-service.
@@ -45,6 +46,12 @@ export class InternalController {
   decideAccountAccess(@Param('id', ParseIntPipe) id: number) {
     if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Application access policy is unavailable.');
     return this.outboundEmailPolicy.decideAccountAccess(id);
+  }
+
+  @Post('account-access/authorize')
+  authorizeAccountAccess(@Body() dto: AuthorizeAccountAccessDto) {
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Application access policy is unavailable.');
+    return this.outboundEmailPolicy.decideRequestAccountAccess(dto.userId, dto.tokenJti);
   }
 
   @Post('account-access/batch')

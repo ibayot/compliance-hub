@@ -390,6 +390,7 @@ function ReportView({ params }: { params: ReportParams }) {
       documentsApi.listDocuments({
         year: String(year),
         unit_id: unitId || undefined,
+        page: 1,
         limit: 200,
       }),
   });

@@ -84,6 +84,10 @@ export class OutboundEmailPolicyService {
     return (await this.readAccountAccess(userId)).decision;
   }
 
+  async decideRequestAccountAccess(userId: number, tokenJti: string): Promise<OutboundEmailDecision> {
+    return (await this.readAccountAccess(userId, tokenJti)).decision;
+  }
+
   async decideAccountAccessBatch(accountIds: number[]) {
     if (accountIds.length === 0) return [];
     const rows = await this.queryAccountAccess(accountIds).getRawMany<Record<string, unknown>>();
