@@ -20,6 +20,11 @@ def copyLauncherIcon = tasks.register('copyLauncherIcon', Copy) {
     into(generatedResources.map { it.dir('drawable-nodpi') })
     rename { 'hub_launcher.png' }
 }
+def copyRootCertificate = tasks.register('copyRootCertificate', Copy) {
+    from('../../backend/assets/compliance-hub-root-ca.crt')
+    into(generatedResources.map { it.dir('raw') })
+    rename { 'compliance_hub_root_ca.crt' }
+}
 
 android {
     namespace = 'com.dswd.compliancehub.launcher'
@@ -45,7 +50,7 @@ android {
     }
 }
 
-tasks.named('preBuild').configure { dependsOn(copyLauncherIcon) }
+tasks.named('preBuild').configure { dependsOn(copyLauncherIcon, copyRootCertificate) }
 
 dependencies {
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'

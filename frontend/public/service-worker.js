@@ -25,6 +25,7 @@ self.addEventListener('push', (event) => {
       body: 'You have a new notification.',
       icon: '/icons/app-192.png',
       badge: '/icons/app-192.png',
+      silent: false,
       tag: 'rictms-new-notification',
       renotify: true,
       data: { targetPath: safeTargetPath(payload.targetPath) },

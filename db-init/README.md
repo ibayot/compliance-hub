@@ -1,5 +1,13 @@
 # Database initialization order
 
+## For release 1.1.6 (from 1.1.5)
+
+This release uses the existing schema. Select and verify the Users database, then apply the environment-managed `20261118-add-application-changelog-v1.1.6-users.sql`. It publishes staff notes and a separately curated End User note while preserving publication and acknowledgment history on repeat. The local Docker Users database must be updated during implementation; staging and production remain operator-managed.
+
+Rebuild the frontend and Gateway together so they report `1.1.6` and the iOS profile includes the public root CA. Build and distribute the signed Android Trusted Web Activity APK separately; the APK includes the public CA and guides users through Android's required manual trust setup. Check that `/.well-known/assetlinks.json` still matches the launcher signing key. No new schema migration is required. Do not put either private key in Git, an APK, or the iOS profile.
+
+On iOS, users install the combined Web Clip/root certificate profile and enable full trust in Certificate Trust Settings. On Android 11+, users save the bundled certificate and install it through Security settings; the APK cannot silently install a root CA. The existing notification permission and account-approval rules remain unchanged. Test sound and badges with each target OS's notification settings enabled.
+
 ## For release 1.1.5
 
 Rebuild and recreate the frontend, Gateway, Users, Ticketing, and Compliance services together. Verify the frontend manifest and gateway health both report `1.1.5`. This patch uses the existing schema. After the staging smoke checks pass, apply the environment-managed `20261117-add-application-changelog-v1.1.5-users.sql` with the verified **Users** database selected. Repeat application preserves release timestamps and user acknowledgments. The SQL is ignored by Git and travels separately. The installed Android launcher follows the web version independently.

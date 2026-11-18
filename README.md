@@ -84,9 +84,9 @@ npm run dev
 
 ## Android APK download
 
-The Android launcher opens the deployed Compliance Hub website in a Trusted Web Activity and uses the website's Web Push setup through the supported browser. It needs no Firebase project or Play Store listing. Android asks the user to confirm installation after downloading the file.
+The Android launcher opens the deployed Compliance Hub website in a Trusted Web Activity and uses the website's Web Push setup through the supported browser. It needs no Firebase project or Play Store listing. The launcher includes the public RICTMS root CA and guides the user through Android's required one-time CA trust step before opening the site. Android requires the user to install CA certificates from Security settings; the app cannot silently trust one.
 
-Build from the repository root with JDK 17, Android SDK Platform 36 and Build Tools 36.0.0. Set `HUB_ANDROID_ORIGIN` to the deployment's HTTPS origin as opened on the phone, without a path. Use a certificate trusted by the target phones. Set `HUB_ANDROID_KEYSTORE` and `HUB_ANDROID_KEY_ALIAS` for the organization release key, and supply `HUB_ANDROID_KEYSTORE_PASSWORD` and, if different, `HUB_ANDROID_KEY_PASSWORD` through the build environment. Keep the key and passwords outside the repository.
+Build from the repository root with JDK 17, Android SDK Platform 36 and Build Tools 36.0.0. Set `HUB_ANDROID_ORIGIN` to the deployment's HTTPS origin as opened on the phone, without a path. The public root CA at `backend/assets/compliance-hub-root-ca.crt` is included in both the Android launcher and the generated iOS profile; never include the CA private key or server private key. Set `HUB_ANDROID_KEYSTORE` and `HUB_ANDROID_KEY_ALIAS` for the organization release key, and supply `HUB_ANDROID_KEYSTORE_PASSWORD` and, if different, `HUB_ANDROID_KEY_PASSWORD` through the build environment. Keep signing keys and passwords outside the repository.
 
 If this is the first rollout and the organization has no launcher signing key, create one with an interactive password prompt and keep the file for future updates:
 
@@ -101,6 +101,8 @@ node frontend/scripts/build-android-launcher.mjs
 The build emits `output/android-launcher/Compliance-Hub.apk` and its matching `assetlinks.json`. For a deployment with matching staging files and settings, rerun with `--stage-web-assets` to put both files in the frontend build context. If the build machine is separate, copy the APK to `frontend/public/downloads/Compliance-Hub.apk` and the statement to `frontend/public/.well-known/assetlinks.json` on that deployment. Rebuild the frontend container. Existing deployments may continue using `VITE_ANDROID_APK_URL` for an externally hosted APK.
 
 Verify that the HTTPS origin serves the exact statement at `/.well-known/assetlinks.json` without redirecting and that an Android browser offers **Download App → Download Android APK**. Install on a phone over the office network or VPN, confirm it opens full screen, then enable alerts from the bell and test a notification after closing the app. Use the same organization key and a higher app version for future APK updates. Website updates take effect without reinstalling the launcher.
+
+At first launch, the signed launcher checks whether the exact bundled root CA is trusted. If not, save the certificate in Downloads, install it from Android **Security → Encryption & credentials → Install a certificate → CA certificate**, and return to the launcher. It opens the website only after the matching root CA appears in Android's trust store. Menu names vary by device. This is a user-approved, device-wide Android trust change; it is not silently applied by the APK. The very first APK/profile delivery must be verified through a trusted source because HTTPS cannot authenticate its own previously untrusted root CA.
 
 ## Capacitor development build
 

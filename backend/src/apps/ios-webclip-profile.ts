@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, X509Certificate } from 'crypto';
 
 const LOCAL_WEB_ORIGINS = new Set(['localhost', '127.0.0.1']);
 
@@ -48,9 +48,20 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
-export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer): string {
+export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer, rootCaPem: Buffer): string {
   if (iconPng.length === 0 || iconPng.length >= 1_000_000) {
     throw new Error('The Web Clip icon must be a non-empty PNG smaller than 1 MB.');
+  }
+  let rootCa: X509Certificate;
+  try {
+    rootCa = new X509Certificate(rootCaPem);
+  } catch {
+    throw new Error('The Compliance Hub root CA certificate is invalid.');
+  }
+  const now = Date.now();
+  if (!rootCa.ca || rootCa.subject !== rootCa.issuer ||
+      Date.parse(rootCa.validFrom) > now || Date.parse(rootCa.validTo) <= now) {
+    throw new Error('The Compliance Hub root CA certificate is not a valid, current root CA.');
   }
 
   const parsedUrl = new URL(targetUrl);
@@ -59,6 +70,7 @@ export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer): stri
   const payloadIdentifier = `com.rictms.compliancehub.webclip.${profileUuid}`;
   const launchUrl = new URL('/dashboard', parsedUrl);
   const iconData = iconPng.toString('base64').match(/.{1,76}/g)?.join('\n') ?? '';
+  const rootCaData = rootCa.raw.toString('base64').match(/.{1,76}/g)?.join('\n') ?? '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -66,6 +78,24 @@ export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer): stri
 <dict>
   <key>PayloadContent</key>
   <array>
+    <dict>
+      <key>PayloadContent</key>
+      <data>
+${rootCaData}
+      </data>
+      <key>PayloadDescription</key>
+      <string>Allows this iPhone to verify the Compliance Hub internal HTTPS server.</string>
+      <key>PayloadDisplayName</key>
+      <string>RICTMS Helpdesk Internal TLS CA</string>
+      <key>PayloadIdentifier</key>
+      <string>${payloadIdentifier}.root-ca</string>
+      <key>PayloadType</key>
+      <string>com.apple.security.root</string>
+      <key>PayloadUUID</key>
+      <string>${stableUuid(`root-ca:${payloadIdentifier}`)}</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+    </dict>
     <dict>
       <key>FullScreen</key>
       <true/>
@@ -98,7 +128,7 @@ ${iconData}
     </dict>
   </array>
   <key>PayloadDisplayName</key>
-  <string>Compliance Hub Home Screen Profile</string>
+  <string>Compliance Hub Secure Mobile Setup</string>
   <key>PayloadIdentifier</key>
   <string>${payloadIdentifier}</string>
   <key>PayloadOrganization</key>

@@ -1059,7 +1059,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           <MenuItem onClick={() => void handleInstallWebApp()}>Install web app</MenuItem>
           {showIosProfileDownload && (
             <MenuItem component="a" href="/api/ios-profile.mobileconfig" onClick={() => setAppInstallAnchor(null)}>
-              Download iOS profile (shortcut)
+              Download iOS profile (icon + secure connection)
             </MenuItem>
           )}
         </Menu>
@@ -1073,14 +1073,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           <DialogContent>
             <DialogContentText id="app-install-help-description">
               {installHelp === 'ios'
-                ? 'Open Compliance Hub in Safari. From Share, choose Add to Home Screen and turn on Open as Web App if shown. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
+                ? 'On iPhone, download and install the Compliance Hub profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for RICTMS Helpdesk Internal TLS CA. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
                 : installHelp === 'android'
                   ? 'Open Compliance Hub in Chrome. In the ⋮ menu, choose Add to Home screen, then Install if offered. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
                   : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            {installHelp === 'ios' && <Button href="/install-ios.html">Open Safari install page</Button>}
+            {installHelp === 'ios' && <Button href="/api/ios-profile.mobileconfig">Download iOS profile</Button>}
             <Button onClick={() => setInstallHelp(null)} autoFocus>Done</Button>
           </DialogActions>
         </Dialog>

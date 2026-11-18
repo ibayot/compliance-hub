@@ -9,15 +9,20 @@
         android:usesCleartextTraffic="false">
         <meta-data android:name="asset_statements" android:resource="@string/hub_asset_statements" />
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
-            android:exported="true">
-            <meta-data
-                android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="@string/hub_launch_url" />
+            android:name=".CertificateSetupActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.customtabs.trusted.DEFAULT_URL"
+                android:value="@string/hub_launch_url" />
         </activity>
         <activity
             android:name="com.google.androidbrowserhelper.trusted.FocusActivity"

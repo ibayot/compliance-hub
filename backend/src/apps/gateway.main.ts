@@ -314,7 +314,8 @@ async function bootstrap() {
     try {
       const targetUrl = resolveIosWebClipUrl();
       const icon = readFileSync(resolve(process.cwd(), 'assets/compliance-hub-webclip-icon.png'));
-      const profile = buildIosWebClipProfile(targetUrl, icon);
+      const rootCa = readFileSync(resolve(process.cwd(), 'assets/compliance-hub-root-ca.crt'));
+      const profile = buildIosWebClipProfile(targetUrl, icon, rootCa);
       res.status(200);
       res.setHeader('Content-Type', 'application/x-apple-aspen-config');
       res.setHeader('Content-Disposition', 'attachment; filename="Compliance-Hub.mobileconfig"');

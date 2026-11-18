@@ -22,12 +22,13 @@
   <body>
     <main>
       <img src="/icons/compliance-hub-ios.png" alt="" width="180" height="180">
-      <h1>Install Compliance Hub</h1>
+      <h1>Install Compliance Hub on iPhone</h1>
       <ol>
-        <li>In Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li>
-        <li>Turn on <strong>Open as Web App</strong> if shown, then tap <strong>Add</strong>.</li>
-        <li>Open the new icon. In the bell menu, choose <strong>Browser alerts → Enable</strong>.</li>
+        <li>Download the <a href="/api/ios-profile.mobileconfig">Compliance Hub installation profile</a>, then install it from iPhone Settings under <strong>VPN &amp; Device Management</strong>.</li>
+        <li>Open <strong>Settings → General → About → Certificate Trust Settings</strong> and enable full trust for <strong>RICTMS Helpdesk Internal TLS CA</strong>.</li>
+        <li>Open the new Compliance Hub Home Screen icon, sign in, and choose <strong>Browser alerts → Enable</strong> from the bell menu.</li>
       </ol>
+      <p>iOS requires this one-time full-trust step for a manually installed root certificate. Notification sounds and badges remain controlled by iOS settings.</p>
       <p><a href="/dashboard">Open Compliance Hub</a></p>
     </main>
   </body>

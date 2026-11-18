@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { X509Certificate } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const frontend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const project = join(frontend, 'android-launcher');
 const distribution = join(frontend, '..', 'output', 'android-launcher');
+const rootCaPath = join(frontend, '..', 'backend', 'assets', 'compliance-hub-root-ca.crt');
 const packageName = 'com.dswd.compliancehub.launcher';
 const apkName = 'Compliance-Hub.apk';
 const stageAssets = process.argv[2] === '--stage-web-assets';
@@ -18,6 +20,21 @@ try { site = new URL(process.env.HUB_ANDROID_ORIGIN || ''); } catch { /* Report 
 if (!site || site.protocol !== 'https:' || site.username || site.password
     || site.href !== site.origin + '/' || /^(localhost|127\.|0\.0\.0\.0$|\[::1\]$|10\.0\.2\.2$)/i.test(site.hostname)) {
   throw new Error('Set HUB_ANDROID_ORIGIN to the HTTPS address that staff open on their phones, without a path.');
+}
+
+if (!existsSync(rootCaPath)) {
+  throw new Error('The Compliance Hub root CA is missing from backend/assets/compliance-hub-root-ca.crt.');
+}
+let rootCa;
+try {
+  rootCa = new X509Certificate(readFileSync(rootCaPath));
+} catch {
+  throw new Error('The Compliance Hub root CA file is not a valid X.509 certificate.');
+}
+const now = Date.now();
+if (!rootCa.ca || rootCa.subject !== rootCa.issuer ||
+    Date.parse(rootCa.validFrom) > now || Date.parse(rootCa.validTo) <= now) {
+  throw new Error('The Compliance Hub certificate must be a current, self-issued root CA.');
 }
 
 const keyStore = process.env.HUB_ANDROID_KEYSTORE && resolve(process.env.HUB_ANDROID_KEYSTORE);
