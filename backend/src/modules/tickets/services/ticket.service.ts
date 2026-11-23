@@ -1125,7 +1125,7 @@ export class TicketService implements OnModuleInit {
   }
 
   /**
-   * Specialized Concerns are always manually routed and may only be owned by
+   * Specialized Concerns may only be owned by
    * active RICTMS staff whose role explicitly carries Specialized Support.
    * Keep this check centralized so creation, correction, reassignment, and
    * escalation cannot drift into different eligibility rules.
@@ -1135,16 +1135,17 @@ export class TicketService implements OnModuleInit {
     assignee: { active?: boolean; role?: string } | null | undefined,
   ): void {
     if (ticketType !== TicketType.SPECIALIZED_CONCERNS) return;
-    if (
-      !assignee ||
-      assignee.active === false ||
-      !this.isDirectAssignableRictmsStaff(assignee.role as string) ||
-      !this.roleCapSvc.isSpecializedSupport(assignee.role as string)
-    ) {
+    if (!this.canOwnSpecializedTicket(assignee)) {
       throw new BadRequestException(
         'The selected assignee is not authorized for Specialized Concerns.',
       );
     }
+  }
+
+  private canOwnSpecializedTicket(assignee: { active?: boolean; role?: string } | null | undefined): boolean {
+    const role = assignee?.role;
+    return !!role && assignee?.active !== false && this.isDirectAssignableRictmsStaff(role)
+      && this.roleCapSvc.isSpecializedSupport(role);
   }
 
   /**
@@ -1491,7 +1492,7 @@ export class TicketService implements OnModuleInit {
     }
 
     // ── Auto-Shift based on keyword rules ─────────────────────────────────
-    // Specialized Concerns are an explicit, manually routed workflow. Keyword
+    // Specialized Concerns are explicitly classified at filing. Keyword
     // rules must never replace their selected support type, category, or issue.
     if (dto.ticketType !== TicketType.SPECIALIZED_CONCERNS) {
       // The selected support type is passed to the matcher so duplicate rules
@@ -1550,14 +1551,21 @@ export class TicketService implements OnModuleInit {
     let automaticAssignmentPool: string | null = null;
     const filingDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const overtimeDate = await this.attendanceService.isOvertimeDay(filingDate) ? filingDate : null;
-    const overtimeFiler = overtimeDate && isOvertimeStaff(callerRole) && Number(requesterId) !== Number(callerId);
+    const isSpecialized = ticketType === TicketType.SPECIALIZED_CONCERNS;
+    const isOvertimeProxy = !!overtimeDate && isOvertimeStaff(callerRole) && Number(requesterId) !== Number(callerId);
+    const filer = isSpecialized && (overtimeDate ? isOvertimeProxy : dto.assignedToId == null)
+      && this.isDirectAssignableRictmsStaff(callerRole)
+      ? await this.usersHttpClient.getUserById(callerId)
+      : null;
+    const specializedFiler = filer?.active === true && this.canOwnSpecializedTicket(filer) ? filer : null;
+    const overtimeFiler = isOvertimeProxy && (!isSpecialized || !!specializedFiler);
 
     if (overtimeDate) {
       if (dto.assignedToId != null && (!overtimeFiler || Number(dto.assignedToId) !== Number(callerId))) {
         throw new BadRequestException('OT proxy requests belong to the staff filer; personal requests remain Open for another OT participant.');
       }
       if (overtimeFiler) {
-        assignedTech = await this.usersHttpClient.getUserById(callerId);
+        assignedTech = specializedFiler ?? await this.usersHttpClient.getUserById(callerId);
         if (!assignedTech || assignedTech.active === false) throw new ForbiddenException('The filer is not an active staff member.');
         this.assertSpecializedAssigneeEligibility(ticketType, assignedTech);
         assignedToId = callerId;
@@ -1616,7 +1624,16 @@ export class TicketService implements OnModuleInit {
       const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedToId);
       shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
       isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
-    } else if (ticketType !== TicketType.SPECIALIZED_CONCERNS)
+    } else if (isSpecialized) {
+      if (specializedFiler) {
+        assignedToId = callerId;
+        assignedTech = specializedFiler;
+        const busy = await this.ticketRepo.count({ where: { assignedToId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
+        const hasBreachedTicket = busy > 0 && await this.hasBreachedActiveTicket(assignedToId);
+        shouldStartInProgress = busy === 0 || hasBreachedTicket;
+        isSlaWaiting = !shouldStartInProgress;
+      }
+    } else
       try {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
         const isOfficeDayToday = await this.attendanceService.isOfficeDay(today);
@@ -1887,7 +1904,8 @@ export class TicketService implements OnModuleInit {
           previousAssigneeId: null,
           technicianId: assignedTech.id,
           technicianName: formatPersonName(assignedTech, assignedTech.email),
-          source: overtimeFiler ? 'overtime_filer' : manuallySelected ? 'ticket_creation_manual' : 'ticket_creation_auto',
+          source: overtimeFiler ? 'overtime_filer' : manuallySelected ? 'ticket_creation_manual'
+            : specializedFiler ? 'specialized_filer' : 'ticket_creation_auto',
         },
       ).catch(() => {});
     }
