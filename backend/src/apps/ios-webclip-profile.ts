@@ -56,12 +56,12 @@ export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer, rootC
   try {
     rootCa = new X509Certificate(rootCaPem);
   } catch {
-    throw new Error('The Compliance Hub root CA certificate is invalid.');
+    throw new Error('The FO2 iCare root CA certificate is invalid.');
   }
   const now = Date.now();
   if (!rootCa.ca || rootCa.subject !== rootCa.issuer ||
       Date.parse(rootCa.validFrom) > now || Date.parse(rootCa.validTo) <= now) {
-    throw new Error('The Compliance Hub root CA certificate is not a valid, current root CA.');
+    throw new Error('The FO2 iCare root CA certificate is not a valid, current root CA.');
   }
 
   const parsedUrl = new URL(targetUrl);
@@ -86,7 +86,7 @@ ${rootCaData}
       <key>PayloadDescription</key>
       <string>Allows this iPhone to verify the FO2 iCare internal HTTPS server.</string>
       <key>PayloadDisplayName</key>
-      <string>RICTMS Helpdesk Internal TLS CA</string>
+      <string>FO2 iCare Internal TLS CA</string>
       <key>PayloadIdentifier</key>
       <string>${payloadIdentifier}.root-ca</string>
       <key>PayloadType</key>

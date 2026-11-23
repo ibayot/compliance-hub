@@ -2049,7 +2049,12 @@ export const attendanceApi = {
 export interface BrowserPushConfig {
   enabled: boolean;
   publicKey: string | null;
+  configurationIssue?: 'missing-settings' | 'encryption-or-subject' | 'signing-key-pair' | 'proxy-url';
 }
+
+export type BrowserPushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
+type BrowserPushTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
+  | { outcome: 'failed'; failure?: BrowserPushFailure; providerStatus?: number };
 
 export const notificationsApi = {
   getSummary: async (): Promise<{ notifications: any[]; unreadCount: number }> => {
@@ -2080,7 +2085,7 @@ export const notificationsApi = {
     const response = await apiClient.post('/notifications/push-subscription', subscription);
     return response.data;
   },
-  sendTestAlert: async (endpoint: string): Promise<{ outcome: 'accepted' | 'expired' | 'failed' | 'not-enabled' }> => {
+  sendTestAlert: async (endpoint: string): Promise<BrowserPushTestResult> => {
     const response = await apiClient.post('/notifications/push-test', { endpoint });
     return response.data;
   },

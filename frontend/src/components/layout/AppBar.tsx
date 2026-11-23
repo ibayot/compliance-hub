@@ -50,7 +50,7 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
-import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig } from '@/app/api/references';
+import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure } from '@/app/api/references';
 import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
@@ -112,6 +112,26 @@ function getHttpErrorStatus(error: unknown): number | null {
   const status = (error as { response?: { status?: unknown } }).response?.status;
   return typeof status === 'number' && Number.isInteger(status) ? status : null;
 }
+
+function pushSetupMessage(config: BrowserPushConfig | null): string {
+  switch (config?.configurationIssue) {
+    case 'signing-key-pair': return 'Ticketing has mismatched or invalid Web Push signing keys. Ask an administrator to restore a matching key pair.';
+    case 'encryption-or-subject': return 'Ticketing has an invalid Web Push encryption key or contact subject. Ask an administrator to check its settings.';
+    case 'proxy-url': return 'Ticketing has an invalid Web Push proxy address. Ask an administrator to check its settings.';
+    default: return 'Ticketing has not confirmed valid Web Push settings. An administrator should check the four Web Push values and recreate the service.';
+  }
+}
+
+const pushFailureMessages: Record<BrowserPushFailure, string> = {
+  authentication: 'The push provider rejected Ticketing’s signing credentials. Ask an administrator to check the VAPID keys and server clock. If the keys changed, enable alerts again on this device.',
+  'rate-limit': 'The push provider is limiting requests. Wait a few minutes and try the test again.',
+  'provider-unavailable': 'The push provider is temporarily unavailable. Try the test again later.',
+  'provider-request': 'The push provider rejected the request. Ask an administrator to check Ticketing’s push logs.',
+  dns: 'Ticketing could not look up the push provider. Ask an administrator to check the server’s DNS or outbound proxy.',
+  tls: 'Ticketing could not verify the push provider’s HTTPS certificate. Ask an administrator to check the server’s certificate trust and proxy.',
+  timeout: 'Ticketing timed out connecting to the push provider. Ask an administrator to check the server’s outbound HTTPS or proxy.',
+  connection: 'Ticketing could not establish an HTTPS connection to the push provider. Ask an administrator to check the server’s outbound firewall or proxy.',
+};
 
 export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
@@ -287,7 +307,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       return;
     }
     if (!pushSupported || !pushConfig?.enabled || !pushConfig.publicKey) {
-      setPushMessage('The Ticketing service has not confirmed valid Web Push settings. Check all four server values and recreate the Ticketing service.');
+      setPushMessage(pushSetupMessage(pushConfig));
       return;
     }
 
@@ -371,15 +391,31 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         setPushMessage('Enable browser alerts again on this device before sending a test.');
         return;
       }
-      const { outcome } = await notificationsApi.sendTestAlert(subscription.endpoint);
-      if (outcome === 'accepted') {
+      const config = await notificationsApi.getPushConfig();
+      setPushConfig(config);
+      if (!config.enabled || !config.publicKey) {
+        setPushEnabled(false);
+        setPushMessage(pushSetupMessage(config));
+        return;
+      }
+      const subscriptionKey = subscription.options.applicationServerKey;
+      if (subscriptionKey && !applicationServerKeysMatch(subscriptionKey, decodeApplicationServerKey(config.publicKey))) {
+        await notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
+        await subscription.unsubscribe().catch(() => false);
+        setPushEnabled(false);
+        setPushMessage('The server’s signing key changed. Enable browser alerts again on this device, then retry the test.');
+        return;
+      }
+      const result = await notificationsApi.sendTestAlert(subscription.endpoint);
+      if (result.outcome === 'accepted') {
         setPushMessage('The push provider accepted the test. Check your device’s notification panel for FO2 iCare.');
-      } else if (outcome === 'expired' || outcome === 'not-enabled') {
-        if (outcome === 'expired') await subscription.unsubscribe().catch(() => false);
+      } else if (result.outcome === 'expired' || result.outcome === 'not-enabled') {
+        if (result.outcome === 'expired') await subscription.unsubscribe().catch(() => false);
         setPushEnabled(false);
         setPushMessage('This device’s subscription is no longer active. Enable browser alerts again, then retry the test.');
-      } else {
-        setPushMessage('The push provider did not accept the test. Ask an administrator to check Ticketing service logs and its connection to the push provider.');
+      } else if (result.outcome === 'failed') {
+        const message = result.failure && pushFailureMessages[result.failure];
+        setPushMessage(`${message || 'The push provider did not accept the test. Ask an administrator to check Ticketing’s push logs.'}${result.providerStatus ? ` (HTTP ${result.providerStatus})` : ''}`);
       }
     } catch (error) {
       const status = getHttpErrorStatus(error);
@@ -534,7 +570,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       originalFaviconHrefRef.current = favicon.getAttribute('href') || '';
     }
 
-    const baseTitle = originalDocumentTitleRef.current || 'RICTMS Compliance Hub';
+    const baseTitle = originalDocumentTitleRef.current || 'FO2 iCare';
     const originalFavicon = originalFaviconHrefRef.current;
     let animationTimer: ReturnType<typeof setInterval> | null = null;
     let animationStopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -907,14 +943,15 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       position="fixed"
       data-app-layout-mode={layoutMode}
       sx={{
-        position: { xs: 'sticky', md: 'fixed' },
+        top: 0,
         left: { xs: 0, md: `${drawerWidth}px` },
         width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
         bgcolor: 'background.paper',
         color: 'text.primary',
-        pt: { xs: 'env(safe-area-inset-top)', md: 0 },
+        borderBottomWidth: 'var(--app-header-divider-height)',
+        pt: 'var(--app-header-safe-top)',
         '& .MuiToolbar-root': {
-          minHeight: { xs: 56, sm: 64 },
+          minHeight: 'var(--app-toolbar-height)',
           px: { xs: 1, sm: 2 },
           gap: { xs: 0.25, sm: 0.5 },
           paddingLeft: { xs: 'max(8px, env(safe-area-inset-left))', sm: 'max(16px, env(safe-area-inset-left))' },
@@ -1107,7 +1144,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           <DialogContent>
             <DialogContentText id="app-install-help-description">
               {installHelp === 'ios'
-                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for RICTMS Helpdesk Internal TLS CA. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
+                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
                 : installHelp === 'android'
                   ? 'Open FO2 iCare in Chrome. In the ⋮ menu, choose Add to Home screen, then Install if offered. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
                   : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
@@ -1196,7 +1233,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                       : pushConfigCheckFailed
                         ? 'Could not check server alert settings. Tap Retry to try again.'
                     : !pushConfig?.enabled
-                      ? 'Ticketing has not confirmed valid Web Push settings. An administrator should check all four values and recreate the service.'
+                      ? pushSetupMessage(pushConfig)
                       : pushEnabled
                         ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
                         : 'Enable alerts here as well as in your device and browser settings.')}

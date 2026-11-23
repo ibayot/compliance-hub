@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { AppRelease } from '@/lib/api/changelog';
+import { displayCurrentAppBrand } from '@/lib/utils/app-branding';
 
 const CATEGORY_GROUPS = [
   { value: 'feature', label: 'FEATURE', color: 'success' },
@@ -32,14 +33,14 @@ export default function ChangelogDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>{manual ? "What's New" : "What's New in Compliance Hub"}</DialogTitle>
+      <DialogTitle>What&apos;s New in FO2 iCare</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={3}>
           {releases.length ? (
             releases.map((r) => (
               <Stack key={r.id} spacing={1}>
                 <Typography variant="h6">
-                  v{r.version} — {r.title}
+                  v{r.version} — {displayCurrentAppBrand(r.title)}
                 </Typography>
                 {CATEGORY_GROUPS.map((group) => {
                   const notes = r.notes.filter((note) => note.category === group.value);
@@ -54,8 +55,8 @@ export default function ChangelogDialog({
                       />
                       {notes.map((note) => (
                         <Stack key={note.id} spacing={0.5}>
-                          <Typography fontWeight={700}>{note.title}</Typography>
-                          <Typography whiteSpace="pre-wrap">{note.description}</Typography>
+                          <Typography fontWeight={700}>{displayCurrentAppBrand(note.title)}</Typography>
+                          <Typography whiteSpace="pre-wrap">{displayCurrentAppBrand(note.description)}</Typography>
                         </Stack>
                       ))}
                     </Stack>

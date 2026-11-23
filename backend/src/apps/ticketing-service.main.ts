@@ -85,7 +85,7 @@ async function bootstrap() {
 
   // OpenAPI/Swagger — accessible at /api/docs (not proxied through gateway)
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Compliance Hub — Ticketing Service')
+    .setTitle('FO2 iCare — Ticketing Service')
     .setDescription('IT helpdesk ticket management, attendance tracking, and SLA monitoring')
     .setVersion(serviceVersion)
     .addBearerAuth()

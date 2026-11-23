@@ -10,14 +10,14 @@ export function docsAuthMiddleware(req: Request, res: Response, next: NextFuncti
 
   const authorization = String(req.headers.authorization || '');
   if (!authorization.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Compliance Hub API Documentation"');
+    res.setHeader('WWW-Authenticate', 'Basic realm="FO2 iCare API Documentation"');
     return res.status(401).send('Authentication required.');
   }
 
   const decoded = Buffer.from(authorization.slice('Basic '.length), 'base64').toString('utf8');
   const separator = decoded.indexOf(':');
   if (separator < 0 || decoded.slice(0, separator) !== username || decoded.slice(separator + 1) !== password) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Compliance Hub API Documentation"');
+    res.setHeader('WWW-Authenticate', 'Basic realm="FO2 iCare API Documentation"');
     return res.status(401).send('Invalid documentation credentials.');
   }
 

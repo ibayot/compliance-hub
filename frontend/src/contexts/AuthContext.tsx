@@ -384,7 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (reconnecting && user) {
-      enqueueSnackbar('Connection to Compliance Hub is temporarily unavailable. Reconnecting without signing you out.', {
+      enqueueSnackbar('Connection to FO2 iCare is temporarily unavailable. Reconnecting without signing you out.', {
         key: 'session-reconnecting', variant: 'warning', persist: true,
         action: <Button color="inherit" onClick={retrySession}>Retry</Button>,
       });

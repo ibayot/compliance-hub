@@ -38,6 +38,7 @@ The route owns selection when shareable/deep-linked; otherwise the parent owns s
 - **DS-TABS-002** — Tab changes MUST define draft retention, loading, and unsaved-change behavior.
 - **DS-TABS-003** — Tabs MUST use consistent activation and keyboard behavior for their chosen navigation model.
 - **DS-TABS-004** — An unavailable selected tab MUST fall back to a valid permitted location without exposing restricted content.
+- **DS-TABS-005** — Sticky tab bars MUST keep a stable offset below the application header, retain their natural height in grid/flex layouts, and avoid scroll-direction transforms or animation. Stacked tab levels MUST use deliberate offsets so they do not compete for the same viewport position.
 
 ## Accessibility
 
@@ -49,7 +50,7 @@ Each panel's data and actions require authorization independent of tab visibilit
 
 ## Validation
 
-Test keyboard switching, refresh/deep links, permission changes, panel loading, and unsaved values.
+Test keyboard switching, refresh/deep links, permission changes, panel loading, and unsaved values. For sticky tabs, scroll the populated page in both directions and confirm the bar stays at a stable offset without covering another tab level or shifting the content.
 
 ## Related Patterns
 

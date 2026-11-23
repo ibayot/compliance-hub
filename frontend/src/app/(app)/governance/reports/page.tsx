@@ -1404,7 +1404,7 @@ function ReportView({ params }: { params: ReportParams }) {
           {/* ── Footer ── */}
           <Box sx={{ mt: 4, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
             <Typography variant="caption" color="text.secondary">
-              Report generated on {new Date().toLocaleString()} · Compliance Hub
+              Report generated on {new Date().toLocaleString()} · FO2 iCare
             </Typography>
           </Box>
         </div>

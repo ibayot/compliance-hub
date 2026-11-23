@@ -105,7 +105,7 @@ export default function LoginPage() {
         serverMessage ||
         (err?.message === 'Network Error' || !err?.response
           ? navigator.onLine
-            ? 'Compliance Hub is temporarily unreachable. Please try again shortly.'
+            ? 'FO2 iCare is temporarily unreachable. Please try again shortly.'
             : 'You are offline. Check your internet connection and try again.'
           : 'Invalid email or password.');
       enqueueSnackbar(msg, { variant: 'error' });
@@ -192,8 +192,8 @@ export default function LoginPage() {
           />
           <CardContent sx={{ p: 4, position: 'relative', zIndex: 1 }}>
             <Box textAlign="center" mb={4}>
-              <Typography variant="h4" component="h1" gutterBottom>
-                RICTMS Compliance Hub
+              <Typography variant="h5" component="h1" gutterBottom sx={{ textWrap: 'balance' }}>
+                FO2 iCare: ICT Coordination, Assistance, Response &amp; Enablement System
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Sign in to your account
@@ -330,11 +330,6 @@ export default function LoginPage() {
               )}
             </form>
 
-            <Box mt={3} textAlign="center">
-              <Typography variant="caption" color="text.secondary">
-                RICTMS Internal Use Only
-              </Typography>
-            </Box>
           </CardContent>
         </Card>
       </Box>

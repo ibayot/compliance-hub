@@ -254,7 +254,7 @@ export default function PublicRatingPage() {
               <Box
                 component="img"
                 src="/images/logos/ticketing-logo.png"
-                alt="Compliance Hub Ticketing"
+                alt="FO2 iCare"
                 sx={{ height: 52 }}
               />
               <Box>

@@ -46,19 +46,42 @@ body {
 }
 
 .app-shell {
-  --app-sticky-top: 64px;
+  --app-toolbar-height: 64px;
+  --app-header-safe-top: 0px;
+  --app-header-divider-height: 1px;
+  --app-sticky-top: calc(var(--app-toolbar-height) + var(--app-header-safe-top) + var(--app-header-divider-height));
+  --app-primary-tabs-height: 48px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow-x: clip;
 }
 
 @media (max-width: 899.95px) {
-  .app-shell { --app-sticky-top: calc(64px + env(safe-area-inset-top)); }
+  .app-shell { --app-header-safe-top: env(safe-area-inset-top, 0px); }
 }
 
 @media (max-width: 599.95px) {
-  .app-shell { --app-sticky-top: calc(56px + env(safe-area-inset-top)); }
+  .app-shell { --app-toolbar-height: 56px; }
+}
+
+.app-main-toolbar-spacer {
+  height: var(--app-sticky-top);
+}
+
+@media print {
+  .app-main-toolbar-spacer { display: none; }
+}
+
+.app-page-content .app-sticky-tabs,
+.app-page-content .app-sticky-tab-band,
+.MuiDialogContent-root .app-sticky-tabs {
+  align-self: start;
+  justify-self: stretch;
+  isolation: isolate;
+  overflow-anchor: none;
+  animation: none !important;
+  transform: none !important;
+  transition: none !important;
 }
 
 .app-page-content .app-sticky-tabs,
@@ -79,11 +102,11 @@ body {
 }
 
 .app-page-content .app-secondary-tabs {
-  top: calc(var(--app-sticky-top) + 48px);
+  top: calc(var(--app-sticky-top) + var(--app-primary-tabs-height) + 1px);
   z-index: 11;
 }
 
-.app-page-content .MuiCard-root:has(> .app-sticky-tabs) {
+.app-page-content .MuiCard-root:has(.app-sticky-tabs, .app-sticky-tab-band) {
   overflow: visible;
 }
 
@@ -280,7 +303,7 @@ body {
   border-left-color: var(--app-layout-primary);
 }
 
-.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root:not(:has(> .app-sticky-tabs, .app-sticky-tab-band)) {
+.app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiCard-root:not(:has(.app-sticky-tabs, .app-sticky-tab-band)) {
   overflow: hidden;
 }
 
@@ -413,15 +436,9 @@ body {
 
   html,
   body,
-  #root,
-  .app-shell,
-  .app-main {
+  #root {
     max-width: 100%;
     overflow-x: clip;
-  }
-
-  .app-main-toolbar-spacer {
-    padding: 0 !important;
   }
 
   .app-page-content {

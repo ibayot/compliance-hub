@@ -40,7 +40,7 @@ export async function deleteBiometricCredentials(): Promise<void> {
 export async function getBiometricCredentials() {
   return NativeBiometric.getSecureCredentials({
     server: BIOMETRIC_SERVER,
-    reason: 'Authenticate to sign in to RICTMS Compliance Hub',
+    reason: 'Authenticate to sign in to FO2 iCare',
     title: 'Biometric Login',
     subtitle: 'Use your device biometrics to continue',
     negativeButtonText: 'Cancel',

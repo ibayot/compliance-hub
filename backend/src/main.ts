@@ -58,7 +58,7 @@ async function bootstrap() {
 
   // Swagger API Documentation
   const config = new DocumentBuilder()
-    .setTitle('RICTMS Compliance Hub API')
+    .setTitle('FO2 iCare API')
     .setDescription(
       'API documentation for the Regional Internal Compliance Tracking and Metrics System',
     )

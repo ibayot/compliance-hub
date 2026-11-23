@@ -58,7 +58,7 @@ export default function StaffDirectoryPage() {
   return <Box>
 <Typography variant="h4" component="h1" gutterBottom>Staff Directory</Typography>
 <Typography color="text.secondary" sx={{ mb: 2 }}>
-      Find staff by their current unit in Compliance Hub. Saved unit selections take precedence over personnel-directory updates.
+      Find staff by their current unit in FO2 iCare. Saved unit selections take precedence over personnel-directory updates.
       Directory-only staff have not yet been registered. This is a read-only lookup, not account management.
     </Typography>
 <WorkspaceLayout kind="standard" context={<><Paper sx={{ p: 2, mb: 2 }}>

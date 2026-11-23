@@ -103,8 +103,8 @@ export class EmailService implements OnModuleInit {
     const configuredFrontendUrl =
       this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     this.frontendUrl = this.normalizeFrontendUrl(configuredFrontendUrl);
-    this.primaryFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
-    this.fallbackFromAddress = '"DSWD FO2 Compliance Hub" <noreply@rictms.gov.ph>';
+    this.primaryFromAddress = '"FO2 iCare" <noreply@rictms.gov.ph>';
+    this.fallbackFromAddress = '"FO2 iCare" <noreply@rictms.gov.ph>';
 
     const emailEnabledRaw = String(
       this.configService.get<string>('EMAIL_ENABLED') ?? 'true',
@@ -133,9 +133,17 @@ export class EmailService implements OnModuleInit {
     const safeName = name
       .replace(/[\r\n]+/g, ' ')
       .replace(/["\\]/g, '')
+      .replace(/\b(?:(?:(?:DSWD FO2|RICTMS)\s+)?Compliance Hub|RICTMS\s+(?:IT\s+)?Help\s*desk)\b/gi, 'FO2 iCare')
       .trim();
     const safeAddress = address.replace(/[\r\n<>]+/g, '').trim();
-    return `"${safeName || 'DSWD FO2 Compliance Hub'}" <${safeAddress}>`;
+    return `"${safeName || 'FO2 iCare'}" <${safeAddress}>`;
+  }
+
+  private formatSubject(subject: string): string {
+    const title = subject.replace(/[\r\n]+/g, ' ').trim()
+      .replace(/^(?:(?:FO2 iCare|(?:RICTMS\s+)?Compliance Hub)\s*[-–—]\s*|\[RICTMS\]\s*)+/i, '')
+      .replace(/^Your Compliance Hub Verification Code$/i, 'Your Verification Code');
+    return `FO2 iCare - ${title}`;
   }
 
   private escapeHtml(value: string): string {
@@ -182,7 +190,7 @@ export class EmailService implements OnModuleInit {
       const configuredFromName =
         dbConfig?.smtpFromName?.trim() ||
         this.configService.get<string>('SMTP_FROM_NAME')?.trim() ||
-        'DSWD FO2 Compliance Hub';
+        'FO2 iCare';
       this.primaryFromAddress = this.formatFromAddress(configuredFromName, pFrom);
 
       if (pHost) {
@@ -244,7 +252,7 @@ export class EmailService implements OnModuleInit {
           : data.ticketType === 'specialized_concerns'
             ? 'Specialized Concerns'
             : 'IT Support';
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${data.subject}`;
+    const subject = `Ticketing #${data.ticketNumber} — ${data.subject}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
 
     let assignedLine = '';
@@ -261,7 +269,7 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#1976d2;padding:20px 24px;">
-      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;">FO2 iCare</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Created Successfully</p>
     </div>
     <div style="padding:24px;">
@@ -290,8 +298,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk<br/>
-      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
+      FO2 iCare — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from FO2 iCare. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -301,7 +309,7 @@ export class EmailService implements OnModuleInit {
 
     // Also notify the assigned tech if one was auto-assigned
     if (data.assignedToEmail) {
-      const techSubject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
+      const techSubject = `Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
       const techHtml = html
         .replace('Ticket Created Successfully', 'New Ticket Assigned to You')
         .replace(
@@ -326,7 +334,7 @@ export class EmailService implements OnModuleInit {
             ? 'Specialized Concerns'
             : 'IT Support';
 
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
+    const subject = `Ticketing #${data.ticketNumber} — Assigned to You — ${data.subject}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
 
     const html = `
@@ -336,7 +344,7 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#e65100;padding:20px 24px;">
-      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;">FO2 iCare</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Assigned to You</p>
     </div>
     <div style="padding:24px;">
@@ -355,8 +363,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk<br/>
-      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
+      FO2 iCare — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from FO2 iCare. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -366,7 +374,7 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendTicketResolvedEmailToRequester(data: TicketResolvedEmailData): Promise<void> {
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
+    const subject = `Ticketing #${data.ticketNumber} — Ticket Resolved — Action Required`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
     const closeTicketUrl = `${ticketUrl}?emailAction=close`;
     const rateTicketUrl = `${ticketUrl}?emailAction=rate`;
@@ -377,7 +385,7 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#2e7d32;padding:20px 24px;">
-      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;">FO2 iCare</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">Ticket Marked as Resolved — Your Action Required</p>
     </div>
     <div style="padding:24px;">
@@ -391,7 +399,7 @@ export class EmailService implements OnModuleInit {
 
       <div style="background:#e8f5e9;border:1px solid #c8e6c9;padding:16px;border-radius:4px;margin:16px 0;">
         <p style="margin:0 0 8px;font-weight:600;color:#1b5e20;font-size:14px;">What would you like to do?</p>
-        <p style="margin:0 0 12px;font-size:13px;color:#388e3c;">Log in to Compliance Hub to take action on this ticket:</p>
+        <p style="margin:0 0 12px;font-size:13px;color:#388e3c;">Log in to FO2 iCare to take action on this ticket:</p>
         <table style="width:100%;">
           <tr>
             <td style="padding:4px 8px 4px 0;width:50%;">
@@ -407,8 +415,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk<br/>
-      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
+      FO2 iCare — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from FO2 iCare. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -419,15 +427,15 @@ export class EmailService implements OnModuleInit {
 
   async sendTicketRequesterCorrectedEmail(data: TicketRequesterCorrectedEmailData): Promise<void> {
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — Request Assigned to You`;
+    const subject = `Ticketing #${data.ticketNumber} — Request Assigned to You`;
     const html = `
       <div style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;">
-        <h2>Compliance Hub Ticket Request</h2>
+        <h2>FO2 iCare Ticket Request</h2>
         <p>Hello <strong>${data.requesterName}</strong>,</p>
         <p>You were selected as the requester for ticket <strong>${data.ticketNumber}</strong>.</p>
         <p><strong>Subject:</strong> ${data.subject}</p>
         <p><a href="${ticketUrl}">View Ticket</a></p>
-        <p style="font-size:12px;color:#888;">This is an automated email from Compliance Hub. Please do not reply.</p>
+        <p style="font-size:12px;color:#888;">This is an automated email from FO2 iCare. Please do not reply.</p>
       </div>`;
     await this.send(data.requesterEmail, subject, html);
   }
@@ -441,7 +449,7 @@ export class EmailService implements OnModuleInit {
         : data.action === 'auto_closed'
           ? 'Automatically Closed by the System'
           : 'Closed by Requester';
-    const subject = `Compliance Hub - Ticketing #${data.ticketNumber} — ${actionLabel}`;
+    const subject = `Ticketing #${data.ticketNumber} — ${actionLabel}`;
     const ticketUrl = `${this.frontendUrl}/operations/tickets/${data.ticketId}`;
     const ratingLine =
       data.action === 'rated' && data.rating
@@ -454,7 +462,7 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#6a1b9a;padding:20px 24px;">
-      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS IT Help Desk</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;">FO2 iCare</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">${actionLabel}</p>
     </div>
     <div style="padding:24px;">
@@ -472,8 +480,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:0;font-size:12px;color:#aaa;text-align:center;">If your session has expired, you will be prompted to log in and then redirected to the ticket.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — IT Help Desk<br/>
-      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
+      FO2 iCare — IT Help Desk<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from FO2 iCare. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -488,7 +496,7 @@ export class EmailService implements OnModuleInit {
     date: string,
     absentStaff: Array<{ name: string; email: string; role: string }>,
   ): Promise<void> {
-    const subject = `[RICTMS] Non-Attendance Report — ${date}`;
+    const subject = `Non-Attendance Report — ${date}`;
     const rows = absentStaff
       .map(
         (s) =>
@@ -501,14 +509,14 @@ export class EmailService implements OnModuleInit {
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;">
-  <h2>Non-Attendance Report — ${date}</h2>
+  <h2>FO2 iCare — Non-Attendance Report — ${date}</h2>
   <p>Hello ${recipientName},</p>
   <p>The following RICTMS staff did not log in or were marked absent on <strong>${date}</strong>:</p>
   <table style="width:100%;border-collapse:collapse;margin:12px 0;">
     <thead><tr style="background:#eee;"><th style="padding:6px 8px;text-align:left;">Name</th><th style="padding:6px 8px;text-align:left;">Email</th><th style="padding:6px 8px;text-align:left;">Role</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
-  <p style="font-size:13px;color:#888;">This is an automated report from RICTMS Compliance Hub.</p>
+  <p style="font-size:13px;color:#888;">This is an automated report from FO2 iCare.</p>
 </body>
 </html>`;
 
@@ -516,25 +524,25 @@ export class EmailService implements OnModuleInit {
   }
 
   async sendMfaCode(email: string, code: string): Promise<void> {
-    const subject = 'Compliance Hub - Your Verification Code';
+    const subject = 'Your Verification Code';
     const html = `
 <!DOCTYPE html>
 <html>
 <body>
   <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
     <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-bottom: 1px solid #eee;">
-      <h2 style="margin: 0; color: #1e293b;">Verification Code</h2>
+      <h2 style="margin: 0; color: #1e293b;">FO2 iCare — Verification Code</h2>
     </div>
     <div style="padding: 30px;">
       <p style="margin-top: 0;">Hello,</p>
-      <p>Your verification code for Compliance Hub is:</p>
+      <p>Your verification code for FO2 iCare is:</p>
       <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; border-radius: 4px; margin: 20px 0;">
         ${code}
       </div>
       <p>This code will expire in 15 minutes. If you did not request this code, please ignore this email.</p>
     </div>
     <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #eee;">
-      This is an automated message from Compliance Hub. Please do not reply to this email.
+      This is an automated message from FO2 iCare. Please do not reply to this email.
     </div>
   </div>
 </body>
@@ -548,7 +556,7 @@ export class EmailService implements OnModuleInit {
     const dbConfig = await this.configRepo.findOne({ where: { id: 1 } });
     const isDbEnabled = dbConfig?.isEmailNotificationsEnabled ?? true;
 
-    const subject = 'RICTMS Compliance Hub — SMTP Test Email';
+    const subject = 'SMTP Test Email';
     const html = `
 <!DOCTYPE html>
 <html>
@@ -556,11 +564,11 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#1976d2;padding:20px 24px;">
-      <h1 style="margin:0;color:#fff;font-size:18px;">RICTMS Compliance Hub</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;">FO2 iCare</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:13px;">SMTP Configuration Test</p>
     </div>
     <div style="padding:24px;">
-      <p style="margin:0 0 16px;">This is a test email sent from the RICTMS Compliance Hub system.</p>
+      <p style="margin:0 0 16px;">This is a test email sent from FO2 iCare.</p>
       <p style="margin:0 0 16px;">If you received this message, your SMTP configuration is working correctly.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr style="background:#f9f9f9;"><td style="padding:6px 12px;font-weight:600;color:#555;width:140px;">From</td><td style="padding:6px 12px;">${this.primaryFromAddress}</td></tr>
@@ -570,8 +578,8 @@ export class EmailService implements OnModuleInit {
       <p style="margin:16px 0 0;font-size:13px;color:#888;">No action required — this is an automated test message.</p>
     </div>
     <div style="background:#f5f5f5;padding:12px 24px;text-align:center;font-size:12px;color:#999;">
-      RICTMS Compliance Hub — Email Test<br/>
-      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from the Compliance Hub application. Please do not reply.</span>
+      FO2 iCare — Email Test<br/>
+      <span style="display:block;margin-top:4px;font-size:11px;color:#aaa;">This is an automated email from FO2 iCare. Please do not reply.</span>
     </div>
   </div>
 </body>
@@ -605,7 +613,7 @@ export class EmailService implements OnModuleInit {
       const transporter = this.primaryTransporter || this.fallbackTransporter;
       if (!transporter) throw new Error('No SMTP configured');
       const from = this.primaryTransporter ? this.primaryFromAddress : this.fallbackFromAddress;
-      await transporter.sendMail({ from, to, subject, html });
+      await transporter.sendMail({ from, to, subject: this.formatSubject(subject), html });
       this.logger.log('[EMAIL-TEST] Test email sent successfully.');
       return { sent: true, message: 'Test email sent successfully.' };
     } catch (err: any) {
@@ -618,7 +626,7 @@ export class EmailService implements OnModuleInit {
   }
 
   public async sendGenericEmail(to: string, subject: string, html: string): Promise<void> {
-    await this.send(to, subject, html);
+    await this.send(to, subject, `${html}<p style="font-size:12px;color:#666;">This is an automated email from FO2 iCare.</p>`);
   }
 
   public async sendRatingInvitationEmail(data: RatingInvitationEmailData): Promise<EmailDeliveryOutcome> {
@@ -636,7 +644,7 @@ export class EmailService implements OnModuleInit {
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#1565c0;padding:20px 24px;color:#fff;">
-      <h1 style="margin:0;font-size:18px;">Service Feedback Request</h1>
+      <h1 style="margin:0;font-size:18px;">FO2 iCare — Service Feedback Request</h1>
     </div>
     <div style="padding:24px;">
       <p>Hello <strong>${recipientName}</strong>,</p>
@@ -662,6 +670,7 @@ export class EmailService implements OnModuleInit {
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;max-width:560px;margin:0 auto;background:#f5f5f5;padding:20px;">
   <div style="background:#fff;border-radius:8px;padding:24px;">
+    <h1 style="margin:0 0 12px;font-size:18px;">FO2 iCare — Service Feedback</h1>
     <p>Hello <strong>${this.escapeHtml(data.recipientName)}</strong>,</p>
     <p>Enter this one-time code in the service feedback page:</p>
     <p style="font-size:30px;letter-spacing:8px;font-weight:700;text-align:center;color:#1565c0;">${this.escapeHtml(data.code)}</p>
@@ -778,7 +787,7 @@ export class EmailService implements OnModuleInit {
       await activeTransporter.sendMail({
         from: activeFrom,
         to: effectiveTo,
-        subject,
+        subject: this.formatSubject(subject),
         html,
       });
 

@@ -1,8 +1,8 @@
-# RICTMS Compliance Hub
+# FO2 iCare
 
 > **Current Version:** `v1.0.8`
 
-Compliance Hub is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
+FO2 iCare is an internal document governance and compliance platform for government teams. It supports document intake and review workflows, ticketing and escalation, issuance mapping, KPI monitoring, and role-based operations across split microservices.
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
@@ -84,7 +84,7 @@ npm run dev
 
 ## Android APK download
 
-The Android launcher opens the deployed Compliance Hub website in a Trusted Web Activity and uses the website's Web Push setup through the supported browser. It needs no Firebase project or Play Store listing. The launcher includes the public RICTMS root CA and guides the user through Android's required one-time CA trust step before opening the site. Android requires the user to install CA certificates from Security settings; the app cannot silently trust one.
+The Android launcher opens FO2 iCare in a Trusted Web Activity and uses the website's Web Push setup through the supported browser. It needs no Firebase project or Play Store listing. The launcher includes the public RICTMS root CA and guides the user through Android's required one-time CA trust step before opening the site. Android requires the user to install CA certificates from Security settings; the app cannot silently trust one.
 
 Build from the repository root with JDK 17, Android SDK Platform 36 and Build Tools 36.0.0. Set `HUB_ANDROID_ORIGIN` to the deployment's HTTPS origin as opened on the phone, without a path. The public root CA at `backend/assets/compliance-hub-root-ca.crt` is included in both the Android launcher and the generated iOS profile; never include the CA private key or server private key. Set `HUB_ANDROID_KEYSTORE` and `HUB_ANDROID_KEY_ALIAS` for the organization release key, and supply `HUB_ANDROID_KEYSTORE_PASSWORD` and, if different, `HUB_ANDROID_KEY_PASSWORD` through the build environment. Keep signing keys and passwords outside the repository.
 

@@ -189,7 +189,7 @@ export class AuthService {
       const htmlTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
           <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #1976d2; margin: 0;">Compliance Hub</h2>
+            <h2 style="color: #1976d2; margin: 0;">FO2 iCare</h2>
           </div>
           <div style="background-color: #f5f7fa; padding: 20px; border-radius: 8px; text-align: center;">
             <p style="margin: 0 0 10px 0; color: #555555; font-size: 16px;">Your verification code is:</p>
@@ -209,7 +209,7 @@ export class AuthService {
         .publishRequired('email.send', {
           purpose: 'security',
           to: user.email,
-          subject: 'Compliance Hub - Your MFA Code',
+          subject: 'Your MFA Code',
           text: `Your verification code is: ${code}. Use the newest code to complete your current sign-in. If your sign-in has expired, please sign in again.`,
           html: htmlTemplate,
         })
@@ -367,7 +367,7 @@ export class AuthService {
     const htmlTemplate = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
         <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #1976d2; margin: 0;">Compliance Hub</h2>
+          <h2 style="color: #1976d2; margin: 0;">FO2 iCare</h2>
         </div>
         <div style="background-color: #f5f7fa; padding: 20px; border-radius: 8px; text-align: center;">
           <p style="margin: 0 0 10px 0; color: #555555; font-size: 16px;">Your verification code is:</p>
@@ -383,7 +383,7 @@ export class AuthService {
     await this.eventBus.publish('email.send', {
       purpose: 'security',
       to: user.email,
-      subject: 'Your Compliance Hub Verification Code',
+      subject: 'Your Verification Code',
       text: `Your verification code is: ${code}. It expires in 15 minutes.`,
       html: htmlTemplate,
     });

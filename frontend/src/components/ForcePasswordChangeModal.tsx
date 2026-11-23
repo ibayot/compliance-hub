@@ -377,7 +377,7 @@ export default function ForcePasswordChangeModal({ open, onClose, user }: Props)
             </Typography>
             <Typography variant="body2">
               The personal information collected here will be used only to verify your identity,
-              secure your account, complete your profile, and provide Compliance Hub services. It
+              secure your account, complete your profile, and provide FO2 iCare services. It
               will not be used to harm, discriminate against, or unfairly disadvantage you, and
               will be handled according to applicable DSWD privacy and security policies.
             </Typography>

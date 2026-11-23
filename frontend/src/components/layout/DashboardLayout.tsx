@@ -15,7 +15,6 @@ import {
   Divider,
   Paper,
   Stack,
-  Toolbar,
   Typography,
 } from '@mui/material';
 import MobilePageAction from './MobilePageAction';
@@ -247,7 +246,6 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         width: '100%',
         minWidth: 0,
         minHeight: '100vh',
-        overflowX: 'clip',
         '@supports (height: 100dvh)': { minHeight: '100dvh' },
       }}
     >
@@ -373,7 +371,6 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           minWidth: 0,
           width: '100%',
           maxWidth: '100%',
-          overflowX: 'clip',
           bgcolor: 'background.default',
           pb: {
             xs: pageAction
@@ -389,10 +386,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         }}
       >
         {/* Toolbar spacing */}
-        <Toolbar
-          className="app-main-toolbar-spacer"
-          sx={{ display: { xs: 'none', md: 'flex' }, minHeight: { md: 64 } }}
-        />
+        <Box className="app-main-toolbar-spacer" aria-hidden="true" />
 
         {/* Shared content frame keeps every authenticated page aligned to its appearance preset. */}
         <Box

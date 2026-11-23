@@ -1,4 +1,5 @@
 'use client';
+import { displayCurrentAppBrand } from '@/lib/utils/app-branding';
 import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
 
@@ -661,7 +662,7 @@ function GlobalSettingsCard() {
                   <TextField label="SMTP Username" value={config.smtpUser || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpUser: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <TextField label="SMTP Password" type="password" value={config.smtpPass || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpPass: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <TextField label="From Email Address" value={config.smtpFrom || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFrom: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
-                  <TextField label="From Name" value={config.smtpFromName || ''} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFromName: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
+                  <TextField label="From Name" value={displayCurrentAppBrand(config.smtpFromName || '')} onChange={(e) => setConfig((p: any) => ({ ...p, smtpFromName: e.target.value }))} inputProps={{ maxLength: 100 }} fullWidth />
                   <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
                     <Button variant="contained" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Global Settings'}</Button>
                     <TextField size="small" label="Test Recipient Email" value={smtpTestEmail} onChange={(e) => setSmtpTestEmail(e.target.value)} sx={{ flexGrow: 1, minWidth: 240 }} />
@@ -1625,7 +1626,7 @@ function FocalUserManagementCard() {
         <Typography variant="body2">{user.units?.[0]?.name || 'Not assigned'}</Typography>
         {user.unitAssignmentSource && (
           <Chip
-            label={user.unitAssignmentSource === 'manual' ? 'Selected in Compliance Hub' : 'Synchronized from UMS'}
+            label={user.unitAssignmentSource === 'manual' ? 'Selected in FO2 iCare' : 'Synchronized from UMS'}
             size="small"
             color={user.unitAssignmentSource === 'manual' ? 'info' : 'success'}
             variant="outlined"
@@ -2623,7 +2624,7 @@ function ProfilePreferencesCard() {
                 <Chip
                   label={
                     unitSource.source === 'manual'
-                      ? 'Selected in Compliance Hub'
+                      ? 'Selected in FO2 iCare'
                       : 'Synchronized from UMS'
                   }
                   size="small"

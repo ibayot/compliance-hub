@@ -360,21 +360,10 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
     return content;
   };
 
-  let sidebarLogo = '/images/logos/app-logo.png';
-  let sidebarTitle = 'RICTMS Compliance Hub';
-
-  if (user?.role === 'user') {
-    sidebarLogo = '/images/logos/ticketing-logo.png';
-    sidebarTitle = 'RICTMS Helpdesk';
-  } else {
-    if (appMode === 'ticketing_only') {
-      sidebarLogo = '/images/logos/ticketing-logo.png';
-      sidebarTitle = 'RICTMS Helpdesk';
-    } else if (appMode === 'compliance_only') {
-      sidebarLogo = '/images/logos/compliance-logo.png';
-      sidebarTitle = 'RICTMS Compliance';
-    }
-  }
+  const sidebarTitle = 'FO2 iCare';
+  const sidebarLogo = user?.role === 'user' || appMode === 'ticketing_only'
+    ? '/images/logos/ticketing-logo.png'
+    : appMode === 'compliance_only' ? '/images/logos/compliance-logo.png' : '/images/logos/app-logo.png';
 
   const visibleNavigationSections = navigationSections
     .map((section) => ({

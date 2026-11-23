@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createECDH, createHash, randomBytes } from 'crypto';
 import * as webPush from 'web-push';
 import { Repository } from 'typeorm';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
@@ -28,12 +28,23 @@ const PUSH_SERVICE_HOSTS = new Set([
 ]);
 const MAX_SUBSCRIPTIONS_PER_USER = 8;
 const TEST_ALERT_INTERVAL_MS = 30_000;
-type PushOutcome = 'accepted' | 'expired' | 'failed';
+type PushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
+type PushResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
+  | { outcome: 'failed'; failure: PushFailure; providerStatus?: number };
+type PushConfigurationIssue = 'missing-settings' | 'encryption-or-subject' | 'signing-key-pair' | 'proxy-url';
+interface PushConfiguration {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+  encryptionKey: Buffer;
+  proxy?: string;
+}
 
 @Injectable()
 export class WebPushService {
   private readonly logger = new Logger(WebPushService.name);
   private configurationWarningLogged = false;
+  private configurationIssue?: PushConfigurationIssue;
   private readonly nextTestAlertAt = new Map<number, number>();
 
   constructor(
@@ -45,42 +56,57 @@ export class WebPushService {
     private readonly usersClient: UsersHttpClient,
   ) {}
 
-  private configuration(): { publicKey: string; privateKey: string; subject: string; encryptionKey: Buffer } | null {
+  private invalidConfiguration(issue: PushConfigurationIssue): null {
+    this.configurationIssue = issue;
+    if (!this.configurationWarningLogged) {
+      this.logger.warn(`Browser push configuration is invalid (${issue}).`);
+      this.configurationWarningLogged = true;
+    }
+    return null;
+  }
+
+  private configuration(): PushConfiguration | null {
     const publicKey = this.config.get<string>('WEB_PUSH_PUBLIC_KEY')?.trim();
     const privateKey = this.config.get<string>('WEB_PUSH_PRIVATE_KEY')?.trim();
     const subject = this.config.get<string>('WEB_PUSH_SUBJECT')?.trim();
     const encryptionKeyText = this.config.get<string>('WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY')?.trim();
+    this.configurationIssue = undefined;
     if (!publicKey && !privateKey && !subject && !encryptionKeyText) return null;
     if (!publicKey || !privateKey || !subject || !encryptionKeyText) {
-      if (!this.configurationWarningLogged) {
-        this.logger.warn('Browser push is disabled because its server configuration is incomplete.');
-        this.configurationWarningLogged = true;
-      }
-      return null;
+      return this.invalidConfiguration('missing-settings');
     }
 
     const encryptionKey = Buffer.from(encryptionKeyText, 'base64');
     if (encryptionKey.length !== 32 || !/^(mailto:[^\s@]+@[^\s@]+|https:\/\/[^\s]+)$/i.test(subject)) {
-      if (!this.configurationWarningLogged) {
-        this.logger.error('Browser push is disabled because its encryption key or VAPID subject is invalid.');
-        this.configurationWarningLogged = true;
-      }
-      return null;
+      return this.invalidConfiguration('encryption-or-subject');
     }
-    try { webPush.setVapidDetails(subject, publicKey, privateKey); }
-    catch {
-      if (!this.configurationWarningLogged) {
-        this.logger.error('Browser push is disabled because the VAPID key pair is invalid.');
-        this.configurationWarningLogged = true;
+    try {
+      const signingKey = createECDH('prime256v1');
+      signingKey.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+      if (!signingKey.getPublicKey().equals(Buffer.from(publicKey, 'base64url'))) {
+        return this.invalidConfiguration('signing-key-pair');
       }
-      return null;
+      webPush.setVapidDetails(subject, publicKey, privateKey);
+    } catch {
+      return this.invalidConfiguration('signing-key-pair');
     }
-    return { publicKey, privateKey, subject, encryptionKey };
+    const proxy = this.config.get<string>('WEB_PUSH_PROXY_URL')?.trim() || undefined;
+    if (proxy) {
+      try {
+        const parsed = new URL(proxy);
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+          return this.invalidConfiguration('proxy-url');
+        }
+      } catch {
+        return this.invalidConfiguration('proxy-url');
+      }
+    }
+    return { publicKey, privateKey, subject, encryptionKey, proxy };
   }
 
-  getPublicConfig(): { enabled: boolean; publicKey: string | null } {
+  getPublicConfig(): { enabled: boolean; publicKey: string | null; configurationIssue?: PushConfigurationIssue } {
     const config = this.configuration();
-    return { enabled: !!config, publicKey: config?.publicKey ?? null };
+    return { enabled: !!config, publicKey: config?.publicKey ?? null, configurationIssue: this.configurationIssue };
   }
 
   private endpointHash(endpoint: string): string {
@@ -155,7 +181,7 @@ export class WebPushService {
     return { removed: (result.affected ?? 0) > 0 };
   }
 
-  async sendTestAlert(userId: number, endpoint: string): Promise<{ outcome: PushOutcome | 'not-enabled' }> {
+  async sendTestAlert(userId: number, endpoint: string): Promise<PushResult> {
     const config = this.configuration();
     if (!config) throw new ServiceUnavailableException('Browser notifications are not configured on this server.');
     if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048) {
@@ -174,28 +200,49 @@ export class WebPushService {
     this.nextTestAlertAt.set(userId, now + TEST_ALERT_INTERVAL_MS);
     await this.usersClient.requireAccountAccess(userId);
     const unreadCount = await this.notifications.count({ where: { userId, isRead: false } });
-    return { outcome: await this.deliver(subscription, config.encryptionKey, { test: true, targetPath: '/dashboard', unreadCount }) };
+    return this.deliver(subscription, config, { test: true, targetPath: '/dashboard', unreadCount });
   }
 
-  private async deliver(record: WebPushSubscription, key: Buffer, payload: object): Promise<PushOutcome> {
+  private async deliver(record: WebPushSubscription, config: PushConfiguration, payload: object): Promise<PushResult> {
     let subscription: BrowserPushSubscriptionInput;
-    try { subscription = this.decryptSubscription(record.encryptedSubscription, key); }
+    try { subscription = this.decryptSubscription(record.encryptedSubscription, config.encryptionKey); }
     catch {
       await this.subscriptions.delete({ id: record.id });
       this.logger.warn('Removed an unreadable browser push subscription.');
-      return 'expired';
+      return { outcome: 'expired' };
     }
     try {
-      await webPush.sendNotification(subscription, JSON.stringify(payload), { TTL: 60, urgency: 'normal', timeout: 8_000 });
-      return 'accepted';
-    } catch (error: any) {
-      if (error?.statusCode === 404 || error?.statusCode === 410) {
+      await webPush.sendNotification(subscription, JSON.stringify(payload), {
+        TTL: 60,
+        urgency: 'normal',
+        timeout: 8_000,
+        proxy: config.proxy,
+        vapidDetails: { subject: config.subject, publicKey: config.publicKey, privateKey: config.privateKey },
+      });
+      return { outcome: 'accepted' };
+    } catch (error) {
+      const { statusCode, code, message } = (error ?? {}) as { statusCode?: number; code?: string; message?: string };
+      if (statusCode === 404 || statusCode === 410) {
         await this.subscriptions.delete({ id: record.id });
-        return 'expired';
+        return { outcome: 'expired' };
       }
-      this.logger.warn(`Browser push delivery failed with status ${Number(error?.statusCode) || 'unknown'}.`);
-      return 'failed';
+      const providerStatus = typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599
+        ? statusCode : undefined;
+      const failure = this.classifyFailure(providerStatus, code, message);
+      this.logger.warn(`Browser push delivery failed (${failure}${providerStatus ? `, HTTP ${providerStatus}` : ''}).`);
+      return { outcome: 'failed', failure, providerStatus };
     }
+  }
+
+  private classifyFailure(status?: number, code?: string, message?: string): PushFailure {
+    if (status === 401 || status === 403) return 'authentication';
+    if (status === 429) return 'rate-limit';
+    if (status && status >= 500) return 'provider-unavailable';
+    if (status) return 'provider-request';
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'dns';
+    if (code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT' || /socket timeout/i.test(message ?? '')) return 'timeout';
+    if (/^(?:ERR_TLS_|CERT_|SELF_SIGNED_|DEPTH_ZERO_SELF_SIGNED_|UNABLE_TO_(?:VERIFY|GET_ISSUER))/.test(code ?? '')) return 'tls';
+    return 'connection';
   }
 
   async sendForNotification(notification: TicketNotification): Promise<void> {
@@ -215,7 +262,7 @@ export class WebPushService {
     const unreadCount = await this.notifications.count({ where: { userId: notification.userId, isRead: false } });
     const path = notification.targetPath;
     const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
-    await Promise.all(records.map(record => this.deliver(record, config.encryptionKey, {
+    await Promise.all(records.map(record => this.deliver(record, config, {
       title: 'FO2 iCare', body: 'You have a new notification.', targetPath, unreadCount,
     })));
   }

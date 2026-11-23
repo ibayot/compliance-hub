@@ -51,6 +51,8 @@ business event -> ticket_notifications row -> SSE event for open sessions
 
 The Android launcher receives delegated browser push via Trusted Web Activity. Use the existing AndroidX channel ID so updates preserve the user's channel choices. New channels allow the Android launcher dot and request the system notification sound by default. Test in Chrome and Brave with the app open and closed. Device-wide permission, browser site permission, and account-bound bell opt-in are separate checks.
 
+Validate that the Ticketing VAPID public/private keys are a matching pair. A test alert reports a safe reason for DNS, TLS, timeout, connection, or provider HTTP failures. Endpoint URLs, provider response bodies, signing keys, and proxy credentials stay server-side. Ticketing may use `WEB_PUSH_PROXY_URL` for an authorized outbound proxy. Direct HTTPS remains the default (PLAT-WEB-PUSH-003, INFRA-CONFIG-004).
+
 ## Validation
 
 Verify an eligible opt-in, unauthorized/denied account, unavailable approval service, account switch/logout, generic payload, existing notification record/SSE despite push failure, expired endpoint cleanup, safe notification click, SMTP disabled and enabled, and an iOS Home Screen installation on a supported iOS version. Test mobile delivery over the deployed HTTPS origin; a LAN IP over plain HTTP is not a secure service-worker context.
