@@ -5,14 +5,25 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.browser.customtabs.CustomTabsCallback;
+import androidx.browser.customtabs.CustomTabsClient;
+import androidx.browser.customtabs.CustomTabsService;
+import androidx.browser.customtabs.CustomTabsServiceConnection;
+import androidx.browser.customtabs.CustomTabsSession;
+
+import com.google.androidbrowserhelper.trusted.TwaProviderPicker;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -29,26 +40,51 @@ import java.util.Enumeration;
  */
 public final class CertificateSetupActivity extends Activity {
     private static final int CREATE_CERTIFICATE_REQUEST = 401;
+    private static final long VERIFICATION_TIMEOUT_MS = 4_000;
+    private static final long VERIFICATION_RETRY_DELAY_MS = 750;
+    private static final String CERTIFICATE_SAVED = "certificateSaved";
+    private final Handler browserHandler = new Handler(Looper.getMainLooper());
+    private CustomTabsServiceConnection browserConnection;
+    private boolean certificateSaved;
+    private boolean verificationInProgress;
+    private boolean verificationFailed;
+    private boolean automaticVerificationAttempted;
+    private boolean resumed;
     private Button saveCertificateButton;
     private Button openSecuritySettingsButton;
     private Button openHubButton;
+    private Button openBrowserButton;
     private TextView statusText;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (isRootCaTrusted()) {
-            openHub();
-            return;
-        }
+        certificateSaved = savedInstanceState != null && savedInstanceState.getBoolean(CERTIFICATE_SAVED);
         showSetupScreen();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (openHubButton != null) {
-            refreshTrustStatus();
+        resumed = true;
+        refreshTrustStatus();
+        if (!automaticVerificationAttempted && openHubButton.isEnabled()) {
+            automaticVerificationAttempted = true;
+            startBrowserVerification();
         }
+    }
+
+    @Override
+    protected void onPause() {
+        resumed = false;
+        cancelBrowserVerification();
+        super.onPause();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(CERTIFICATE_SAVED, certificateSaved);
+        super.onSaveInstanceState(outState);
     }
 
     private void showSetupScreen() {
@@ -121,14 +157,13 @@ public final class CertificateSetupActivity extends Activity {
 
         openHubButton = button("Open Compliance Hub", teal);
         openHubButton.setEnabled(false);
-        openHubButton.setOnClickListener(view -> {
-            if (isRootCaTrusted()) {
-                openHub();
-            } else {
-                refreshTrustStatus();
-            }
-        });
+        openHubButton.setOnClickListener(view -> startBrowserVerification());
         content.addView(openHubButton, buttonLayout());
+
+        openBrowserButton = button("Open in browser", navy);
+        openBrowserButton.setVisibility(View.GONE);
+        openBrowserButton.setOnClickListener(view -> openInBrowser());
+        content.addView(openBrowserButton, buttonLayout());
 
         setContentView(scroll);
         refreshTrustStatus();
@@ -166,7 +201,7 @@ public final class CertificateSetupActivity extends Activity {
             }
             output.flush();
             statusText.setText("Certificate saved. Install it from Android Security settings, then return here.");
-            openSecuritySettingsButton.setEnabled(true);
+            certificateSaved = true;
         } catch (Exception error) {
             statusText.setText("The certificate could not be saved. Choose Downloads and try again.");
         }
@@ -174,17 +209,114 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void refreshTrustStatus() {
-        if (statusText == null || openHubButton == null) return;
-        if (isRootCaTrusted()) {
-            statusText.setText("The Compliance Hub certificate is trusted on this device.");
-            openHubButton.setEnabled(true);
-            openSecuritySettingsButton.setEnabled(false);
-        } else if (openSecuritySettingsButton.isEnabled()) {
-            statusText.setText("Install the saved certificate in Android Security settings, then return here.");
-            openHubButton.setEnabled(false);
+        boolean trusted = isRootCaTrusted();
+        openSecuritySettingsButton.setEnabled(!trusted && certificateSaved);
+        openHubButton.setEnabled(trusted && !verificationInProgress);
+        openHubButton.setText(verificationFailed && trusted ? "Retry full screen" : "Open Compliance Hub");
+        openBrowserButton.setVisibility(verificationFailed && trusted && !verificationInProgress
+                ? View.VISIBLE : View.GONE);
+
+        if (!trusted) {
+            statusText.setText(certificateSaved
+                    ? "Install the saved certificate in Android Security settings, then return here."
+                    : "Save the certificate first. Android requires you to confirm its installation in Settings.");
+        } else if (verificationInProgress) {
+            statusText.setText("Checking full-screen access with your browser…");
+        } else if (verificationFailed) {
+            statusText.setText("Full-screen access could not be verified. Check that you’re on the office network or VPN, then retry.");
         } else {
-            statusText.setText("Save the certificate first. Android requires you to confirm its installation in Settings.");
-            openHubButton.setEnabled(false);
+            statusText.setText("The Compliance Hub certificate is trusted on this device.");
+        }
+    }
+
+    private void startBrowserVerification() {
+        if (verificationInProgress || !resumed || !isRootCaTrusted()) return;
+        verificationFailed = false;
+        verificationInProgress = true;
+        refreshTrustStatus();
+        verifyBrowserAssociation(true);
+    }
+
+    private void verifyBrowserAssociation(boolean canRetry) {
+        Uri launchUrl = Uri.parse(getString(R.string.hub_launch_url));
+        Uri origin = new Uri.Builder().scheme(launchUrl.getScheme())
+                .encodedAuthority(launchUrl.getEncodedAuthority()).build();
+        TwaProviderPicker.Action browser = TwaProviderPicker.pickProvider(getPackageManager());
+        if (browser.launchMode != TwaProviderPicker.LaunchMode.TRUSTED_WEB_ACTIVITY || browser.provider == null) {
+            finishBrowserVerification(false, false);
+            return;
+        }
+
+        CustomTabsServiceConnection connection = new CustomTabsServiceConnection() {
+            @Override
+            public void onCustomTabsServiceConnected(android.content.ComponentName name, CustomTabsClient client) {
+                if (browserConnection != this) return;
+                CustomTabsServiceConnection currentConnection = this;
+                client.warmup(0);
+                CustomTabsSession session = client.newSession(new CustomTabsCallback() {
+                    @Override
+                    public void onRelationshipValidationResult(int relation, Uri requestedOrigin,
+                            boolean verified, Bundle extras) {
+                        if (browserConnection != currentConnection || relation != CustomTabsService.RELATION_HANDLE_ALL_URLS
+                                || !origin.getScheme().equals(requestedOrigin.getScheme())
+                                || !origin.getEncodedAuthority().equals(requestedOrigin.getEncodedAuthority())) return;
+                        finishBrowserVerification(verified, canRetry);
+                    }
+                });
+                if (session == null || !session.validateRelationship(CustomTabsService.RELATION_HANDLE_ALL_URLS, origin, null)) {
+                    finishBrowserVerification(false, canRetry);
+                }
+            }
+
+            @Override
+            public void onServiceDisconnected(android.content.ComponentName name) {
+                if (browserConnection == this) finishBrowserVerification(false, canRetry);
+            }
+        };
+        try {
+            if (CustomTabsClient.bindCustomTabsService(this, browser.provider, connection)) {
+                browserConnection = connection;
+                browserHandler.postDelayed(() -> finishBrowserVerification(false, canRetry), VERIFICATION_TIMEOUT_MS);
+                return;
+            }
+        } catch (SecurityException ignored) {
+            // The selected browser can be disabled or changed while opening the app.
+        }
+        finishBrowserVerification(false, canRetry);
+    }
+
+    private void finishBrowserVerification(boolean verified, boolean canRetry) {
+        cancelBrowserVerification();
+        if (!resumed || isFinishing()) return;
+        if (verified && isRootCaTrusted()) {
+            openHub();
+        } else if (canRetry && isRootCaTrusted()) {
+            verificationInProgress = true;
+            browserHandler.postDelayed(() -> verifyBrowserAssociation(false), VERIFICATION_RETRY_DELAY_MS);
+        } else {
+            verificationFailed = true;
+            refreshTrustStatus();
+        }
+    }
+
+    private void cancelBrowserVerification() {
+        browserHandler.removeCallbacksAndMessages(null);
+        if (browserConnection != null) {
+            unbindService(browserConnection);
+            browserConnection = null;
+        }
+        verificationInProgress = false;
+    }
+
+    private void openInBrowser() {
+        if (!isRootCaTrusted()) {
+            refreshTrustStatus();
+            return;
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.hub_launch_url))));
+        } catch (android.content.ActivityNotFoundException ignored) {
+            statusText.setText("No browser is available. Enable Chrome, then retry.");
         }
     }
 
