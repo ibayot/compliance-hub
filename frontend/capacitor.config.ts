@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.dswd.compliancehub',
-  appName: 'Compliance Hub',
+  appName: 'FO2 iCare',
   webDir: 'dist',
   plugins: {
     GoogleAuth: {

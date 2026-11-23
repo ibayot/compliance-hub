@@ -9,9 +9,6 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Autocomplete,
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Box,
   Button,
   Card,
@@ -23,6 +20,7 @@ import {
   CircularProgress,
   Alert,
   Divider,
+  IconButton,
   Table as MuiTable,
   TableHead,
   TableRow,
@@ -52,7 +50,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { ticketsApi } from '@/app/api/references';
+import { ticketsApi, type TicketReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
@@ -63,6 +61,95 @@ const Table = ({ children, ...props }: any) => (
     <MuiTable {...props}>{children}</MuiTable>
   </ResponsiveTable>
 );
+
+function AssigneeRanking({ rows, compact }: { rows: TicketReportResult['weeklyTechnicianPerformance']; compact: boolean }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const idPrefix = React.useId();
+
+  const renderTiming = (row: TicketReportResult['weeklyTechnicianPerformance'][number]) => (
+    <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
+      elapsedCalendarHours: row.avgCalendarResolutionHours,
+      elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
+      creditedPauseHours: row.avgCreditedPauseHours ?? 0,
+      activeHours: row.avgActiveResolutionHours,
+      pauseCount: row.pauseCount ?? null,
+      estimated: !!row.estimatedTickets,
+    }} />
+  );
+  const toggle = (id: number) => setExpandedId(current => current === id ? null : id);
+
+  if (compact) return (
+    <Box component="ol" aria-label="Ticket assignee ranking" sx={{ m: 0, pl: 3, '& > li::marker': { fontWeight: 700 } }}>
+      {rows.map(row => {
+        const expanded = expandedId === row.techId;
+        const detailsId = `${idPrefix}-${row.techId}`;
+        return (
+          <Box component="li" key={row.techId} sx={{ py: 0.75, pl: 0.5, borderBottom: 1, borderColor: 'divider' }}>
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+              <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                <Typography variant="body2" fontWeight={700}>{row.techName}</Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {row.resolvedTickets} resolved · {row.slaRate.toFixed(1)}% SLA · Score {row.weightedScore.toFixed(1)}
+                </Typography>
+                <Typography variant="caption" display="block">Avg active time {row.avgActiveResolutionHours.toFixed(1)}h</Typography>
+              </Box>
+              <IconButton aria-label={`Timing details for ${row.techName}`} aria-expanded={expanded} aria-controls={detailsId}
+                sx={{ flexShrink: 0, minWidth: 44, minHeight: 44 }} onClick={() => toggle(row.techId)}>
+                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </IconButton>
+            </Stack>
+            <Collapse id={detailsId} in={expanded} timeout={0}>{expanded && renderTiming(row)}</Collapse>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+
+  return (
+    <Table aria-label="Ticket assignee ranking" size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell scope="col">Rank</TableCell>
+          <TableCell scope="col">Assignee</TableCell>
+          <TableCell scope="col" align="right">Resolved</TableCell>
+          <TableCell scope="col" align="right">SLA Met</TableCell>
+          <TableCell scope="col" align="right">SLA Missed</TableCell>
+          <TableCell scope="col" align="right">SLA Rate</TableCell>
+          <TableCell scope="col" align="right">Avg Active Time</TableCell>
+          <TableCell scope="col" align="right">Score</TableCell>
+          <TableCell scope="col" align="center">Details</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {rows.map((row, index) => {
+          const expanded = expandedId === row.techId;
+          const detailsId = `${idPrefix}-${row.techId}`;
+          return (
+            <React.Fragment key={row.techId}>
+              <TableRow hover>
+                <TableCell>{index + 1}</TableCell>
+                <TableCell component="th" scope="row" sx={{ minWidth: 155, overflowWrap: 'anywhere' }}>{row.techName}</TableCell>
+                <TableCell align="right">{row.resolvedTickets}</TableCell>
+                <TableCell align="right">{row.met}</TableCell>
+                <TableCell align="right">{row.missed}</TableCell>
+                <TableCell align="right">{row.slaRate.toFixed(1)}%</TableCell>
+                <TableCell align="right">{row.avgActiveResolutionHours.toFixed(1)}h</TableCell>
+                <TableCell align="right">{row.weightedScore.toFixed(1)}</TableCell>
+                <TableCell align="center">
+                  <IconButton size="small" aria-label={`Timing details for ${row.techName}`} aria-expanded={expanded}
+                    aria-controls={expanded ? detailsId : undefined} onClick={() => toggle(row.techId)}>
+                    {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+              {expanded && <TableRow id={detailsId}><TableCell colSpan={9}>{renderTiming(row)}</TableCell></TableRow>}
+            </React.Fragment>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
 
 function ReportCards({ children }: { children: React.ReactNode }) {
   return <Box sx={{
@@ -1828,31 +1915,7 @@ export default function TicketReportsPage() {
                       assignee and efficiency is capped at 100%. Compare ticket counts when reading scores.
                       {!!result.performancePeriod?.excludedTickets && ` ${result.performancePeriod.excludedTickets} ticket(s) excluded because assignee or usable SLA timing is unavailable.`}
                     </Typography>
-                    <ReportCards>
-                      {result.weeklyTechnicianPerformance.map((row, index) => (
-                        <Accordion key={row.techId} disableGutters elevation={0} variant="outlined" TransitionProps={{ timeout: 0 }}>
-                          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ textAlign: 'left' }}>
-                            <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                              <Typography fontWeight={700}>#{index + 1} {row.techName}</Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {row.resolvedTickets} resolved · {row.slaRate.toFixed(1)}% SLA · Score {row.weightedScore.toFixed(1)}
-                              </Typography>
-                              <Typography variant="body2" fontWeight={600}>Avg Active Time {row.avgActiveResolutionHours.toFixed(1)}h</Typography>
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails sx={{ pt: 0 }}>
-                            <ResolutionTimingSummary average estimatedTickets={row.estimatedTickets} timing={{
-                              elapsedCalendarHours: row.avgCalendarResolutionHours,
-                              elapsedBusinessHours: row.avgBusinessResolutionHours ?? row.avgActiveResolutionHours,
-                              creditedPauseHours: row.avgCreditedPauseHours ?? 0,
-                              activeHours: row.avgActiveResolutionHours,
-                              pauseCount: row.pauseCount ?? null,
-                              estimated: !!row.estimatedTickets,
-                            }} />
-                          </AccordionDetails>
-                        </Accordion>
-                      ))}
-                    </ReportCards>
+                    <AssigneeRanking rows={result.weeklyTechnicianPerformance} compact={isCompactViewport} />
                   </CardContent>
                 </Card>
               </Grid>

@@ -7,6 +7,8 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  HttpCode,
+  ServiceUnavailableException,
   Request,
   UseGuards,
   Optional,
@@ -54,6 +56,13 @@ export class NotificationController {
   async removePushSubscription(@Request() req: any, @Body() body: { endpoint?: string }) {
     if (!this.webPushService) return { removed: false };
     return this.webPushService.removeSubscription(this.userId(req), body?.endpoint ?? '');
+  }
+
+  @Post('push-test')
+  @HttpCode(200)
+  async sendTestAlert(@Request() req: any, @Body() body: { endpoint?: string }) {
+    if (!this.webPushService) throw new ServiceUnavailableException('Browser notifications are unavailable.');
+    return this.webPushService.sendTestAlert(this.userId(req), body?.endpoint ?? '');
   }
 
   @Get('summary')

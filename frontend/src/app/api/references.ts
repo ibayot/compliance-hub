@@ -2080,6 +2080,10 @@ export const notificationsApi = {
     const response = await apiClient.post('/notifications/push-subscription', subscription);
     return response.data;
   },
+  sendTestAlert: async (endpoint: string): Promise<{ outcome: 'accepted' | 'expired' | 'failed' | 'not-enabled' }> => {
+    const response = await apiClient.post('/notifications/push-test', { endpoint });
+    return response.data;
+  },
   removePushSubscription: async (endpoint: string): Promise<{ removed: boolean }> => {
     const response = await apiClient.delete('/notifications/push-subscription', { data: { endpoint } });
     return response.data;

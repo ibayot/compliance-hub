@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  HttpException,
+  HttpStatus,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,11 +27,14 @@ const PUSH_SERVICE_HOSTS = new Set([
   'updates.push.services.mozilla.com',
 ]);
 const MAX_SUBSCRIPTIONS_PER_USER = 8;
+const TEST_ALERT_INTERVAL_MS = 30_000;
+type PushOutcome = 'accepted' | 'expired' | 'failed';
 
 @Injectable()
 export class WebPushService {
   private readonly logger = new Logger(WebPushService.name);
   private configurationWarningLogged = false;
+  private readonly nextTestAlertAt = new Map<number, number>();
 
   constructor(
     @InjectRepository(WebPushSubscription)
@@ -150,6 +155,49 @@ export class WebPushService {
     return { removed: (result.affected ?? 0) > 0 };
   }
 
+  async sendTestAlert(userId: number, endpoint: string): Promise<{ outcome: PushOutcome | 'not-enabled' }> {
+    const config = this.configuration();
+    if (!config) throw new ServiceUnavailableException('Browser notifications are not configured on this server.');
+    if (typeof endpoint !== 'string' || !endpoint || endpoint.length > 2048) {
+      throw new BadRequestException('A valid browser push endpoint is required.');
+    }
+    const subscription = await this.subscriptions.findOne({ where: { userId, endpointHash: this.endpointHash(endpoint) } });
+    if (!subscription) return { outcome: 'not-enabled' };
+
+    const now = Date.now();
+    for (const [id, nextAt] of this.nextTestAlertAt) {
+      if (nextAt <= now) this.nextTestAlertAt.delete(id);
+    }
+    if (this.nextTestAlertAt.has(userId) || this.nextTestAlertAt.size >= 4096) {
+      throw new HttpException('Please wait 30 seconds before sending another test alert.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    this.nextTestAlertAt.set(userId, now + TEST_ALERT_INTERVAL_MS);
+    await this.usersClient.requireAccountAccess(userId);
+    const unreadCount = await this.notifications.count({ where: { userId, isRead: false } });
+    return { outcome: await this.deliver(subscription, config.encryptionKey, { test: true, targetPath: '/dashboard', unreadCount }) };
+  }
+
+  private async deliver(record: WebPushSubscription, key: Buffer, payload: object): Promise<PushOutcome> {
+    let subscription: BrowserPushSubscriptionInput;
+    try { subscription = this.decryptSubscription(record.encryptedSubscription, key); }
+    catch {
+      await this.subscriptions.delete({ id: record.id });
+      this.logger.warn('Removed an unreadable browser push subscription.');
+      return 'expired';
+    }
+    try {
+      await webPush.sendNotification(subscription, JSON.stringify(payload), { TTL: 60, urgency: 'normal', timeout: 8_000 });
+      return 'accepted';
+    } catch (error: any) {
+      if (error?.statusCode === 404 || error?.statusCode === 410) {
+        await this.subscriptions.delete({ id: record.id });
+        return 'expired';
+      }
+      this.logger.warn(`Browser push delivery failed with status ${Number(error?.statusCode) || 'unknown'}.`);
+      return 'failed';
+    }
+  }
+
   async sendForNotification(notification: TicketNotification): Promise<void> {
     const config = this.configuration();
     if (!config) return;
@@ -167,30 +215,8 @@ export class WebPushService {
     const unreadCount = await this.notifications.count({ where: { userId: notification.userId, isRead: false } });
     const path = notification.targetPath;
     const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
-    webPush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
-
-    await Promise.all(records.map(async (record) => {
-      let subscription: BrowserPushSubscriptionInput;
-      try { subscription = this.decryptSubscription(record.encryptedSubscription, config.encryptionKey); }
-      catch {
-        await this.subscriptions.delete({ id: record.id });
-        this.logger.warn('Removed an unreadable browser push subscription.');
-        return;
-      }
-      try {
-        await webPush.sendNotification(subscription, JSON.stringify({
-          title: 'RICTMS Compliance Hub',
-          body: 'You have a new notification.',
-          targetPath,
-          unreadCount,
-        }), { TTL: 60, urgency: 'normal' });
-      } catch (error: any) {
-        if (error?.statusCode === 404 || error?.statusCode === 410) {
-          await this.subscriptions.delete({ id: record.id });
-          return;
-        }
-        this.logger.warn(`Browser push delivery failed with status ${Number(error?.statusCode) || 'unknown'}.`);
-      }
-    }));
+    await Promise.all(records.map(record => this.deliver(record, config.encryptionKey, {
+      title: 'FO2 iCare', body: 'You have a new notification.', targetPath, unreadCount,
+    })));
   }
 }

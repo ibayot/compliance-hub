@@ -21,6 +21,20 @@ export function registerWebPushWorker(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
 }
 
+export async function getActiveWebPushWorker(): Promise<ServiceWorkerRegistration> {
+  let timeout: number | undefined;
+  try {
+    return await Promise.race([
+      registerWebPushWorker().then(() => navigator.serviceWorker.ready),
+      new Promise<never>((_, reject) => {
+        timeout = window.setTimeout(() => reject(new Error('Notification service did not start in time.')), 10_000);
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 window.addEventListener('beforeinstallprompt', (event) => {
   if (Capacitor.isNativePlatform()) return;
   event.preventDefault();

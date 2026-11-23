@@ -51,7 +51,7 @@ import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
 import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig } from '@/app/api/references';
-import { isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp, registerWebPushWorker } from '@/lib/install-web-app';
+import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
@@ -146,6 +146,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushNeedsHomeScreen, setPushNeedsHomeScreen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [sendingTestAlert, setSendingTestAlert] = useState(false);
   const [pushMessage, setPushMessage] = useState('');
   const [pushConfigCheckFailed, setPushConfigCheckFailed] = useState(false);
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
@@ -278,7 +279,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       return;
     }
     if (pushNeedsHomeScreen) {
-      setPushMessage('In Safari, add Compliance Hub to the Home Screen as a web app, then enable alerts from its icon.');
+      setPushMessage('In Safari, add FO2 iCare to the Home Screen as a web app, then enable alerts from its icon.');
       return;
     }
     if (pushConfigCheckFailed) {
@@ -295,18 +296,19 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     let pushStep: 'permission' | 'service-worker' | 'subscription' | 'server-save' = 'permission';
     try {
       // Call the permission API directly from this button gesture, as required by browsers.
-      const permission = await Notification.requestPermission();
+      const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
       if (permission !== 'granted') {
         setPushMessage(permission === 'denied'
           ? isAppleMobileDevice()
             ? 'iOS denied notifications for this Home Screen icon. If it is listed in Settings → Notifications, allow alerts there. If the profile icon is absent from Settings and no prompt appears, use the Safari-installed web app for alerts.'
-            : 'Notifications are blocked in browser settings. Allow them for this site to continue.'
+            : isAndroidBrowser()
+              ? 'Allow notifications for the site in Chrome or Brave, and for FO2 iCare and its browser in Android settings. Then retry here.'
+              : 'Notifications are blocked in browser settings. Allow them for this site to continue.'
           : 'Notification permission was not granted.');
         return;
       }
       pushStep = 'service-worker';
-      await registerWebPushWorker();
-      const activeRegistration = await navigator.serviceWorker.ready;
+      const activeRegistration = await getActiveWebPushWorker();
       pushStep = 'subscription';
       let subscription = await activeRegistration.pushManager.getSubscription();
       if (subscription?.options.applicationServerKey &&
@@ -335,7 +337,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       if (pushStep === 'service-worker') {
         setPushMessage('This app could not prepare its notification service. Close and reopen the app, then try again.');
       } else if (pushStep === 'subscription') {
-        setPushMessage('Android could not create a notification subscription for this app. Check that notifications are allowed for Compliance Hub in Android settings, then try again.');
+        setPushMessage('The browser could not register this device with its push service. Check the connection and browser site permissions, then retry. In Brave, also check that Google services for push messaging are enabled.');
       } else if (pushStep === 'server-save') {
         const status = getHttpErrorStatus(error);
         if (status === 401) {
@@ -355,6 +357,38 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         setPushMessage('The browser could not request notification permission. Check Android notification settings, then retry.');
       }
     } finally { setPushBusy(false); }
+  };
+
+  const handleTestAlert = async () => {
+    if (!pushEnabled || pushBusy || sendingTestAlert) return;
+    setSendingTestAlert(true);
+    setPushMessage('');
+    try {
+      const registration = await getActiveWebPushWorker();
+      const subscription = await registration.pushManager.getSubscription();
+      if (Notification.permission !== 'granted' || !subscription) {
+        setPushEnabled(false);
+        setPushMessage('Enable browser alerts again on this device before sending a test.');
+        return;
+      }
+      const { outcome } = await notificationsApi.sendTestAlert(subscription.endpoint);
+      if (outcome === 'accepted') {
+        setPushMessage('The push provider accepted the test. Check your device’s notification panel for FO2 iCare.');
+      } else if (outcome === 'expired' || outcome === 'not-enabled') {
+        if (outcome === 'expired') await subscription.unsubscribe().catch(() => false);
+        setPushEnabled(false);
+        setPushMessage('This device’s subscription is no longer active. Enable browser alerts again, then retry the test.');
+      } else {
+        setPushMessage('The push provider did not accept the test. Ask an administrator to check Ticketing service logs and its connection to the push provider.');
+      }
+    } catch (error) {
+      const status = getHttpErrorStatus(error);
+      setPushMessage(status === 429 ? 'Wait 30 seconds before sending another test alert.'
+        : status === 401 || status === 403 ? 'Your account could not send the test alert. Sign in again and retry.'
+          : 'The app could not send a test alert. Check the connection or ask an administrator to verify Web Push settings.');
+    } finally {
+      setSendingTestAlert(false);
+    }
   };
 
   const fetchMyShift = React.useCallback(() => {
@@ -1047,10 +1081,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             <MenuItem
               component="a"
               href={androidApkUrl}
-              download="Compliance-Hub.apk"
+              download="FO2-iCare.apk"
               onClick={() => {
                 setAppInstallAnchor(null);
-                enqueueSnackbar('When the download finishes, open Compliance-Hub.apk from Downloads to install.', { variant: 'info' });
+                enqueueSnackbar('When the download finishes, open FO2-iCare.apk from Downloads to install.', { variant: 'info' });
               }}
             >
               Download Android APK
@@ -1069,13 +1103,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           aria-labelledby="app-install-help-title"
           aria-describedby="app-install-help-description"
         >
-          <DialogTitle id="app-install-help-title">Install Compliance Hub</DialogTitle>
+          <DialogTitle id="app-install-help-title">Install FO2 iCare</DialogTitle>
           <DialogContent>
             <DialogContentText id="app-install-help-description">
               {installHelp === 'ios'
-                ? 'On iPhone, download and install the Compliance Hub profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for RICTMS Helpdesk Internal TLS CA. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
+                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for RICTMS Helpdesk Internal TLS CA. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
                 : installHelp === 'android'
-                  ? 'Open Compliance Hub in Chrome. In the ⋮ menu, choose Add to Home screen, then Install if offered. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
+                  ? 'Open FO2 iCare in Chrome. In the ⋮ menu, choose Add to Home screen, then Install if offered. Open the new icon, then choose Enable under Browser alerts in the bell menu.'
                   : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
             </DialogContentText>
           </DialogContent>
@@ -1145,16 +1179,16 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 <Button
                   size="small"
                   onClick={() => void (pushConfigCheckFailed ? retryPushConfigCheck() : handleBrowserPushToggle())}
-                  disabled={pushBusy || pushConfigChecking || !user || (!pushConfigCheckFailed && !pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
+                  disabled={pushBusy || sendingTestAlert || pushConfigChecking || !user || (!pushConfigCheckFailed && !pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
                 >
                   {pushConfigChecking ? 'Checking…' : pushConfigCheckFailed ? 'Retry' : pushBusy ? 'Working…' : pushEnabled ? 'Turn off' : 'Enable'}
                 </Button>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
+              <Typography variant="caption" color="text.secondary" aria-live="polite" sx={{ display: 'block', lineHeight: 1.35 }}>
                 {pushMessage || (pushNeedsHomeScreen
-                  ? 'In Safari, add Compliance Hub to the Home Screen as a web app to use alerts.'
+                  ? 'In Safari, add FO2 iCare to the Home Screen as a web app to use alerts.'
                   : !window.isSecureContext
-                    ? 'Open Compliance Hub at its HTTPS address before enabling browser alerts.'
+                    ? 'Open FO2 iCare at its HTTPS address before enabling browser alerts.'
                   : !pushSupported
                     ? 'This browser or connection does not support background alerts.'
                     : pushConfigChecking
@@ -1164,9 +1198,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                     : !pushConfig?.enabled
                       ? 'Ticketing has not confirmed valid Web Push settings. An administrator should check all four values and recreate the service.'
                       : pushEnabled
-                        ? 'Enabled on this device. Sound and badges follow device settings.'
-                        : 'Receive alerts when the browser is closed; permission is required.')}
+                        ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
+                        : 'Enable alerts here as well as in your device and browser settings.')}
               </Typography>
+              {pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
+                {sendingTestAlert ? 'Sending test…' : 'Send test alert'}
+              </Button>}
             </Box>
             <Divider />
             {isNotifLoading ? (

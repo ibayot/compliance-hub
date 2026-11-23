@@ -318,7 +318,7 @@ async function bootstrap() {
       const profile = buildIosWebClipProfile(targetUrl, icon, rootCa);
       res.status(200);
       res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-      res.setHeader('Content-Disposition', 'attachment; filename="Compliance-Hub.mobileconfig"');
+      res.setHeader('Content-Disposition', 'attachment; filename="FO2-iCare.mobileconfig"');
       res.setHeader('Cache-Control', 'no-store, max-age=0');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       return req.method === 'HEAD' ? res.end() : res.send(profile);

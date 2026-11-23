@@ -4,7 +4,7 @@
     <application
         android:allowBackup="false"
         android:icon="@drawable/hub_launcher"
-        android:label="Compliance Hub"
+        android:label="@string/hub_app_name"
         android:theme="@android:style/Theme.Translucent.NoTitleBar"
         android:usesCleartextTraffic="false">
         <meta-data android:name="asset_statements" android:resource="@string/hub_asset_statements" />
@@ -35,7 +35,7 @@
             android:enabled="false"
             android:exported="false" />
         <service
-            android:name="com.google.androidbrowserhelper.trusted.DelegationService"
+            android:name=".HubNotificationService"
             android:exported="true">
             <meta-data
                 android:name="android.support.customtabs.trusted.SMALL_ICON"

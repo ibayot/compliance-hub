@@ -1,4 +1,7 @@
 /* Web Push only. This worker deliberately does not cache pages or API responses. */
+self.addEventListener('install', (event) => event.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
 function safeTargetPath(value) {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '/dashboard';
   try {
@@ -13,23 +16,26 @@ self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     let payload = {};
     try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
-    const unreadCount = Number.isSafeInteger(payload.unreadCount) && payload.unreadCount > 0
+    const test = payload?.test === true;
+    const unreadCount = Number.isSafeInteger(payload?.unreadCount) && payload.unreadCount > 0
       ? payload.unreadCount
       : 0;
+    // Show the OS notification independently of numeric app badge support.
+    await self.registration.showNotification('FO2 iCare', {
+      body: test ? 'Your test alert arrived on this device.' : 'You have a new notification.',
+      icon: '/icons/app-192.png',
+      badge: '/icons/app-192.png',
+      silent: false,
+      tag: test ? 'fo2-icare-test-alert' : 'rictms-new-notification',
+      renotify: true,
+      data: { targetPath: safeTargetPath(payload?.targetPath) },
+    });
+    if (test) return;
     if (unreadCount && typeof self.navigator.setAppBadge === 'function') {
       await self.navigator.setAppBadge(unreadCount).catch(() => undefined);
     } else if (!unreadCount && typeof self.navigator.clearAppBadge === 'function') {
       await self.navigator.clearAppBadge().catch(() => undefined);
     }
-    await self.registration.showNotification('RICTMS Compliance Hub', {
-      body: 'You have a new notification.',
-      icon: '/icons/app-192.png',
-      badge: '/icons/app-192.png',
-      silent: false,
-      tag: 'rictms-new-notification',
-      renotify: true,
-      data: { targetPath: safeTargetPath(payload.targetPath) },
-    });
   })());
 });
 

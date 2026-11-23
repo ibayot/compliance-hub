@@ -1,9 +1,13 @@
 package com.dswd.compliancehub.launcher;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -43,35 +47,26 @@ public final class CertificateSetupActivity extends Activity {
     private static final long VERIFICATION_TIMEOUT_MS = 4_000;
     private static final long VERIFICATION_RETRY_DELAY_MS = 750;
     private static final String CERTIFICATE_SAVED = "certificateSaved";
+    private static final String PREFERENCES = "certificate_setup";
+    private static final String LAST_BROWSER_CHECK = "last_browser_check";
+    private static final String CERTIFICATE_SEARCH = "Certificate";
     private final Handler browserHandler = new Handler(Looper.getMainLooper());
     private CustomTabsServiceConnection browserConnection;
     private boolean certificateSaved;
-    private boolean verificationInProgress;
-    private boolean verificationFailed;
-    private boolean automaticVerificationAttempted;
     private boolean resumed;
-    private Button saveCertificateButton;
-    private Button openSecuritySettingsButton;
-    private Button openHubButton;
-    private Button openBrowserButton;
-    private TextView statusText;
+    private TextView setupStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         certificateSaved = savedInstanceState != null && savedInstanceState.getBoolean(CERTIFICATE_SAVED);
-        showSetupScreen();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         resumed = true;
-        refreshTrustStatus();
-        if (!automaticVerificationAttempted && openHubButton.isEnabled()) {
-            automaticVerificationAttempted = true;
-            startBrowserVerification();
-        }
+        continueLaunch();
     }
 
     @Override
@@ -88,6 +83,7 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void showSetupScreen() {
+        if (setupStatus != null) return;
         int navy = Color.rgb(23, 43, 66);
         int teal = Color.rgb(20, 122, 118);
         int page = Color.rgb(247, 249, 251);
@@ -113,8 +109,7 @@ public final class CertificateSetupActivity extends Activity {
 
         TextView introduction = new TextView(this);
         introduction.setText(
-                "Compliance Hub uses Chrome to display the application. Before Chrome can verify " +
-                "the internal HTTPS connection and remove the address bar, Android requires you " +
+                "Before FO2 iCare can open its internal HTTPS site, Android requires you " +
                 "to trust the RICTMS root certificate once in Settings. This certificate grants " +
                 "device-wide trust to certificates issued by the RICTMS internal CA. It contains " +
                 "no private key or account data. Install it only on an approved device.");
@@ -126,54 +121,59 @@ public final class CertificateSetupActivity extends Activity {
         TextView steps = new TextView(this);
         steps.setText(
                 "1. Save the public certificate file in Downloads.\n\n" +
-                "2. Open Android Security settings and choose Install a certificate > CA certificate. " +
-                "Select the saved Compliance Hub certificate and confirm Android's trust warning.\n\n" +
-                "3. Return here. Compliance Hub checks for the installed certificate before opening the site.");
+                "2. Open Android Settings and paste Certificate into the search field. Choose Install a certificate > CA certificate. " +
+                "Select the saved FO2 iCare certificate and confirm Android's trust warning.\n\n" +
+                "3. Return to FO2 iCare. It opens automatically once Android trusts the certificate.");
         steps.setTextColor(navy);
         steps.setTextSize(15);
         steps.setPadding(0, 0, 0, dp(16));
         content.addView(steps, fullWidth());
 
-        statusText = new TextView(this);
-        statusText.setTextColor(navy);
-        statusText.setTextSize(14);
-        statusText.setPadding(0, 0, 0, dp(12));
-        content.addView(statusText, fullWidth());
+        setupStatus = new TextView(this);
+        setupStatus.setTextColor(navy);
+        setupStatus.setTextSize(14);
+        setupStatus.setPadding(0, 0, 0, dp(12));
+        if (certificateSaved) setupStatus.setText("Certificate saved. Install it in Settings, then return here.");
+        content.addView(setupStatus, fullWidth());
 
-        saveCertificateButton = button("Save CA certificate", teal);
+        Button saveCertificateButton = button("Save CA certificate", teal);
         saveCertificateButton.setOnClickListener(view -> requestCertificateSave());
         content.addView(saveCertificateButton, buttonLayout());
 
-        openSecuritySettingsButton = button("Open Android security settings", navy);
-        openSecuritySettingsButton.setEnabled(false);
-        openSecuritySettingsButton.setOnClickListener(view -> {
-            try {
-                startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS));
-            } catch (Exception error) {
-                Toast.makeText(this, "Open Security settings from the Android Settings app.", Toast.LENGTH_LONG).show();
-            }
-        });
-        content.addView(openSecuritySettingsButton, buttonLayout());
-
-        openHubButton = button("Open Compliance Hub", teal);
-        openHubButton.setEnabled(false);
-        openHubButton.setOnClickListener(view -> startBrowserVerification());
-        content.addView(openHubButton, buttonLayout());
-
-        openBrowserButton = button("Open in browser", navy);
-        openBrowserButton.setVisibility(View.GONE);
-        openBrowserButton.setOnClickListener(view -> openInBrowser());
-        content.addView(openBrowserButton, buttonLayout());
+        Button findCertificateButton = button("Find certificate in Settings", navy);
+        findCertificateButton.setOnClickListener(view -> openCertificateSearch());
+        content.addView(findCertificateButton, buttonLayout());
 
         setContentView(scroll);
-        refreshTrustStatus();
+    }
+
+    private void openCertificateSearch() {
+        ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(ClipData.newPlainText("Settings search", CERTIFICATE_SEARCH));
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && launchSettings(Settings.ACTION_APP_SEARCH_SETTINGS)) {
+            return;
+        }
+        if (!launchSettings(Settings.ACTION_SETTINGS)) {
+            setupStatus.setText("Open Android Settings and search for Certificate.");
+        }
+    }
+
+    private boolean launchSettings(String action) {
+        try {
+            startActivity(new Intent(action));
+            return true;
+        } catch (ActivityNotFoundException | SecurityException ignored) {
+            return false;
+        }
     }
 
     private void requestCertificateSave() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/x-x509-ca-cert");
-        intent.putExtra(Intent.EXTRA_TITLE, "Compliance-Hub-Root-CA.crt");
+        intent.putExtra(Intent.EXTRA_TITLE, "FO2-iCare-Root-CA.crt");
         try {
             startActivityForResult(intent, CREATE_CERTIFICATE_REQUEST);
         } catch (Exception error) {
@@ -185,9 +185,10 @@ public final class CertificateSetupActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != CREATE_CERTIFICATE_REQUEST) return;
+        showSetupScreen();
         Uri destination = data == null ? null : data.getData();
         if (resultCode != RESULT_OK || destination == null) {
-            statusText.setText("Certificate save was canceled. Save the file before continuing.");
+            setupStatus.setText("Certificate save canceled. You can use a copy already saved in Downloads.");
             return;
         }
 
@@ -200,53 +201,63 @@ public final class CertificateSetupActivity extends Activity {
                 output.write(buffer, 0, length);
             }
             output.flush();
-            statusText.setText("Certificate saved. Install it from Android Security settings, then return here.");
+            setupStatus.setText("Certificate saved. Install it in Settings, then return here.");
             certificateSaved = true;
         } catch (Exception error) {
-            statusText.setText("The certificate could not be saved. Choose Downloads and try again.");
-        }
-        refreshTrustStatus();
-    }
-
-    private void refreshTrustStatus() {
-        boolean trusted = isRootCaTrusted();
-        openSecuritySettingsButton.setEnabled(!trusted && certificateSaved);
-        openHubButton.setEnabled(trusted && !verificationInProgress);
-        openHubButton.setText(verificationFailed && trusted ? "Retry full screen" : "Open Compliance Hub");
-        openBrowserButton.setVisibility(verificationFailed && trusted && !verificationInProgress
-                ? View.VISIBLE : View.GONE);
-
-        if (!trusted) {
-            statusText.setText(certificateSaved
-                    ? "Install the saved certificate in Android Security settings, then return here."
-                    : "Save the certificate first. Android requires you to confirm its installation in Settings.");
-        } else if (verificationInProgress) {
-            statusText.setText("Checking full-screen access with your browser…");
-        } else if (verificationFailed) {
-            statusText.setText("Full-screen access could not be verified. Check that you’re on the office network or VPN, then retry.");
-        } else {
-            statusText.setText("The Compliance Hub certificate is trusted on this device.");
+            setupStatus.setText("The certificate could not be saved. Choose Downloads and try again.");
         }
     }
 
-    private void startBrowserVerification() {
-        if (verificationInProgress || !resumed || !isRootCaTrusted()) return;
-        verificationFailed = false;
-        verificationInProgress = true;
-        refreshTrustStatus();
-        verifyBrowserAssociation(true);
-    }
+    private void continueLaunch() {
+        if (!isRootCaTrusted()) {
+            getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().remove(LAST_BROWSER_CHECK).apply();
+            showSetupScreen();
+            return;
+        }
 
-    private void verifyBrowserAssociation(boolean canRetry) {
-        Uri launchUrl = Uri.parse(getString(R.string.hub_launch_url));
+        Uri launchUrl = getLaunchUrl();
         Uri origin = new Uri.Builder().scheme(launchUrl.getScheme())
                 .encodedAuthority(launchUrl.getEncodedAuthority()).build();
         TwaProviderPicker.Action browser = TwaProviderPicker.pickProvider(getPackageManager());
         if (browser.launchMode != TwaProviderPicker.LaunchMode.TRUSTED_WEB_ACTIVITY || browser.provider == null) {
-            finishBrowserVerification(false, false);
+            showLaunchStatus("A compatible browser is needed for full-screen access.", true);
             return;
         }
 
+        String browserCheck = origin + "|" + browser.provider;
+        if (browserCheck.equals(getSharedPreferences(PREFERENCES, MODE_PRIVATE).getString(LAST_BROWSER_CHECK, null))) {
+            openHub(browserCheck);
+            return;
+        }
+
+        showLaunchStatus("Opening FO2 iCare…", false);
+        verifyBrowserAssociation(origin, browser.provider, browserCheck, true);
+    }
+
+    private void showLaunchStatus(String message, boolean showBrowserAction) {
+        setupStatus = null;
+        LinearLayout content = new LinearLayout(this);
+        content.setPadding(dp(24), dp(24), dp(24), dp(24));
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        TextView messageView = new TextView(this);
+        messageView.setText(message);
+        messageView.setTextSize(18);
+        messageView.setGravity(Gravity.CENTER);
+        content.addView(messageView, fullWidth());
+        if (showBrowserAction) {
+            Button openBrowserButton = button("Open in browser", Color.rgb(23, 43, 66));
+            openBrowserButton.setOnClickListener(view -> openInBrowser());
+            content.addView(openBrowserButton, buttonLayout());
+        }
+        setContentView(content);
+    }
+
+    private Uri getLaunchUrl() {
+        return Uri.parse(getString(R.string.hub_launch_url));
+    }
+
+    private void verifyBrowserAssociation(Uri origin, String provider, String browserCheck, boolean canRetry) {
         CustomTabsServiceConnection connection = new CustomTabsServiceConnection() {
             @Override
             public void onCustomTabsServiceConnected(android.content.ComponentName name, CustomTabsClient client) {
@@ -258,65 +269,65 @@ public final class CertificateSetupActivity extends Activity {
                     public void onRelationshipValidationResult(int relation, Uri requestedOrigin,
                             boolean verified, Bundle extras) {
                         if (browserConnection != currentConnection || relation != CustomTabsService.RELATION_HANDLE_ALL_URLS
-                                || !origin.getScheme().equals(requestedOrigin.getScheme())
+                                || requestedOrigin == null || !origin.getScheme().equals(requestedOrigin.getScheme())
                                 || !origin.getEncodedAuthority().equals(requestedOrigin.getEncodedAuthority())) return;
-                        finishBrowserVerification(verified, canRetry);
+                        finishBrowserVerification(origin, provider, browserCheck, verified, canRetry);
                     }
                 });
                 if (session == null || !session.validateRelationship(CustomTabsService.RELATION_HANDLE_ALL_URLS, origin, null)) {
-                    finishBrowserVerification(false, canRetry);
+                    finishBrowserVerification(origin, provider, browserCheck, false, canRetry);
                 }
             }
 
             @Override
             public void onServiceDisconnected(android.content.ComponentName name) {
-                if (browserConnection == this) finishBrowserVerification(false, canRetry);
+                if (browserConnection == this) finishBrowserVerification(origin, provider, browserCheck, false, canRetry);
             }
         };
         try {
-            if (CustomTabsClient.bindCustomTabsService(this, browser.provider, connection)) {
+            if (CustomTabsClient.bindCustomTabsService(this, provider, connection)) {
                 browserConnection = connection;
-                browserHandler.postDelayed(() -> finishBrowserVerification(false, canRetry), VERIFICATION_TIMEOUT_MS);
+                browserHandler.postDelayed(() -> finishBrowserVerification(origin, provider, browserCheck, false, canRetry),
+                        VERIFICATION_TIMEOUT_MS);
                 return;
             }
         } catch (SecurityException ignored) {
             // The selected browser can be disabled or changed while opening the app.
         }
-        finishBrowserVerification(false, canRetry);
+        finishBrowserVerification(origin, provider, browserCheck, false, canRetry);
     }
 
-    private void finishBrowserVerification(boolean verified, boolean canRetry) {
+    private void finishBrowserVerification(Uri origin, String provider, String browserCheck, boolean verified, boolean canRetry) {
         cancelBrowserVerification();
         if (!resumed || isFinishing()) return;
-        if (verified && isRootCaTrusted()) {
-            openHub();
-        } else if (canRetry && isRootCaTrusted()) {
-            verificationInProgress = true;
-            browserHandler.postDelayed(() -> verifyBrowserAssociation(false), VERIFICATION_RETRY_DELAY_MS);
-        } else {
-            verificationFailed = true;
-            refreshTrustStatus();
+        if (!verified && canRetry) {
+            browserHandler.postDelayed(() -> verifyBrowserAssociation(origin, provider, browserCheck, false),
+                    VERIFICATION_RETRY_DELAY_MS);
+            return;
         }
+        // An optional Custom Tabs callback cannot replace the browser's own TWA verification.
+        openHub(browserCheck);
     }
 
     private void cancelBrowserVerification() {
         browserHandler.removeCallbacksAndMessages(null);
         if (browserConnection != null) {
-            unbindService(browserConnection);
+            CustomTabsServiceConnection connection = browserConnection;
             browserConnection = null;
+            unbindService(connection);
         }
-        verificationInProgress = false;
     }
 
     private void openInBrowser() {
         if (!isRootCaTrusted()) {
-            refreshTrustStatus();
+            showSetupScreen();
             return;
         }
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.hub_launch_url))));
-        } catch (android.content.ActivityNotFoundException ignored) {
-            statusText.setText("No browser is available. Enable Chrome, then retry.");
+            startActivity(new Intent(Intent.ACTION_VIEW, getLaunchUrl()));
+            finish();
+        } catch (ActivityNotFoundException ignored) {
+            showLaunchStatus("No browser is available. Enable a browser and reopen FO2 iCare.", false);
         }
     }
 
@@ -346,11 +357,17 @@ public final class CertificateSetupActivity extends Activity {
         return MessageDigest.getInstance("SHA-256").digest(value);
     }
 
-    private void openHub() {
+    private void openHub(String browserCheck) {
+        if (!isRootCaTrusted()) {
+            showSetupScreen();
+            return;
+        }
         Intent launch = new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class);
         // Browser Helper otherwise starts a second launcher while the first is still alive.
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(launch);
+        // This only avoids repeated warm-ups. The CA and the TWA association are still checked on every launch.
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putString(LAST_BROWSER_CHECK, browserCheck).apply();
         finish();
     }
 

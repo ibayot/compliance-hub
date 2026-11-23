@@ -84,7 +84,7 @@ export function buildIosWebClipProfile(targetUrl: string, iconPng: Buffer, rootC
 ${rootCaData}
       </data>
       <key>PayloadDescription</key>
-      <string>Allows this iPhone to verify the Compliance Hub internal HTTPS server.</string>
+      <string>Allows this iPhone to verify the FO2 iCare internal HTTPS server.</string>
       <key>PayloadDisplayName</key>
       <string>RICTMS Helpdesk Internal TLS CA</string>
       <key>PayloadIdentifier</key>
@@ -108,15 +108,15 @@ ${iconData}
       <key>IsRemovable</key>
       <true/>
       <key>Label</key>
-      <string>Compliance Hub</string>
+      <string>FO2 iCare</string>
       <key>Precomposed</key>
       <true/>
       <key>URL</key>
       <string>${escapeXml(launchUrl.toString())}</string>
       <key>PayloadDescription</key>
-      <string>Adds a fullscreen Compliance Hub icon to the Home Screen.</string>
+      <string>Adds the FO2 iCare Home Screen icon for ICT Coordination, Assistance, Response &amp; Enablement System.</string>
       <key>PayloadDisplayName</key>
-      <string>Compliance Hub Web Clip</string>
+      <string>FO2 iCare</string>
       <key>PayloadIdentifier</key>
       <string>${payloadIdentifier}</string>
       <key>PayloadType</key>
@@ -128,11 +128,11 @@ ${iconData}
     </dict>
   </array>
   <key>PayloadDisplayName</key>
-  <string>Compliance Hub Secure Mobile Setup</string>
+  <string>FO2 iCare Secure Mobile Setup</string>
   <key>PayloadIdentifier</key>
   <string>${payloadIdentifier}</string>
   <key>PayloadOrganization</key>
-  <string>RICTMS Compliance Hub</string>
+  <string>FO2 iCare</string>
   <key>PayloadRemovalDisallowed</key>
   <false/>
   <key>PayloadType</key>

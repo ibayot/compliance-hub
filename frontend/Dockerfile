@@ -114,7 +114,7 @@ server { \
     location = /downloads/Compliance-Hub.apk { \
         include /etc/nginx/security-headers.conf; \
         types { application/vnd.android.package-archive apk; } \
-        add_header Content-Disposition "attachment; filename=Compliance-Hub.apk"; \
+        add_header Content-Disposition "attachment; filename=FO2-iCare.apk"; \
         add_header Cache-Control "no-cache"; \
         try_files $uri =404; \
     } \

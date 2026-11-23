@@ -44,9 +44,12 @@ business event -> ticket_notifications row -> SSE event for open sessions
 - **CH-NOTIFY-001** — MUST retain the durable `ticket_notifications` row and existing in-app/SSE path independently of Web Push configuration or delivery outcome.
 - **CH-NOTIFY-002** — MUST send browser push only to an opted-in subscription bound to the currently authenticated and currently approved account.
 - **CH-NOTIFY-003** — MUST keep the push payload generic and must not include ticket content, identifiers, staff identity, MFA codes, or recovery links.
-- **CH-NOTIFY-004** — MUST keep browser push separate from email toggles and routes; only ordinary in-app notifications may produce a Web Push alert.
+- **CH-NOTIFY-004** — MUST keep browser push separate from email toggles and routes. Send routine Web Push for ordinary in-app notifications. A user-initiated device test follows CH-NOTIFY-007.
 - **CH-NOTIFY-005** — MUST keep push delivery best-effort and remove invalid endpoint records without changing the notification or ticket state.
 - **CH-NOTIFY-006** — MUST disclose browser/OS installation, permission, badge, and sound limits accurately; never promise delivery or badges on unsupported contexts.
+- **CH-NOTIFY-007** — MUST restrict a test alert to the currently signed-in account and that device's saved subscription. Rate-limit tests, keep them outside notification history and unread counts, and distinguish provider acceptance from actual device delivery. Use the existing push transport and generic lock-screen content.
+
+The Android launcher receives delegated browser push via Trusted Web Activity. Use the existing AndroidX channel ID so updates preserve the user's channel choices. New channels allow the Android launcher dot and request the system notification sound by default. Test in Chrome and Brave with the app open and closed. Device-wide permission, browser site permission, and account-bound bell opt-in are separate checks.
 
 ## Validation
 

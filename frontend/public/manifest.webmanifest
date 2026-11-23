@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "RICTMS Compliance Hub",
-  "short_name": "Compliance Hub",
-  "description": "RICTMS compliance and help desk application",
+  "name": "FO2 iCare",
+  "short_name": "FO2 iCare",
+  "description": "FO2 iCare: ICT Coordination, Assistance, Response & Enablement System",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
