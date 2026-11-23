@@ -1078,7 +1078,46 @@ export const issuancesApi = {
   },
 };
 
+export interface TicketNeighbors {
+  olderId: string | null;
+  newerId: string | null;
+}
+
+export interface TicketQueueFilters {
+  status?: TicketStatus;
+  ticketType?: TicketType;
+  priority?: string;
+  requesterId?: number;
+  createdById?: number;
+  assignedToId?: number;
+  assignedToMe?: boolean;
+  proxyCreatedByMe?: boolean;
+  pendingSatisfaction?: boolean;
+  date?: string;
+  includeCarryover?: boolean;
+  escalatedToMe?: boolean;
+  year?: number | string;
+  month?: number | string;
+  quarter?: number | string;
+  semester?: number | string;
+  search?: string;
+  slaState?: 'overdue' | 'nearing_sla' | 'on_track';
+  page?: number;
+  limit?: number;
+  aroundTicketId?: string;
+}
+
+export type TicketQueueScope = 'requested' | 'assigned' | 'all';
+
+export interface TicketDetailListState {
+  openedFromTicketList: true;
+  viewerId: number;
+  scope?: TicketQueueScope;
+  filters?: TicketQueueFilters;
+}
+
 export interface PaginatedTickets {
+  neighbors?: TicketNeighbors;
   data: Ticket[];
   total: number;
   page: number;
@@ -1125,23 +1164,9 @@ export const ticketsApi = {
     return response.data;
   },
   // Global/Technician Pause Methods
-  getMyRequested: async (filters?: {
-    status?: TicketStatus;
-    year?: number;
-    month?: number;
-    quarter?: number;
-    semester?: number;
-    date?: string;
-    includeCarryover?: boolean;
-    ticketType?: TicketType;
-    priority?: string;
-    search?: string;
-    pendingSatisfaction?: boolean;
-    proxyCreatedByMe?: boolean;
-    page?: number;
-    limit?: number;
-  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
+  getMyRequested: async (filters?: TicketQueueFilters, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
+    if (filters?.aroundTicketId) params.set('aroundTicketId', filters.aroundTicketId);
     if (filters?.status) params.set('status', filters.status);
     if (filters?.year) params.set('year', String(filters.year));
     if (filters?.month) params.set('month', String(filters.month));
@@ -1159,22 +1184,9 @@ export const ticketsApi = {
     const query = params.toString();
     return readTicketData<PaginatedTickets>(`/tickets/my-requested${query ? `?${query}` : ''}`, options);
   },
-  getMyAssigned: async (filters?: {
-    status?: TicketStatus;
-    year?: number;
-    month?: number;
-    quarter?: number;
-    semester?: number;
-    date?: string;
-    includeCarryover?: boolean;
-    ticketType?: TicketType;
-    priority?: string;
-    search?: string;
-    proxyCreatedByMe?: boolean;
-    page?: number;
-    limit?: number;
-  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
+  getMyAssigned: async (filters?: TicketQueueFilters, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
+    if (filters?.aroundTicketId) params.set('aroundTicketId', filters.aroundTicketId);
     if (filters?.status) params.set('status', filters.status);
     if (filters?.year) params.set('year', String(filters.year));
     if (filters?.month) params.set('month', String(filters.month));
@@ -1204,29 +1216,9 @@ export const ticketsApi = {
     return res.data;
   },
 
-  getAll: async (filters?: {
-    status?: TicketStatus;
-    ticketType?: TicketType;
-    priority?: string;
-    requesterId?: number;
-    createdById?: number;
-    assignedToId?: number;
-    assignedToMe?: boolean;
-    proxyCreatedByMe?: boolean;
-    pendingSatisfaction?: boolean;
-    date?: string;
-    includeCarryover?: boolean;
-    escalatedToMe?: boolean;
-    year?: string;
-    month?: string;
-    quarter?: string;
-    semester?: string;
-    search?: string;
-    slaState?: 'overdue' | 'nearing_sla' | 'on_track';
-    page?: number;
-    limit?: number;
-  }, options?: TicketReadOptions): Promise<PaginatedTickets> => {
+  getAll: async (filters?: TicketQueueFilters, options?: TicketReadOptions): Promise<PaginatedTickets> => {
     const params = new URLSearchParams();
+    if (filters?.aroundTicketId) params.set('aroundTicketId', filters.aroundTicketId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.ticketType) params.append('ticketType', filters.ticketType);
     if (filters?.priority) params.append('priority', filters.priority);
@@ -1238,15 +1230,21 @@ export const ticketsApi = {
     if (filters?.date) params.append('date', filters.date);
     if (filters?.includeCarryover) params.append('includeCarryover', 'true');
     if (filters?.escalatedToMe) params.append('escalatedToMe', 'true');
-    if (filters?.year) params.append('year', filters.year);
-    if (filters?.month) params.append('month', filters.month);
-    if (filters?.quarter) params.append('quarter', filters.quarter);
-    if (filters?.semester) params.append('semester', filters.semester);
+    if (filters?.year) params.append('year', String(filters.year));
+    if (filters?.month) params.append('month', String(filters.month));
+    if (filters?.quarter) params.append('quarter', String(filters.quarter));
+    if (filters?.semester) params.append('semester', String(filters.semester));
     if (filters?.search?.trim()) params.append('search', filters.search.trim());
     if (filters?.slaState) params.append('slaState', filters.slaState);
     params.append('page', String(filters?.page ?? 1));
     params.append('limit', String(filters?.limit ?? 25));
     return readTicketData<PaginatedTickets>(`/tickets?${params}`, options);
+  },
+
+  getQueue: (scope: TicketQueueScope, filters: TicketQueueFilters, options?: TicketReadOptions): Promise<PaginatedTickets> => {
+    if (scope === 'requested') return ticketsApi.getMyRequested(filters, options);
+    if (scope === 'assigned') return ticketsApi.getMyAssigned(filters, options);
+    return ticketsApi.getAll(filters, options);
   },
 
   getAttendanceAssignmentAlerts: async (): Promise<AttendanceAssignmentAlert[]> => {

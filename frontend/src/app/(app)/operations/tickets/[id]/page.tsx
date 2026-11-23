@@ -10,6 +10,7 @@ import { getTicketSlaSummary } from '@/lib/utils/ticket-sla-summary';
 import ResolutionTimingSummary from '@/components/ResolutionTimingSummary';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Accordion,
@@ -44,6 +45,7 @@ import {
   Paper,
   ListItemButton,
   IconButton,
+  Tooltip,
   Link,
 } from '@mui/material';
 import { useParams, useRouter } from 'next/navigation';
@@ -61,6 +63,8 @@ import {
   attendanceApi,
   knowledgeBaseApi,
   Ticket,
+  TicketDetailListState,
+  TicketQueueScope,
   TechnicianOption,
   UpdateTicketDto,
   TicketEvent,
@@ -74,6 +78,8 @@ import AuthenticatedImageGallery from '@/app/shared/AuthenticatedImageGallery';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import {
   ArrowBack as BackIcon,
+  ChevronLeft as PreviousTicketIcon,
+  ChevronRight as NextTicketIcon,
   Star as StarIcon,
   ThumbUp as ThumbUpIcon,
   CloudUpload as UploadIcon,
@@ -211,12 +217,15 @@ function SlaCountdownTimer({
 }
 
 export default function TicketDetailPage() {
+  const { id } = useParams();
+  return <TicketDetail key={id} ticketId={id as string} />;
+}
+
+function TicketDetail({ ticketId }: { ticketId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const params = useParams();
   const router = useRouter();
   const { user, myCap } = useAuth();
-  const ticketId = params.id as string;
   const { enqueueSnackbar } = useSnackbar();
   const openedFromMyTickets =
     typeof window !== 'undefined' &&
@@ -510,16 +519,40 @@ export default function TicketDetailPage() {
     !myCap?.isTicketSettingsFocal &&
     !isAcceptedEscalationFocal;
   const isRequester = ticket?.requesterId === (user as any)?.id;
-  const ticketListPath = openedFromMyTickets
+  const routeState = location.state as TicketDetailListState | null;
+  const listState = routeState?.openedFromTicketList && user && routeState.viewerId === Number(user.id)
+    ? routeState : null;
+  const ticketListPath = listState?.scope === 'requested' || openedFromMyTickets
     ? '/operations/my-tickets'
-    : myCap?.isTicketModuleAccess
-      ? '/operations/tickets'
-      : isRequester
-        ? '/operations/my-tickets'
-        : '/operations/my-assigned-tickets';
+    : listState?.scope === 'assigned' ? '/operations/my-assigned-tickets'
+      : myCap?.isTicketModuleAccess ? '/operations/tickets'
+        : isRequester ? '/operations/my-tickets' : '/operations/my-assigned-tickets';
   const returnToTicketList = () => {
-    if (location.state?.openedFromTicketList) navigate(-1);
+    if (listState) navigate(-1);
     else navigate(ticketListPath);
+  };
+  const personalProxy = !myCap?.isTicketModuleAccess && !!user && !!ticket
+    && Number(ticket.createdById) === Number(user.id) && !isRequester;
+  const neighborScope: TicketQueueScope = listState?.scope ?? (openedFromMyTickets || isRegularUser || personalProxy
+    ? 'requested' : myCap?.isTicketModuleAccess ? 'all' : isRequester ? 'requested' : 'assigned');
+  const neighborFilters = listState?.filters ?? (personalProxy ? { proxyCreatedByMe: true } : {});
+  const neighbors = useQuery({
+    queryKey: ['ticket-neighbors', user?.id, user?.role, neighborScope, neighborFilters, ticketId],
+    enabled: !!user && ticket?.id === ticketId && (isRegularUser || myCap != null),
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const result = await ticketsApi.getQueue(neighborScope, {
+        ...neighborFilters, aroundTicketId: ticketId,
+      }, { signal });
+      if (!result.neighbors) throw new Error('Ticket navigation is unavailable.');
+      return result.neighbors;
+    },
+  });
+  const openNeighbor = (id: string) => {
+    navigate(`/operations/tickets/${id}${openedFromMyTickets ? '?source=my-tickets' : ''}`, {
+      replace: !!listState, state: listState,
+    });
+    window.scrollTo(0, 0);
   };
   const canSatisfaction =
     isRequester &&
@@ -1388,13 +1421,30 @@ export default function TicketDetailPage() {
 
   return (
     <Box>
-<Button
-        startIcon={<BackIcon />}
-        onClick={returnToTicketList}
-        sx={{ mb: 2, display: { xs: 'none', md: 'inline-flex' } }}
-      >
-        Back to Tickets
-      </Button>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} mb={2}>
+        <Button startIcon={<BackIcon />} onClick={returnToTicketList}
+          sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
+          Back to Tickets
+        </Button>
+        <Stack component="nav" aria-label="Ticket navigation" direction="row" alignItems="center" gap={1} sx={{ ml: 'auto' }}>
+          {neighbors.isError && <Button size="small" onClick={() => void neighbors.refetch()}>Retry ticket navigation</Button>}
+          {([
+            { id: neighbors.data?.olderId, label: 'Previous ticket (older)', Icon: PreviousTicketIcon },
+            { id: neighbors.data?.newerId, label: 'Next ticket (newer)', Icon: NextTicketIcon },
+          ]).map(({ id, label, Icon }) => (
+            <Tooltip key={label} title={label}>
+              <Box component="span" sx={{ display: 'inline-flex' }}>
+                <IconButton aria-label={label} color="primary" disabled={!id || neighbors.isError}
+                  onClick={() => { if (id) openNeighbor(id); }}
+                  sx={{ width: 44, height: 44, border: '1px solid', borderColor: 'divider',
+                    borderRadius: 2, bgcolor: 'background.paper', '&:not(.Mui-disabled)': { borderColor: 'primary.main' } }}>
+                  <Icon fontSize="medium" />
+                </IconButton>
+              </Box>
+            </Tooltip>
+          ))}
+        </Stack>
+      </Stack>
 <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box

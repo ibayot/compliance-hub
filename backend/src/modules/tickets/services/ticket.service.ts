@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { captureTicketUnit } from './ticket-unit-snapshot';
 import {
+  isUUID,
   IsString,
   IsDateString,
   IsNumber,
@@ -1974,6 +1975,24 @@ export class TicketService implements OnModuleInit {
 
   // --- Read ----------------------------------------------------------------
 
+  private async getTicketNeighbors(qb: SelectQueryBuilder<Ticket>, anchorId: string) {
+    if (!isUUID(anchorId)) throw new BadRequestException('Ticket ID must be a UUID.');
+    const anchor = await qb.clone().select('t.id', 'id').addSelect('t.createdAt')
+      .andWhere('t.id = :anchorId', { anchorId }).orderBy().limit(1).getRawOne();
+    if (!anchor) return { olderId: null, newerId: null };
+
+    // Compare timestamps in the database to retain the full precision used by the queue sort.
+    const anchorTime = this.ticketRepo.createQueryBuilder('anchor').select('anchor.createdAt')
+      .where('anchor.id = :anchorId').getQuery();
+    const findNearest = (operator: '<' | '>', order: 'ASC' | 'DESC') => qb.clone()
+      .select('t.id', 'id').addSelect('t.createdAt')
+      .andWhere(`(t.createdAt ${operator} (${anchorTime}) OR
+        (t.createdAt = (${anchorTime}) AND t.id ${operator} :anchorId))`, { anchorId })
+      .orderBy('t.createdAt', order).addOrderBy('t.id', order).limit(1).getRawOne<{ id: string }>();
+    const [older, newer] = await Promise.all([findNearest('<', 'DESC'), findNearest('>', 'ASC')]);
+    return { olderId: older?.id ?? null, newerId: newer?.id ?? null };
+  }
+
   async getTickets(filters: {
     status?: TicketStatus;
     ticketType?: TicketType;
@@ -1999,6 +2018,7 @@ export class TicketService implements OnModuleInit {
     semester?: number;
     search?: string;
     slaState?: ActiveTicketSlaState;
+    aroundTicketId?: string;
   }): Promise<
     | Ticket[]
     | {
@@ -2011,6 +2031,7 @@ export class TicketService implements OnModuleInit {
         pendingSatisfactionCount?: number;
         myTicketsCount?: number;
         escalatedToMeCount?: number;
+        neighbors?: { olderId: string | null; newerId: string | null };
       }
   > {
     const allowedSortColumns: Record<string, string> = {
@@ -2031,6 +2052,7 @@ export class TicketService implements OnModuleInit {
       .leftJoinAndSelect('t.issueTypeConfig', 'issueTypeConfig')
 
       .orderBy(sortBy, sortOrder as 'ASC' | 'DESC')
+      .addOrderBy('t.id', sortOrder)
       .distinct(true);
 
     const isEscalatedQueue = Boolean(filters.escalatedToId);
@@ -2201,6 +2223,11 @@ export class TicketService implements OnModuleInit {
         .andWhere('t.satisfactionSubmittedAt IS NULL');
     }
     if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+
+    if (filters.aroundTicketId !== undefined) {
+      const neighbors = await this.getTicketNeighbors(qb, filters.aroundTicketId);
+      return { neighbors, data: [], total: 0, page: 1, limit: 0, totalPages: 0, statusCounts: {} };
+    }
 
     const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : undefined;
     const limit =

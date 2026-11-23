@@ -1,18 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
   CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
   IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import { apiClient } from '@/lib/api/client';
 
 export interface AuthenticatedImageItem {
@@ -28,6 +30,7 @@ interface AuthenticatedImageGalleryProps {
 }
 
 type LoadedImage = { objectUrl?: string; error?: boolean };
+const zoomLevels = [1, 1.5, 2, 3, 4];
 
 export default function AuthenticatedImageGallery({
   images,
@@ -35,27 +38,28 @@ export default function AuthenticatedImageGallery({
   emptyText,
   onReplace,
 }: AuthenticatedImageGalleryProps) {
-  const [loaded, setLoaded] = useState<Record<string, LoadedImage>>({});
+  const [imageLoad, setImageLoad] = useState<{ key: string; entries: Record<string, LoadedImage> }>();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [zoomIndex, setZoomIndex] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const captionId = useId();
   const imageUrlKey = images.map((image) => image.url).join('\u0000');
+  const loaded = imageLoad?.key === imageUrlKey ? imageLoad.entries : undefined;
   const uniqueUrls = useMemo(
     () => [...new Set(imageUrlKey ? imageUrlKey.split('\u0000') : [])],
     [imageUrlKey],
   );
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     const createdUrls: string[] = [];
 
     Promise.all(
       uniqueUrls.map(async (url) => {
         try {
-          const response = await apiClient.get(url, { responseType: 'blob' });
+          const response = await apiClient.get(url, { responseType: 'blob', signal: controller.signal });
+          if (controller.signal.aborted) return [url, { error: true }] as const;
           const objectUrl = URL.createObjectURL(response.data);
-          if (!active) {
-            URL.revokeObjectURL(objectUrl);
-            return [url, { error: true }] as const;
-          }
           createdUrls.push(objectUrl);
           return [url, { objectUrl }] as const;
         } catch {
@@ -63,18 +67,25 @@ export default function AuthenticatedImageGallery({
         }
       }),
     ).then((entries) => {
-      if (active) setLoaded(Object.fromEntries(entries));
+      if (!controller.signal.aborted) setImageLoad({ key: imageUrlKey, entries: Object.fromEntries(entries) });
     });
 
     return () => {
-      active = false;
+      controller.abort();
       createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [uniqueUrls]);
+  }, [imageUrlKey, uniqueUrls]);
 
   useEffect(() => {
     if (openIndex != null && openIndex >= images.length) setOpenIndex(null);
   }, [images.length, openIndex]);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
+    viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2;
+  }, [openIndex, zoomIndex]);
 
   if (images.length === 0) {
     return emptyText ? (
@@ -85,26 +96,37 @@ export default function AuthenticatedImageGallery({
   }
 
   const move = (offset: number) => {
+    setZoomIndex(0);
     setOpenIndex((current) => {
       if (current == null || images.length === 0) return current;
       return (current + offset + images.length) % images.length;
     });
   };
   const currentImage = openIndex == null ? null : images[openIndex];
-  const currentLoaded = currentImage ? loaded[currentImage.url] : null;
+  const currentLoaded = currentImage ? loaded?.[currentImage.url] : null;
+  const canZoom = !!currentLoaded?.objectUrl;
+  const changeZoom = (offset: number) => {
+    if (canZoom) setZoomIndex((current) => Math.max(0, Math.min(zoomLevels.length - 1, current + offset)));
+  };
+  const zoom = zoomLevels[zoomIndex];
 
   return (
     <>
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
         {images.map((image, index) => {
-          const state = loaded[image.url];
+          const state = loaded?.[image.url];
           return (
             <Box key={`${image.url}-${index}`}>
               <Box
                 component="button"
                 type="button"
                 aria-label={`Open ${image.alt || `image ${index + 1}`}`}
-                onClick={() => state?.objectUrl && setOpenIndex(index)}
+                onClick={() => {
+                  if (state?.objectUrl) {
+                    setZoomIndex(0);
+                    setOpenIndex(index);
+                  }
+                }}
                 sx={{
                   p: 0,
                   border: '1px solid',
@@ -158,87 +180,64 @@ export default function AuthenticatedImageGallery({
       <Dialog
         open={openIndex != null}
         onClose={() => setOpenIndex(null)}
-        maxWidth="lg"
-        fullWidth
+        aria-labelledby={captionId}
+        maxWidth={false}
         onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') move(-1);
-          if (event.key === 'ArrowRight') move(1);
+          if (event.key === '+' || event.key === '=') changeZoom(1);
+          if (event.key === '-') changeZoom(-1);
+          if (event.key === '0') setZoomIndex(0);
+          if (zoom > 1 && event.target === viewportRef.current) return;
+          if (images.length > 1 && event.key === 'ArrowLeft') move(-1);
+          if (images.length > 1 && event.key === 'ArrowRight') move(1);
         }}
-        PaperProps={{ sx: { bgcolor: 'black', borderRadius: 2, position: 'relative' } }}
+        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none', backgroundImage: 'none', m: 1,
+          width: 'min(1100px, calc(100vw - 16px))', maxHeight: 'calc(100dvh - 16px)' } }}
       >
-        <DialogContent
-          sx={{
-            p: 0,
-            minHeight: { xs: 320, sm: 480 },
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-          }}
-        >
-          <IconButton
-            aria-label="Close image viewer"
-            onClick={() => setOpenIndex(null)}
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              zIndex: 2,
-              color: 'white',
-              bgcolor: 'rgba(0,0,0,0.45)',
-            }}
-          >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}
+          sx={{ bgcolor: 'background.paper', color: 'text.primary', borderRadius: 2, pl: 1.5, mb: 1 }}>
+          <Typography id={captionId} component="h2" variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
+            {currentImage?.alt || 'Attachment image'}{images.length > 1 ? ` · ${(openIndex ?? 0) + 1} of ${images.length}` : ''}
+          </Typography>
+          <IconButton aria-label="Close image viewer" onClick={() => setOpenIndex(null)}>
             <CloseIcon />
           </IconButton>
-          {currentLoaded?.objectUrl && currentImage && (
-            <Box
-              component="img"
-              src={currentLoaded.objectUrl}
-              alt={currentImage.alt || `Image ${(openIndex ?? 0) + 1}`}
-              sx={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain', display: 'block' }}
-            />
-          )}
-          {images.length > 1 && (
-            <>
-              <IconButton
-                aria-label="Previous image"
-                onClick={() => move(-1)}
-                sx={{
-                  position: 'absolute',
-                  left: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0,0,0,0.45)',
-                }}
-              >
-                <NavigateBeforeIcon />
-              </IconButton>
-              <IconButton
-                aria-label="Next image"
-                onClick={() => move(1)}
-                sx={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: 'white',
-                  bgcolor: 'rgba(0,0,0,0.45)',
-                }}
-              >
-                <NavigateNextIcon />
-              </IconButton>
-            </>
-          )}
+        </Stack>
+        <DialogContent ref={viewportRef} tabIndex={0} aria-label="Image preview area"
+          sx={{ p: 0, flex: '0 1 auto', height: 'min(70dvh, 780px)', minHeight: 0,
+            overflow: zoom > 1 ? 'auto' : 'hidden', overscrollBehavior: 'contain' }}>
+          <Box sx={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {currentLoaded?.objectUrl && currentImage ? (
+              <Box component="img" src={currentLoaded.objectUrl} alt={currentImage.alt || 'Attachment image'}
+                sx={{ display: 'block', width: '100%', height: '100%', minHeight: 0, objectFit: 'contain', borderRadius: 2 }} />
+            ) : currentLoaded?.error ? (
+              <Typography sx={{ bgcolor: 'background.paper', color: 'text.primary', p: 2, borderRadius: 2 }}>
+                Image could not be loaded.
+              </Typography>
+            ) : <CircularProgress aria-label="Loading image" />}
+          </Box>
         </DialogContent>
-        <DialogActions sx={{ bgcolor: 'black', justifyContent: 'space-between', px: 2 }}>
-          <Typography variant="caption" color="grey.400">
-            {openIndex == null ? '' : `${openIndex + 1} / ${images.length}`}
-          </Typography>
-          <Button onClick={() => setOpenIndex(null)} sx={{ color: 'grey.300' }}>
-            Close
+        <Stack direction="row" justifyContent="center" alignItems="center" sx={{ bgcolor: 'background.paper',
+          color: 'text.primary', borderRadius: 2, mt: 1, alignSelf: 'center' }}>
+          {images.length > 1 && (
+            <Tooltip title="Previous image"><IconButton aria-label="Previous image" onClick={() => move(-1)}>
+              <NavigateBeforeIcon />
+            </IconButton></Tooltip>
+          )}
+          <IconButton aria-label="Zoom out" disabled={!canZoom || zoomIndex === 0} onClick={() => changeZoom(-1)}>
+            <ZoomOutIcon />
+          </IconButton>
+          <Button aria-label={`Reset image zoom, current zoom ${zoom * 100}%`} onClick={() => setZoomIndex(0)} disabled={!canZoom}>
+            {zoom * 100}%
           </Button>
-        </DialogActions>
+          <IconButton aria-label="Zoom in" disabled={!canZoom || zoomIndex === zoomLevels.length - 1} onClick={() => changeZoom(1)}>
+            <ZoomInIcon />
+          </IconButton>
+          {images.length > 1 && (
+            <Tooltip title="Next image"><IconButton aria-label="Next image" onClick={() => move(1)}>
+              <NavigateNextIcon />
+            </IconButton></Tooltip>
+          )}
+        </Stack>
       </Dialog>
     </>
   );

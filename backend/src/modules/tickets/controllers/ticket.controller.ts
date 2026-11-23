@@ -123,6 +123,7 @@ export class TicketController {
     @Query('pendingSatisfaction') pendingSatisfaction?: string,
     @Query('priority') priority?: string,
     @Request() req?: any,
+    @Query('aroundTicketId') aroundTicketId?: string,
   ) {
     const allowedSlaStates = new Set<ActiveTicketSlaState>(['overdue', 'nearing_sla', 'on_track']);
     if (slaState && !allowedSlaStates.has(slaState as ActiveTicketSlaState)) {
@@ -166,6 +167,7 @@ export class TicketController {
       semester: semester ? Number(semester) : undefined,
       search,
       slaState: slaState as ActiveTicketSlaState | undefined,
+      aroundTicketId,
       viewerId,
       viewerRole: req?.user?.role,
       page: page ? Number(page) : undefined,
@@ -195,6 +197,7 @@ export class TicketController {
     @Query('search') search?: string,
     @Query('proxyCreatedByMe') proxyCreatedByMe?: string,
     @Request() req?: any,
+    @Query('aroundTicketId') aroundTicketId?: string,
   ) {
     if (req?.user?.role === UserRole.USER) {
       throw new ForbiddenException('End User accounts do not have an assigned-ticket queue.');
@@ -212,6 +215,7 @@ export class TicketController {
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
     return this.ticketService.getTickets({
       assignedOnly: true,
+      aroundTicketId,
       viewerId,
       viewerRole: req?.user?.role,
       status,
@@ -248,6 +252,7 @@ export class TicketController {
     @Query('pendingSatisfaction') pendingSatisfaction?: string,
     @Request() req?: any,
     @Query('proxyCreatedByMe') proxyCreatedByMe?: string,
+    @Query('aroundTicketId') aroundTicketId?: string,
   ) {
     if (
       date &&
@@ -262,6 +267,7 @@ export class TicketController {
     const viewerId = Number(req?.user?.id ?? req?.user?.userId);
     return this.ticketService.getTickets({
       requestedOnly: proxyCreatedByMe !== 'true' && proxyCreatedByMe !== '1',
+      aroundTicketId,
       proxyCreatedByMe: proxyCreatedByMe === 'true' || proxyCreatedByMe === '1',
       viewerId,
       viewerRole: req?.user?.role,

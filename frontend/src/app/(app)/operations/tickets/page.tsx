@@ -90,6 +90,8 @@ import {
   TicketEscalation,
   RatingInvitationRecipient,
   TicketReadOptions,
+  TicketDetailListState,
+  TicketQueueFilters,
 } from '@/app/api/references';
 import TicketImageDropzone from '@/components/TicketImageDropzone';
 import TicketCancelButton from '@/components/TicketCancelButton';
@@ -136,7 +138,6 @@ interface TicketListPosition {
 }
 
 const ticketListPositions = new Map<string, TicketListPosition>();
-const ticketDetailListState = { openedFromTicketList: true };
 const todayInManila = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
 const toDateTimeLocalValue = (value?: string | null) => {
@@ -637,6 +638,34 @@ export default function TicketsPage({
   )
     ? (selectedTab as TicketStatus)
     : undefined;
+  const queueFilters = React.useMemo<TicketQueueFilters>(() => {
+    const toRate = !restrictedAssignedOnly && selectedTab === 'to_rate';
+    const filterByDate = !toRate && filterPeriodMode === 'day';
+    return {
+      status: selectedStatus || (!restrictedAssignedOnly ? (filterStatus as TicketStatus) || undefined : undefined),
+      ticketType: (filterType as TicketType) || undefined,
+      priority: filterPriority || undefined,
+      date: filterByDate ? filterDate : undefined,
+      includeCarryover: filterByDate,
+      year: !toRate && filterPeriodMode !== 'day' ? filterYear || undefined : undefined,
+      month: !toRate && filterPeriodMode === 'month' ? filterMonth || undefined : undefined,
+      quarter: !toRate && filterPeriodMode === 'quarter' ? filterQuarter || undefined : undefined,
+      semester: !toRate && filterPeriodMode === 'semester' ? filterSemester || undefined : undefined,
+      pendingSatisfaction: toRate,
+      proxyCreatedByMe: selectedTab === 'proxy',
+      slaState: filterSla || undefined,
+      assignedToMe: showMyTickets && !showEscalatedToMe,
+      escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
+      search: searchQuery,
+    };
+  }, [restrictedAssignedOnly, selectedStatus, selectedTab, filterStatus, filterType, filterPriority, filterDate,
+    filterPeriodMode, filterYear, filterMonth, filterQuarter, filterSemester, filterSla, showMyTickets,
+    showEscalatedToMe, canViewEscalatedQueue, searchQuery]);
+  const ticketDetailListState: TicketDetailListState = {
+    openedFromTicketList: true,
+    viewerId: Number(user?.id),
+    ...(showEscalations ? {} : { scope: ticketListViewScope, filters: queueFilters }),
+  };
   const allCount = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
   const toRateTickets = frontendFilteredTickets.filter(
@@ -913,86 +942,9 @@ export default function TicketsPage({
       });
     } else setRequestedCountsError(false);
     try {
-      const data = await (personalRequestedOnly
-          ? ticketsApi.getMyRequested({
-              status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-              ticketType: (filterType as TicketType) || undefined,
-              priority: filterPriority || undefined,
-              date:
-                filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-              includeCarryover: filterPeriodMode === 'day' && selectedTab !== 'to_rate',
-              year:
-                filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                  ? Number(filterYear) || undefined
-                  : undefined,
-              month:
-                filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                  ? Number(filterMonth) || undefined
-                  : undefined,
-              quarter:
-                filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                  ? Number(filterQuarter) || undefined
-                  : undefined,
-              semester:
-                filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                  ? Number(filterSemester) || undefined
-                  : undefined,
-              pendingSatisfaction: selectedTab === 'to_rate',
-              proxyCreatedByMe: selectedTab === 'proxy',
-              search: searchQuery,
-              page,
-              limit: TICKETS_PAGE_SIZE,
-            }, { signal: controller.signal })
-          : restrictedAssignedOnly
-            ? ticketsApi.getMyAssigned({
-                status: selectedStatus,
-                ticketType: (filterType as TicketType) || undefined,
-                priority: filterPriority || undefined,
-                date: filterPeriodMode === 'day' ? filterDate : undefined,
-                includeCarryover: filterPeriodMode === 'day',
-                year: filterPeriodMode !== 'day' ? Number(filterYear) || undefined : undefined,
-                month: filterPeriodMode === 'month' ? Number(filterMonth) || undefined : undefined,
-                quarter:
-                  filterPeriodMode === 'quarter' ? Number(filterQuarter) || undefined : undefined,
-                semester:
-                  filterPeriodMode === 'semester' ? Number(filterSemester) || undefined : undefined,
-                search: searchQuery,
-                proxyCreatedByMe: selectedTab === 'proxy',
-                page,
-                limit: TICKETS_PAGE_SIZE,
-              }, { signal: controller.signal })
-            : ticketsApi.getAll({
-                status: selectedStatus || (filterStatus as TicketStatus) || undefined,
-                ticketType: (filterType as TicketType) || undefined,
-                priority: filterPriority || undefined,
-                date:
-                  filterPeriodMode === 'day' && selectedTab !== 'to_rate' ? filterDate : undefined,
-                includeCarryover: filterPeriodMode === 'day',
-                year:
-                  filterPeriodMode !== 'day' && selectedTab !== 'to_rate'
-                    ? filterYear || undefined
-                    : undefined,
-                month:
-                  filterPeriodMode === 'month' && selectedTab !== 'to_rate'
-                    ? filterMonth || undefined
-                    : undefined,
-                quarter:
-                  filterPeriodMode === 'quarter' && selectedTab !== 'to_rate'
-                    ? filterQuarter || undefined
-                    : undefined,
-                semester:
-                  filterPeriodMode === 'semester' && selectedTab !== 'to_rate'
-                    ? filterSemester || undefined
-                    : undefined,
-                slaState: filterSla || undefined,
-                assignedToMe: showMyTickets && !showEscalatedToMe,
-                proxyCreatedByMe: selectedTab === 'proxy',
-                pendingSatisfaction: selectedTab === 'to_rate',
-                escalatedToMe: showEscalatedToMe && canViewEscalatedQueue,
-                search: searchQuery,
-                page,
-                limit: TICKETS_PAGE_SIZE,
-              }, { signal: controller.signal }));
+      const data = await ticketsApi.getQueue(ticketListViewScope, {
+        ...queueFilters, page, limit: TICKETS_PAGE_SIZE,
+      }, { signal: controller.signal });
       if (requestId !== ticketRequestRef.current || controller.signal.aborted) return;
       setTickets(data.data);
       setTotalPages(data.totalPages);
@@ -1019,11 +971,8 @@ export default function TicketsPage({
         }
       }
     }
-  }, [filtersHydrated, personalRequestedOnly, restrictedAssignedOnly, selectedStatus,
-    filterStatus, filterType, filterPriority, filterDate, filterPeriodMode, selectedTab,
-    filterYear, filterMonth, filterQuarter, filterSemester, filterSla, showMyTickets,
-    showEscalatedToMe, canViewEscalatedQueue, canManageAll, isFocalTech, searchQuery, page, user?.id, user?.role,
-    fetchMyRequestedStatusCounts]);
+  }, [filtersHydrated, ticketListViewScope, queueFilters, personalRequestedOnly, selectedTab, page,
+    user?.id, user?.role, fetchMyRequestedStatusCounts]);
 
   useEffect(() => {
     void fetchTickets();
