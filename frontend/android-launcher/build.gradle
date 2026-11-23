@@ -7,8 +7,6 @@ plugins {
 
 def origin = providers.environmentVariable('HUB_ANDROID_ORIGIN').get()
 def webManifest = new JsonSlurper().parse(file('../public/manifest.webmanifest'))
-def appVersion = new JsonSlurper().parse(file('../package.json')).version
-def versionParts = appVersion.tokenize('.').collect { it.toInteger() }
 def assetStatements = JsonOutput.toJson([[
     relation: ['delegate_permission/common.handle_all_urls'],
     target: [namespace: 'web', site: origin]
@@ -34,8 +32,9 @@ android {
         applicationId = 'com.dswd.compliancehub.launcher'
         minSdk = 24
         targetSdk = 36
-        versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
-        versionName = appVersion
+        // The downloadable launcher can be updated independently of the web app.
+        versionCode = 10108
+        versionName = '1.1.7.1'
         resValue 'string', 'hub_launch_url', origin + webManifest.start_url
         resValue 'string', 'hub_asset_statements', assetStatements
     }

@@ -215,7 +215,10 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void openHub() {
-        startActivity(new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class));
+        Intent launch = new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class);
+        // Browser Helper otherwise starts a second launcher while the first is still alive.
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(launch);
         finish();
     }
 
