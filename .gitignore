@@ -116,7 +116,9 @@ docker-compose.staging.yml
 /docker-compose.override.yml
 /frontend/dist-phone-preview/
 /frontend/android-launcher/build/
-/frontend/public/downloads/Compliance-Hub.apk
+/frontend/public/downloads/FO2-iCare.apk
+**/*service-account*.json
+**/*firebase-adminsdk*.json
 
 # Tests and Playwright runner files are local-only and must not be committed.
 **/*.spec.ts

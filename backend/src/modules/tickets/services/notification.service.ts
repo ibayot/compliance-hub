@@ -10,6 +10,7 @@ import { User } from '../../shared/entities';
 import { TicketNotification } from '../entities/ticket-notification.entity';
 import { SseService } from './sse.service';
 import { WebPushService } from './web-push.service';
+import { FcmService } from './fcm.service';
 
 export interface CreateAppNotificationInput {
   ticketId?: string | null;
@@ -30,6 +31,7 @@ export class NotificationService implements OnModuleInit {
     private readonly sseService: SseService,
     private readonly eventBus: EventBusService,
     @Optional() private readonly webPushService?: WebPushService,
+    @Optional() private readonly fcmService?: FcmService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -82,10 +84,24 @@ export class NotificationService implements OnModuleInit {
       this.sseService.emitNotificationCreated(notification.userId),
     );
     // Push is best-effort: never delay or fail the in-app notification/SSE path.
-    if (this.webPushService) {
-      void Promise.all(notifications.map((notification) =>
-        this.webPushService!.sendForNotification(notification),
-      )).catch(() => this.logger.warn('One or more browser push alerts could not be sent.'));
+    if (this.webPushService || this.fcmService) {
+      void Promise.all(notifications.map(async notification => {
+        let fcmAcceptedDeviceIds = new Set<string>();
+        if (this.fcmService) {
+          try {
+            fcmAcceptedDeviceIds = await this.fcmService.sendForNotification(notification);
+          } catch {
+            this.logger.warn('An Android app alert could not be sent.');
+          }
+        }
+        if (this.webPushService) {
+          try {
+            await this.webPushService.sendForNotification(notification, fcmAcceptedDeviceIds);
+          } catch {
+            this.logger.warn('A browser push alert could not be sent.');
+          }
+        }
+      })).catch(() => this.logger.warn('One or more device alerts could not be sent.'));
     }
     this.logger.log(`Created ${notifications.length} app notification(s).`);
   }

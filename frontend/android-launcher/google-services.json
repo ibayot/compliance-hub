@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "468902046531",
+    "project_id": "fo2-icare",
+    "storage_bucket": "fo2-icare.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:468902046531:android:25fcf45b386249802a5df6",
+        "android_client_info": {
+          "package_name": "com.dswd.fo2icare.launcher"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDkrJbwVHB03tsNFUupOBSKH_O1h0_GDeA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

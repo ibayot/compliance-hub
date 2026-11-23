@@ -18,6 +18,7 @@ import { WebPushSubscription } from '../entities/web-push-subscription.entity';
 export interface BrowserPushSubscriptionInput {
   endpoint: string;
   keys: { p256dh: string; auth: string };
+  deviceId?: string;
 }
 
 const PUSH_SERVICE_HOSTS = new Set([
@@ -120,6 +121,10 @@ export class WebPushService {
       !/^[A-Za-z0-9_-]+$/.test(input.keys.p256dh) || !/^[A-Za-z0-9_-]+$/.test(input.keys.auth)) {
       throw new BadRequestException('A valid browser push subscription is required.');
     }
+    if (input.deviceId !== undefined && (typeof input.deviceId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.deviceId))) {
+      throw new BadRequestException('The browser push device identifier is invalid.');
+    }
     let endpoint: URL;
     try { endpoint = new URL(input.endpoint); }
     catch { throw new BadRequestException('The browser push endpoint is invalid.'); }
@@ -203,13 +208,21 @@ export class WebPushService {
     return this.deliver(subscription, config, { test: true, targetPath: '/dashboard', unreadCount });
   }
 
-  private async deliver(record: WebPushSubscription, config: PushConfiguration, payload: object): Promise<PushResult> {
+  private async deliver(
+    record: WebPushSubscription,
+    config: PushConfiguration,
+    payload: object,
+    fcmAcceptedDeviceIds: ReadonlySet<string> = new Set(),
+  ): Promise<PushResult> {
     let subscription: BrowserPushSubscriptionInput;
     try { subscription = this.decryptSubscription(record.encryptedSubscription, config.encryptionKey); }
     catch {
       await this.subscriptions.delete({ id: record.id });
       this.logger.warn('Removed an unreadable browser push subscription.');
       return { outcome: 'expired' };
+    }
+    if (subscription.deviceId && fcmAcceptedDeviceIds.has(subscription.deviceId)) {
+      return { outcome: 'not-enabled' };
     }
     try {
       await webPush.sendNotification(subscription, JSON.stringify(payload), {
@@ -245,7 +258,7 @@ export class WebPushService {
     return 'connection';
   }
 
-  async sendForNotification(notification: TicketNotification): Promise<void> {
+  async sendForNotification(notification: TicketNotification, fcmAcceptedDeviceIds: ReadonlySet<string> = new Set()): Promise<void> {
     const config = this.configuration();
     if (!config) return;
     const records = await this.subscriptions.find({ where: { userId: notification.userId } });
@@ -264,6 +277,6 @@ export class WebPushService {
     const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
     await Promise.all(records.map(record => this.deliver(record, config, {
       title: 'FO2 iCare', body: 'You have a new notification.', targetPath, unreadCount,
-    })));
+    }, fcmAcceptedDeviceIds)));
   }
 }

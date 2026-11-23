@@ -23,6 +23,7 @@ Focused platform context avoids importing unrelated language, framework, or runt
 - [Mobile Lifecycle and Permissions](lifecycle-permission-pattern.md) — `PLAT-MOB-LIFE`
 - [Mobile Offline and Synchronization](offline-sync-pattern.md) — `PLAT-MOB-SYNC`
 - [Mobile Navigation and Distribution](navigation-distribution-pattern.md) — `PLAT-MOB-DIST`
+- [Native Android FCM Notifications](native-fcm-notifications-pattern.md) — `PLAT-MOB-FCM`
 
 ## Implementation
 

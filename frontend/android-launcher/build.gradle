@@ -3,6 +3,7 @@ import groovy.json.JsonSlurper
 
 plugins {
     id 'com.android.application' version '8.13.0'
+    id 'com.google.gms.google-services' version '4.6.0'
 }
 
 def origin = providers.environmentVariable('HUB_ANDROID_ORIGIN').get()
@@ -25,19 +26,22 @@ def copyRootCertificate = tasks.register('copyRootCertificate', Copy) {
 }
 
 android {
-    namespace = 'com.dswd.compliancehub.launcher'
+    namespace = 'com.dswd.fo2icare.launcher'
     compileSdk = 36
 
     defaultConfig {
-        applicationId = 'com.dswd.compliancehub.launcher'
+        applicationId = 'com.dswd.fo2icare.launcher'
         minSdk = 24
         targetSdk = 36
         // The downloadable launcher can be updated independently of the web app.
-        versionCode = 10111
-        versionName = '1.1.7.4'
+        versionCode = 10112
+        versionName = '1.1.8'
         resValue 'string', 'hub_app_name', webManifest.short_name
         resValue 'string', 'hub_launch_url', origin + webManifest.start_url
         resValue 'string', 'hub_asset_statements', assetStatements
+        resValue 'string', 'fo2_icare_notification_channel_id', 'fo2_icare_alerts'
+        resValue 'string', 'fo2_icare_notification_channel_name', 'FO2 iCare Alerts'
+        resValue 'color', 'fo2_icare_notification_color', '#147A76'
     }
 
     sourceSets.main.res.srcDir(generatedResources)
@@ -54,4 +58,7 @@ tasks.named('preBuild').configure { dependsOn(copyLauncherIcon, copyRootCertific
 
 dependencies {
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
+    implementation platform('com.google.firebase:firebase-bom:35.2.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-installations'
 }

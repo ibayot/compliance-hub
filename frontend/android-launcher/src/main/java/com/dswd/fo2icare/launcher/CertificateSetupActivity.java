@@ -1,6 +1,8 @@
-package com.dswd.compliancehub.launcher;
+package com.dswd.fo2icare.launcher;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -11,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.content.pm.PackageManager;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -20,6 +23,11 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.util.Base64;
+
+import com.google.firebase.installations.FirebaseInstallations;
+
+import org.json.JSONObject;
 
 import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsClient;
@@ -37,6 +45,8 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Enumeration;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Gives users an explicit, offline setup path for the internal HTTPS root CA.
@@ -44,22 +54,28 @@ import java.util.Enumeration;
  */
 public final class CertificateSetupActivity extends Activity {
     private static final int CREATE_CERTIFICATE_REQUEST = 401;
+    private static final int POST_NOTIFICATIONS_REQUEST = 402;
     private static final long VERIFICATION_TIMEOUT_MS = 4_000;
     private static final long VERIFICATION_RETRY_DELAY_MS = 750;
     private static final String CERTIFICATE_SAVED = "certificateSaved";
     private static final String PREFERENCES = "certificate_setup";
     private static final String LAST_BROWSER_CHECK = "last_browser_check";
     private static final String CERTIFICATE_SEARCH = "Certificate";
+    private static final String DEVICE_ID = "fcm_device_id";
+    private static final String NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked";
+    private static final String NATIVE_FCM_FRAGMENT_KEY = "fo2_fcm";
     private final Handler browserHandler = new Handler(Looper.getMainLooper());
     private CustomTabsServiceConnection browserConnection;
     private boolean certificateSaved;
     private boolean resumed;
+    private String pendingBrowserCheck = "";
     private TextView setupStatus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         certificateSaved = savedInstanceState != null && savedInstanceState.getBoolean(CERTIFICATE_SAVED);
+        FcmMessageService.ensureNotificationChannel(this);
     }
 
     @Override
@@ -358,13 +374,85 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void openHub(String browserCheck) {
+        pendingBrowserCheck = browserCheck;
         if (!isRootCaTrusted()) {
             showSetupScreen();
             return;
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                && !getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_ASKED, false)) {
+            getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit()
+                    .putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply();
+            new AlertDialog.Builder(this)
+                    .setTitle("Allow FO2 iCare alerts")
+                    .setMessage("Allow notifications so FO2 iCare can alert you when a ticket or other app notification arrives. You can change this later in Android Settings.")
+                    .setPositiveButton("Allow alerts", (dialog, which) ->
+                            requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, POST_NOTIFICATIONS_REQUEST))
+                    .setNegativeButton("Continue without alerts", (dialog, which) -> openHubWithFcm(browserCheck))
+                    .setOnCancelListener(dialog -> openHubWithFcm(browserCheck))
+                    .show();
+            return;
+        }
+        openHubWithFcm(browserCheck);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == POST_NOTIFICATIONS_REQUEST) {
+            openHubWithFcm(pendingBrowserCheck);
+        }
+    }
+
+    private void openHubWithFcm(String browserCheck) {
+        String deviceId = getOrCreateDeviceId();
+        boolean notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        AtomicBoolean launched = new AtomicBoolean(false);
+        Runnable launchWithoutFid = () -> {
+            if (launched.compareAndSet(false, true)) launchHubWithHandoff(browserCheck, deviceId, null, notificationsGranted);
+        };
+        try {
+            FirebaseInstallations.getInstance().getId().addOnCompleteListener(task -> {
+                if (launched.compareAndSet(false, true)) {
+                    String fid = task.isSuccessful() ? task.getResult() : null;
+                    launchHubWithHandoff(browserCheck, deviceId, fid, notificationsGranted);
+                }
+            });
+            browserHandler.postDelayed(launchWithoutFid, 5_000);
+        } catch (RuntimeException error) {
+            launchWithoutFid.run();
+        }
+    }
+
+    private String getOrCreateDeviceId() {
+        android.content.SharedPreferences preferences = getSharedPreferences(PREFERENCES, MODE_PRIVATE);
+        String current = preferences.getString(DEVICE_ID, null);
+        if (current != null && !current.isEmpty()) return current;
+        String created = UUID.randomUUID().toString();
+        preferences.edit().putString(DEVICE_ID, created).apply();
+        return created;
+    }
+
+    private void launchHubWithHandoff(String browserCheck, String deviceId, String fid, boolean notificationsGranted) {
+        if (isFinishing()) return;
         Intent launch = new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class);
         // Browser Helper otherwise starts a second launcher while the first is still alive.
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        JSONObject handoff = new JSONObject();
+        try {
+            handoff.put("version", 1);
+            handoff.put("deviceId", deviceId);
+            handoff.put("notificationsGranted", notificationsGranted);
+            if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);
+            String encoded = Base64.encodeToString(handoff.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+            Uri handoffUrl = getLaunchUrl().buildUpon().encodedFragment(NATIVE_FCM_FRAGMENT_KEY + "=" + encoded).build();
+            launch.setData(handoffUrl);
+        } catch (Exception error) {
+            // Launch the app normally if an optional push identifier cannot be encoded.
+        }
         startActivity(launch);
         // This only avoids repeated warm-ups. The CA and the TWA association are still checked on every launch.
         getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putString(LAST_BROWSER_CHECK, browserCheck).apply();

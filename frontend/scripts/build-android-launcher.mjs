@@ -8,8 +8,8 @@ const frontend = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const project = join(frontend, 'android-launcher');
 const distribution = join(frontend, '..', 'output', 'android-launcher');
 const rootCaPath = join(frontend, '..', 'backend', 'assets', 'compliance-hub-root-ca.crt');
-const packageName = 'com.dswd.compliancehub.launcher';
-const apkName = 'Compliance-Hub.apk';
+const packageName = 'com.dswd.fo2icare.launcher';
+const apkName = 'FO2-iCare.apk';
 const stageAssets = process.argv[2] === '--stage-web-assets';
 if (process.argv.slice(2).length !== Number(stageAssets)) {
   throw new Error('Usage: node frontend/scripts/build-android-launcher.mjs [--stage-web-assets]');

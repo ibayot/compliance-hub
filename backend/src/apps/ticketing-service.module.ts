@@ -29,6 +29,8 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
         DB_SYNCHRONIZE: Joi.boolean().default(false),
         JWT_SECRET: Joi.string().min(16).required(),
         SERVER_ADMIN_TICKETS_API_KEY: Joi.string().min(32).max(512).allow('').optional(),
+        FCM_PROJECT_ID: Joi.string().allow('').optional(),
+        FCM_SERVICE_ACCOUNT_PATH: Joi.string().allow('').optional(),
         CORS_ORIGIN: Joi.string().required(),
         AUDIT_DB_DATABASE: Joi.string().pattern(/^[A-Za-z0-9_]+$/).required(),
         AUTH_ACCESS_COOKIE_NAME: Joi.string().pattern(/^[A-Za-z0-9_-]+$/).invalid('auth_access').required(),

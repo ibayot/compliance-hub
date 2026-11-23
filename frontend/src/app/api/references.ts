@@ -2050,6 +2050,19 @@ export interface BrowserPushConfig {
   configurationIssue?: 'missing-settings' | 'encryption-or-subject' | 'signing-key-pair' | 'proxy-url';
 }
 
+export interface FcmPushConfig {
+  enabled: boolean;
+  configurationIssue?: 'missing-project-id' | 'missing-service-account' | 'invalid-service-account' | 'project-mismatch' | 'missing-encryption-key';
+}
+
+export interface FcmDeviceStatus {
+  enabled: boolean;
+  registered: boolean;
+  configurationIssue?: FcmPushConfig['configurationIssue'];
+}
+
+export type BrowserPushSubscriptionPayload = PushSubscriptionJSON & { deviceId?: string };
+
 export type BrowserPushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
 type BrowserPushTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
   | { outcome: 'failed'; failure?: BrowserPushFailure; providerStatus?: number };
@@ -2079,7 +2092,7 @@ export const notificationsApi = {
     const response = await apiClient.get('/notifications/push-config');
     return response.data;
   },
-  savePushSubscription: async (subscription: PushSubscriptionJSON): Promise<{ enabled: true }> => {
+  savePushSubscription: async (subscription: BrowserPushSubscriptionPayload): Promise<{ enabled: true }> => {
     const response = await apiClient.post('/notifications/push-subscription', subscription);
     return response.data;
   },
@@ -2089,6 +2102,26 @@ export const notificationsApi = {
   },
   removePushSubscription: async (endpoint: string): Promise<{ removed: boolean }> => {
     const response = await apiClient.delete('/notifications/push-subscription', { data: { endpoint } });
+    return response.data;
+  },
+  getFcmConfig: async (): Promise<FcmPushConfig> => {
+    const response = await apiClient.get('/notifications/fcm-config');
+    return response.data;
+  },
+  getFcmDeviceStatus: async (deviceId: string): Promise<FcmDeviceStatus> => {
+    const response = await apiClient.get('/notifications/fcm-subscription', { params: { deviceId } });
+    return response.data;
+  },
+  saveFcmDevice: async (input: { deviceId: string; fid: string }): Promise<{ enabled: true }> => {
+    const response = await apiClient.post('/notifications/fcm-subscription', input);
+    return response.data;
+  },
+  sendFcmTestAlert: async (deviceId: string): Promise<BrowserPushTestResult> => {
+    const response = await apiClient.post('/notifications/fcm-test', { deviceId });
+    return response.data;
+  },
+  removeFcmDevice: async (deviceId: string): Promise<{ removed: boolean }> => {
+    const response = await apiClient.delete('/notifications/fcm-subscription', { data: { deviceId } });
     return response.data;
   },
   unsubscribeCurrentPushSubscription: async (): Promise<void> => {

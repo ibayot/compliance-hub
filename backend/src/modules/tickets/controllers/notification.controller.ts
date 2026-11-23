@@ -13,6 +13,7 @@ import {
   UseGuards,
   Optional,
   UnauthorizedException,
+  Query,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -21,6 +22,7 @@ import { TicketNotification } from '../entities/ticket-notification.entity';
 import { ApiTags } from '@nestjs/swagger';
 import { SseService } from '../services/sse.service';
 import { BrowserPushSubscriptionInput, WebPushService } from '../services/web-push.service';
+import { FcmDeviceInput, FcmService } from '../services/fcm.service';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -33,6 +35,7 @@ export class NotificationController {
     private readonly notificationRepo: Repository<TicketNotification>,
     @Optional() private readonly webPushService?: WebPushService,
     @Optional() private readonly sseService?: SseService,
+    @Optional() private readonly fcmService?: FcmService,
   ) {}
 
   private userId(req: any): number {
@@ -63,6 +66,36 @@ export class NotificationController {
   async sendTestAlert(@Request() req: any, @Body() body: { endpoint?: string }) {
     if (!this.webPushService) throw new ServiceUnavailableException('Browser notifications are unavailable.');
     return this.webPushService.sendTestAlert(this.userId(req), body?.endpoint ?? '');
+  }
+
+  @Get('fcm-config')
+  getFcmConfig() {
+    return this.fcmService?.getPublicConfig() ?? { enabled: false, configurationIssue: 'missing-service-account' };
+  }
+
+  @Get('fcm-subscription')
+  async getFcmSubscription(@Request() req: any, @Query('deviceId') deviceId: string) {
+    if (!this.fcmService) throw new ServiceUnavailableException('Android app alerts are unavailable.');
+    return this.fcmService.getDeviceStatus(this.userId(req), deviceId ?? '');
+  }
+
+  @Post('fcm-subscription')
+  async saveFcmSubscription(@Request() req: any, @Body() body: FcmDeviceInput) {
+    if (!this.fcmService) throw new ServiceUnavailableException('Android app alerts are unavailable.');
+    return this.fcmService.saveDevice(this.userId(req), body);
+  }
+
+  @Delete('fcm-subscription')
+  async removeFcmSubscription(@Request() req: any, @Body() body: { deviceId?: string }) {
+    if (!this.fcmService) return { removed: false };
+    return this.fcmService.removeDevice(this.userId(req), body?.deviceId ?? '');
+  }
+
+  @Post('fcm-test')
+  @HttpCode(200)
+  async sendFcmTestAlert(@Request() req: any, @Body() body: { deviceId?: string }) {
+    if (!this.fcmService) throw new ServiceUnavailableException('Android app alerts are unavailable.');
+    return this.fcmService.sendTestAlert(this.userId(req), body?.deviceId ?? '');
   }
 
   @Get('summary')

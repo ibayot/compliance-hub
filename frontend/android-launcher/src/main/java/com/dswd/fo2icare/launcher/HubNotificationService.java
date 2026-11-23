@@ -1,4 +1,4 @@
-package com.dswd.compliancehub.launcher;
+package com.dswd.fo2icare.launcher;
 
 import android.Manifest;
 import android.app.Notification;

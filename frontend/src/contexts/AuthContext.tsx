@@ -40,6 +40,7 @@ import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
 import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
 import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, readSessionActivity, recoveryGeneration, rememberSessionActivity } from '@/lib/auth/session-recovery';
 import { notificationsApi } from '@/app/api/references';
+import { getNativeFcmHandoff } from '@/lib/native-fcm-handoff';
 import { clearExpiredDestination, signInDestination } from '@/lib/auth/sign-in-destination';
 
 export { tokenStore } from '@/lib/api/client';
@@ -248,8 +249,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async (reason?: string) => {
     if (!Capacitor.isNativePlatform()) {
+      const nativeFcm = getNativeFcmHandoff();
       await Promise.race([
-        notificationsApi.unsubscribeCurrentPushSubscription().catch(() => undefined),
+        Promise.all([
+          notificationsApi.unsubscribeCurrentPushSubscription().catch(() => undefined),
+          nativeFcm?.deviceId
+            ? notificationsApi.removeFcmDevice(nativeFcm.deviceId).catch(() => undefined)
+            : Promise.resolve(undefined),
+        ]).then(() => undefined),
         new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
       ]);
     }

@@ -33,7 +33,7 @@ Do not read every file or every index. The [catalog](INDEX.md) is for discovery 
 | Docker or Compose | [container catalog](containers/INDEX.md) | Exact build/runtime/network/volume/health pattern, secrets |
 | Environment, deployment, recovery | [configuration](infrastructure/configuration-pattern.md), [operations catalog](operations/INDEX.md) | Container pack, deployment, backup, rollback |
 | Web/mobile/desktop behavior | [platform catalog](platforms/INDEX.md) | Profile-enabled platform and framework only |
-| Browser push, background alerts, or app badges | [Web Push pattern](platforms/web/web-push-notifications-pattern.md) | Compliance Hub notification contract, current account-approval rule, endpoint privacy, schema workflow, secure-context/platform limits |
+| Browser push, Android app alerts, background notifications, or app badges | [Web Push pattern](platforms/web/web-push-notifications-pattern.md), [Android FCM pattern](platforms/mobile/native-fcm-notifications-pattern.md) | Compliance Hub notification contract, current account-approval rule, endpoint privacy, schema workflow, secure-context/platform limits |
 | Audit or consistency review | [consistency audit](quality/consistency-audit-pattern.md), [implementation map](inventory/canonical-implementations.md) | Exact scoped patterns, coverage, evidence template |
 | Feature or bug fix | [feature workflow](workflows/feature-change-workflow.md), [validation matrix](quality/validation-matrix.md) | Applicable routes above |
 | Diagnose, reproduce or investigate a failure | [debugging](workflows/debugging-workflow.md), [testing](quality/testing-pattern.md) | Exact failing boundary, safe diagnostic fields and environment authority; diagnosis alone does not grant a fix |

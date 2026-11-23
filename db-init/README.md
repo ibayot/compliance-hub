@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.8 (from 1.1.7)
+
+Apply `20261123-add-fcm-device-registrations-ticketing.sql` to the verified Ticketing database and `20261123-add-application-changelog-v1.1.8-users.sql` to the verified Users database. Both are additive and repeatable. The local Docker database must be updated during implementation; staging and production remain operator-managed. These SQL files are ignored by Git and must be copied separately. Configure the Ticketing Firebase service-account mount and FCM environment variables before expecting Android app alerts. Rebuild frontend, Gateway, Users, Ticketing and Compliance together, and distribute the signed APK separately after deploying the new `assetlinks.json`. The package changed to `com.dswd.fo2icare.launcher`, so this is a separate Android installation identity.
+
 ## For release 1.1.7 (from 1.1.6)
 
 Rebuild and recreate the matching frontend, Gateway, Users, Ticketing and Compliance images. Verify that the frontend manifest and Gateway health show `1.1.7`. The patch uses the existing schema. After staging validation, select and verify the Users database and apply the environment-managed `20261118-add-application-changelog-v1.1.7-users.sql`. Applying it again preserves the publication timestamp and acknowledgments. For rollout validation, compare timestamped statement deltas by schema and digest and have the database administrator measure audit bytes in the same windows.
