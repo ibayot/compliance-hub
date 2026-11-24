@@ -1471,6 +1471,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android prevented the direct launcher update.'}
                   {nativeFcmHandoff.badgeRequest === 'STANDARD' && ' Using standard Android badging.'}
                   {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
+                  {nativeFcmHandoff.previewAlert === 'PREVIEW' && ' The active alert contains a preview.'}
+                  {nativeFcmHandoff.previewAlert === 'GENERIC' && ' The active alert contains generic text.'}
                 </Typography>
               )}
               {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>

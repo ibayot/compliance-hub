@@ -304,7 +304,9 @@ export class WebPushService {
 
     const unreadCount = kind ? 0 : await this.notifications.count({ where: { userId, isRead: false } });
     await Promise.all(records.map(record => {
-      const payload = kind ? { targetPath, kind } : {
+      const payload = kind ? {
+        targetPath, kind, body: record.showPreviews ? safeNotificationPreview(kind) : undefined,
+      } : {
         title: 'FO2 iCare',
         body: record.showPreviews && notification
           ? safeNotificationPreview(notification.eventType)

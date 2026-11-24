@@ -13,6 +13,7 @@ import android.os.Bundle;
 /** Best-effort badge updates for launchers with a separate unread-count interface. */
 final class LauncherBadge {
     enum Result { STANDARD, REQUESTED, BLOCKED }
+    private static final String VIVO_BADGE_PERMISSION = "com.vivo.notification.permission.BADGE_ICON";
 
     private LauncherBadge() {}
 
@@ -37,6 +38,10 @@ final class LauncherBadge {
                 case "com.vivo.launcher":
                 case "com.bbk.launcher2":
                 case "com.bbk.launcher3":
+                    // A manifest declaration does not establish that the phone grants this permission.
+                    if (context.checkSelfPermission(VIVO_BADGE_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+                        return Result.BLOCKED;
+                    }
                     Intent update = new Intent("launcher.action.CHANGE_APPLICATION_NOTIFICATION_NUM");
                     update.setPackage(launcher);
                     update.putExtra("packageName", app.getPackageName());

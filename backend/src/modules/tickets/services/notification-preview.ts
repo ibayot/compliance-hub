@@ -26,6 +26,10 @@ const SAFE_NOTIFICATION_PREVIEWS: Readonly<Record<string, string>> = {
   escalation_focal_removed: 'Your escalation assignment was updated.',
   ticket_rated: 'Feedback was submitted for a ticket.',
   sla_alert_75: 'A ticket is nearing its service target.',
+  sla_alert_100: 'A ticket is overdue.',
+  sla_alert_150: 'A ticket has exceeded its service target by 50%.',
+  nearing_sla: 'A ticket is nearing its service target.',
+  overdue_sla: 'A ticket is overdue.',
   frozen_ticket_reminder: 'A ticket needs follow-up.',
   attendance_updated: 'An attendance record was updated.',
   attendance_absence_report: 'An attendance update is available.',
@@ -36,5 +40,7 @@ const SAFE_NOTIFICATION_PREVIEWS: Readonly<Record<string, string>> = {
 };
 
 export function safeNotificationPreview(eventType: string): string {
-  return SAFE_NOTIFICATION_PREVIEWS[eventType] ?? 'A new update is available in FO2 iCare.';
+  return Object.prototype.hasOwnProperty.call(SAFE_NOTIFICATION_PREVIEWS, eventType)
+    ? SAFE_NOTIFICATION_PREVIEWS[eventType]
+    : 'A new update is available in FO2 iCare.';
 }

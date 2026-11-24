@@ -12,7 +12,7 @@ import { SseService } from './sse.service';
 import { UserRole } from '../../shared/entities';
 import { NotificationService } from './notification.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
-import { slaSoundStep, SlaSoundKind } from './sla-sound-kind';
+import { slaPercentageMilestone, slaSoundStep, SlaSoundKind } from './sla-sound-kind';
 
 @Injectable()
 export class TicketCronService implements OnModuleInit {
@@ -69,7 +69,6 @@ export class TicketCronService implements OnModuleInit {
     this.logger.log('Running hourly ticketing cron tasks...');
     await this.processAutoClosure();
     await this.processAutoUnfreeze();
-    await this.processPercentageAlerts();
   }
 
   @Cron('*/15 * * * *')
@@ -410,73 +409,85 @@ export class TicketCronService implements OnModuleInit {
     }
   }
 
-  private async processPercentageAlerts() {
+  @Cron(CronExpression.EVERY_MINUTE, { waitForCompletion: true })
+  async processPercentageAlerts(now = new Date()) {
+    const config = await this.configRepo.findOne({ where: { id: 1 } });
+    if (!config || config.isFlagCeremonyPaused) return;
     const activeTickets = await this.ticketRepo.find({
       where: {
         status: TicketStatus.IN_PROGRESS,
         assignedToId: Not(IsNull()),
-      } as any,
-      relations: ['category', 'issueTypeConfig'],
+        slaStartedAt: Not(IsNull()),
+        slaDeadline: Not(IsNull()),
+        slaPausedAt: IsNull(),
+      },
+      relations: ['issueTypeConfig'],
     });
-    await this.ticketService.enrichTicketsWithUsers(activeTickets);
-    const config = await this.configRepo.findOne({ where: { id: 1 } });
-    if (!config) return;
+    const calendarCache = new Map<string, boolean>();
+    const workWindows = new Map<string, boolean>();
+    const nextSecond = new Date(now.getTime() + 1000);
+    const highestSent = new Map<string, number>();
+    for (let offset = 0; offset < activeTickets.length; offset += 100) {
+      const sent = await this.eventRepo.find({
+        select: { ticketId: true, eventType: true },
+        where: {
+          ticketId: In(activeTickets.slice(offset, offset + 100).map(ticket => ticket.id)),
+          eventType: In(['sla_alert_75', 'sla_alert_100', 'sla_alert_150']),
+        },
+      });
+      for (const event of sent) {
+        const threshold = Number(event.eventType.slice('sla_alert_'.length));
+        highestSent.set(event.ticketId, Math.max(threshold, highestSent.get(event.ticketId) ?? 0));
+      }
+    }
+    const due: Array<{ ticket: Ticket; assigneeId: number; threshold: 75 | 100 | 150; percentage: number }> = [];
 
     for (const ticket of activeTickets) {
-      const isPausedBeforeBreach = Boolean(
-        ticket.slaPausedAt &&
-        ticket.slaDeadline &&
-        ticket.slaDeadline.getTime() > ticket.slaPausedAt.getTime(),
+      const deadline = ticket.slaDeadline;
+      const budget = Number(ticket.issueTypeConfig?.slaHours) * 3600;
+      const assigneeId = ticket.assignedToId;
+      if (ticket.isSlaWaiting || !deadline || !assigneeId || !Number.isFinite(budget) || budget <= 0) continue;
+      const overdue = now >= deadline;
+      const alreadySent = highestSent.get(ticket.id) ?? 0;
+      if (alreadySent >= (overdue ? 150 : 75)) continue;
+      const calendarKey = ticket.overtimeSlaDate || '';
+      const calendar = calendarKey ? { ...config, overtimeSlaDate: calendarKey } : config;
+      if (!workWindows.has(calendarKey)) {
+        workWindows.set(calendarKey, await this.ticketService.calculateBusinessSecondsForSla(
+          now, nextSecond, calendar, calendarCache,
+        ) > 0);
+      }
+      if (!workWindows.get(calendarKey)) continue;
+
+      // The saved deadline already includes schedule boundaries and credited pauses.
+      const seconds = await this.ticketService.calculateBusinessSecondsForSla(
+        overdue ? deadline : now, overdue ? now : deadline, calendar, calendarCache,
       );
-      if (
-        isPausedBeforeBreach ||
-        ticket.isSlaWaiting ||
-        !ticket.slaDeadline ||
-        !ticket.slaStartedAt ||
-        !ticket.issueTypeConfig ||
-        !ticket.createdAt ||
-        !ticket.issueTypeConfig.slaHours
-      )
-        continue;
+      const threshold = slaPercentageMilestone(overdue, seconds, budget);
+      if (threshold && threshold > alreadySent) {
+        const percentage = Math.max(0, (1 + (overdue ? seconds : -seconds) / budget) * 100);
+        due.push({ ticket, assigneeId, threshold, percentage });
+      }
+    }
 
-      const now = new Date();
-      const totalSlaSeconds = ticket.issueTypeConfig.slaHours * 60 * 60;
-      // The persisted deadline is the authoritative SLA clock: it already
-      // includes the In Progress start, office-hour boundaries, and extensions
-      // applied when a paused clock resumes.
-      const elapsedSeconds = now <= ticket.slaDeadline
-        ? Math.max(
-            0,
-            totalSlaSeconds - await this.ticketService.calculateBusinessSecondsForSla(
-              now,
-              ticket.slaDeadline,
-              ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config,
-            ),
-          )
-        : totalSlaSeconds + await this.ticketService.calculateBusinessSecondsForSla(
-            ticket.slaDeadline,
-            now,
-            ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config,
-          );
-      const percentage = (elapsedSeconds / totalSlaSeconds) * 100;
+    for (let offset = 0; offset < due.length; offset += 100) {
+      const pending = due.slice(offset, offset + 100);
+      await this.ticketService.enrichTicketsWithUsers(pending.map(({ ticket }) => ticket));
 
-      for (const threshold of [75, 100, 150]) {
-        if (percentage < threshold || !ticket.assignedToId || !ticket.assignedTo?.email) continue;
+      for (const { ticket, assigneeId, threshold, percentage } of pending) {
+        if (!ticket.assignedToId) continue;
+        // Recheck the clock immediately before notifying in case it changed during the scan.
+        if (!await this.ticketRepo.existsBy({
+          id: ticket.id, status: TicketStatus.IN_PROGRESS, assignedToId: assigneeId,
+          slaDeadline: ticket.slaDeadline!, slaPausedAt: IsNull(), isSlaWaiting: false,
+        })) continue;
+        if (threshold === 75 && Date.now() >= ticket.slaDeadline!.getTime()) continue;
+
         const eventType = `sla_alert_${threshold}`;
-        const alreadySent = await this.eventRepo.findOne({
-          where: { ticketId: ticket.id, eventType },
-        });
-        if (alreadySent) continue;
-
-        const label = threshold === 75 ? 'SLA Warning' : 'SLA Alert';
-        const message = threshold === 75
-          ? `Ticket ${ticket.ticketNumber} has reached 75% of its SLA time limit.`
+        const label = threshold === 75 ? 'SLA Warning' : 'Overdue SLA';
+        const message = threshold === 100
+          ? `Ticket ${ticket.ticketNumber} is overdue.`
           : `Ticket ${ticket.ticketNumber} has reached ${threshold}% of its SLA time limit.`;
-        await this.emailService.sendGenericEmail(
-          ticket.assignedTo.email,
-          `Ticket ${threshold}% ${label}: ${ticket.ticketNumber}`,
-          `${message} Please address it as soon as possible.`,
-        );
         await this.notificationService.create([ticket.assignedToId], {
           ticketId: ticket.id,
           eventType,
@@ -488,6 +499,13 @@ export class TicketCronService implements OnModuleInit {
           eventType,
           meta: JSON.stringify({ threshold, percentage }),
         }));
+        if (ticket.assignedTo?.email) {
+          await this.emailService.sendGenericEmail(
+            ticket.assignedTo.email,
+            `Ticket ${threshold}% ${label}: ${ticket.ticketNumber}`,
+            `${message} Please address it as soon as possible.`,
+          ).catch(() => this.logger.warn('An SLA milestone email could not be sent.'));
+        }
       }
     }
   }

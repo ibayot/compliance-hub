@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.service.notification.StatusBarNotification;
 
 import androidx.annotation.NonNull;
@@ -31,6 +32,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
     private static final String BADGE_PREFERENCES = "notification_badge";
     private static final String LAST_COUNT_AT = "last_count_at";
     private static final String LAST_LAUNCHER_REQUEST = "last_launcher_request";
+    private static final String HAS_PREVIEW = "fo2_has_preview";
 
     static NotificationChannel routineChannel(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
@@ -42,15 +44,26 @@ public final class FcmMessageService extends FirebaseMessagingService {
         return channel != null && channel.canShowBadge() && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
-    static String badgeAlertStatus(Context context) {
+    private static Notification unreadAlert(Context context) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
-        if (manager == null) return "MISSING";
+        if (manager == null) return null;
         for (StatusBarNotification active : manager.getActiveNotifications()) {
             if (active.getTag() == null && active.getId() == UNREAD_NOTIFICATION) {
-                return active.getNotification().number > 0 ? "COUNTED" : "UNCOUNTED";
+                return active.getNotification();
             }
         }
-        return "MISSING";
+        return null;
+    }
+
+    static String badgeAlertStatus(Context context) {
+        Notification alert = unreadAlert(context);
+        return alert == null ? "MISSING" : alert.number > 0 ? "COUNTED" : "UNCOUNTED";
+    }
+
+    static String previewAlertStatus(Context context) {
+        Notification alert = unreadAlert(context);
+        if (alert == null) return null;
+        return alert.extras.getBoolean(HAS_PREVIEW) ? "PREVIEW" : "GENERIC";
     }
 
     static String lastLauncherRequest(Context context) {
@@ -58,10 +71,19 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 .getString(LAST_LAUNCHER_REQUEST, null);
     }
 
-    private void updateLauncherBadge(int count) {
-        LauncherBadge.Result result = LauncherBadge.update(this, count);
-        getSharedPreferences(BADGE_PREFERENCES, MODE_PRIVATE).edit()
+    private static void updateLauncherBadge(Context context, int count) {
+        LauncherBadge.Result result = LauncherBadge.update(context, count);
+        context.getSharedPreferences(BADGE_PREFERENCES, MODE_PRIVATE).edit()
                 .putString(LAST_LAUNCHER_REQUEST, result.name()).apply();
+    }
+
+    static void refreshVisibleLauncherBadge(Context context) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        Notification alert = unreadAlert(context);
+        if (manager == null || alert == null) return;
+        boolean allowsBadge = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                (canShowBadge(routineChannel(context)) && canShowBadge(manager.getNotificationChannel(alert.getChannelId())));
+        updateLauncherBadge(context, allowsBadge && manager.areNotificationsEnabled() ? Math.max(0, alert.number) : 0);
     }
 
     public static void ensureNotificationChannel(Context context) {
@@ -120,12 +142,12 @@ public final class FcmMessageService extends FirebaseMessagingService {
                             "Your test alert arrived on this device.", false).setAutoCancel(true).build());
                     break;
                 case "nearing_sla":
-                    manager.notify(7103, notification(NEARING_CHANNEL, "nearing",
-                            "You have an SLA reminder.", false).setAutoCancel(true).build());
+                    manager.notify(7103, notificationWithPreview(NEARING_CHANNEL, "nearing",
+                            data.get("previewBody"), "You have an SLA reminder.").setAutoCancel(true).build());
                     break;
                 case "overdue_sla":
-                    manager.notify(7104, notification(OVERDUE_CHANNEL, "overdue",
-                            "You have an SLA reminder.", false).setAutoCancel(true).build());
+                    manager.notify(7104, notificationWithPreview(OVERDUE_CHANNEL, "overdue",
+                            data.get("previewBody"), "You have an SLA reminder.").setAutoCancel(true).build());
                     break;
                 default:
                     break;
@@ -166,7 +188,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         }
         if (count <= 0 || !manager.areNotificationsEnabled()) {
             manager.cancel(UNREAD_NOTIFICATION);
-            updateLauncherBadge(0);
+            updateLauncherBadge(this, 0);
             return;
         }
         boolean badgeSync = "badge_sync".equals(kind);
@@ -175,7 +197,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (badgeSync && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
-                updateLauncherBadge(0);
+                updateLauncherBadge(this, 0);
                 return;
             }
             // AndroidX's silent flag groups even a single notification. Use an ungrouped,
@@ -185,17 +207,23 @@ public final class FcmMessageService extends FirebaseMessagingService {
             // Start a real alert on the audible channel after a silent restoration.
             manager.cancel(UNREAD_NOTIFICATION);
         }
-        String previewBody = data.get("previewBody");
-        boolean showPreview = previewBody != null && !previewBody.trim().isEmpty() && previewBody.length() <= 160;
-        NotificationCompat.Builder alert = notification(channel, "routine",
-                showPreview ? previewBody : "You have unread notifications.", showPreview)
+        NotificationCompat.Builder alert = notificationWithPreview(channel, "routine",
+                data.get("previewBody"), "You have unread notifications.")
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setNumber(count).setOnlyAlertOnce(badgeSync);
         if (badgeSync && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) alert.setSilent(true);
         manager.notify(UNREAD_NOTIFICATION, alert.build());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
         }
-        updateLauncherBadge(allowBadge ? count : 0);
+        updateLauncherBadge(this, allowBadge ? count : 0);
+    }
+
+    private NotificationCompat.Builder notificationWithPreview(String channel, String sound, String preview, String fallback) {
+        boolean hasPreview = preview != null && !preview.trim().isEmpty() && preview.length() <= 160;
+        Bundle state = new Bundle();
+        state.putBoolean(HAS_PREVIEW, hasPreview);
+        return notification(channel, sound, hasPreview ? preview : fallback, hasPreview).addExtras(state);
     }
 
     private NotificationCompat.Builder notification(String channel, String sound, String body, boolean showPreview) {

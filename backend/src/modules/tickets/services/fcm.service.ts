@@ -202,8 +202,8 @@ export class FcmService {
       if (input.showPreviews !== undefined) changes.showPreviews = input.showPreviews;
       const result = await this.registrations.update({ userId, deviceId: input.deviceId }, changes);
       if (!result.affected) throw new BadRequestException('Reopen FO2 iCare to finish Android alert registration.');
-      if (input.deliveryVersion === 2) void this.syncBadge(userId, input.deviceId).catch(() => undefined);
       const updated = await this.registrations.findOne({ where: { userId, deviceId: input.deviceId } });
+      if (updated?.deliveryVersion === 2) void this.syncBadge(userId, input.deviceId).catch(() => undefined);
       return { enabled: true, deliveryVersion: updated?.deliveryVersion ?? 1, showPreviews: updated?.showPreviews ?? true };
     }
     const fidHash = this.fidHash(input.fid);
@@ -268,7 +268,7 @@ export class FcmService {
   }
 
   async sendSlaSound(userId: number, kind: SlaSoundKind): Promise<Set<string>> {
-    return this.sendToUser(userId, kind);
+    return this.sendToUser(userId, kind, undefined, safeNotificationPreview(kind));
   }
 
   async syncBadge(userId: number, deviceId?: string): Promise<void> {
@@ -291,9 +291,14 @@ export class FcmService {
       return new Set();
     }
 
-    const unreadCount = kind === 'notification' || kind === 'badge_sync'
-      ? await this.notifications.count({ where: { userId, isRead: false } })
-      : 0;
+    const where = { userId, isRead: false };
+    const [unreadCount, latestUnread] = await Promise.all([
+      kind === 'notification' || kind === 'badge_sync' ? this.notifications.count({ where }) : 0,
+      kind === 'badge_sync' && registrations.some(device => device.showPreviews)
+        ? this.notifications.findOne({ where, order: { id: 'DESC' }, select: { id: true, eventType: true } })
+        : null,
+    ]);
+    if (latestUnread) previewBody = safeNotificationPreview(latestUnread.eventType);
     const results = await Promise.all(registrations.map(async registration => ({
       deviceId: registration.deviceId,
       result: await this.sendToRegistration(configuration, registration, unreadCount, kind, previewBody),
@@ -358,13 +363,14 @@ export class FcmService {
       const visibleBody = kind === 'notification' && previewBody ? previewBody : 'You have a new notification.';
       const message = enhancedDelivery ? {
         fid,
-        data: { kind, unreadCount: String(count), countAt: String(countAt), ...(previewBody && kind === 'notification' ? { previewBody } : {}) },
+        data: { kind, unreadCount: String(count), countAt: String(countAt), ...(previewBody ? { previewBody } : {}) },
         android: badgeSync ? { priority: 'NORMAL', collapse_key: 'fo2_badge', ttl: '300s' }
           : { priority: 'HIGH', ttl: '60s' },
       } : {
         fid,
         notification: { title: 'FO2 iCare', body: kind === 'test' ? 'This is a test notification.' : visibleBody },
-        data: { unreadCount: String(count), targetPath: '/dashboard' },
+        data: { kind, unreadCount: String(count), countAt: String(countAt), targetPath: '/dashboard',
+          ...(previewBody ? { previewBody } : {}) },
         android: {
           priority: 'HIGH',
           notification: { channel_id: 'fo2_icare_alerts', icon: 'hub_notification', color: '#147A76',

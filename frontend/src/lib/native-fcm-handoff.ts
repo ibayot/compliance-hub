@@ -11,6 +11,7 @@ export interface NativeFcmHandoff {
   routineUsesAppSound?: boolean;
   badgeLauncher?: string;
   badgeAlert?: 'COUNTED' | 'UNCOUNTED' | 'MISSING';
+  previewAlert?: 'PREVIEW' | 'GENERIC';
   badgeRequest?: 'REQUESTED' | 'BLOCKED' | 'STANDARD';
 }
 
@@ -35,6 +36,7 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
       /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(parsed.badgeLauncher) ? parsed.badgeLauncher : undefined,
     badgeAlert: parsed.badgeAlert === 'COUNTED' || parsed.badgeAlert === 'UNCOUNTED' || parsed.badgeAlert === 'MISSING'
       ? parsed.badgeAlert : undefined,
+    previewAlert: parsed.previewAlert === 'PREVIEW' || parsed.previewAlert === 'GENERIC' ? parsed.previewAlert : undefined,
     badgeRequest: parsed.badgeRequest === 'REQUESTED' || parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'STANDARD'
       ? parsed.badgeRequest : undefined,
   };
