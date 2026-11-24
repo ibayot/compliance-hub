@@ -29,7 +29,7 @@ export interface FcmDeviceInput {
 
 export type FcmSendResult =
   | { outcome: 'accepted' | 'expired' | 'not-enabled' }
-  | { outcome: 'failed'; failure: 'authentication' | 'provider-unavailable' | 'provider-request' | 'connection' };
+  | { outcome: 'failed'; failure: 'authentication' | 'provider-unavailable' | 'provider-request' | 'connection' | 'registration-storage' };
 
 type FcmConfigurationIssue = 'missing-project-id' | 'missing-service-account' | 'invalid-service-account' | 'project-mismatch' | 'missing-encryption-key';
 interface FcmConfiguration {
@@ -225,15 +225,7 @@ export class FcmService {
     }
     this.nextTestAlertAt.set(rateLimitKey, now + TEST_ALERT_INTERVAL_MS);
     const unreadCount = await this.notifications.count({ where: { userId, isRead: false } });
-    try {
-      const fid = this.decryptRegistration(registration, configuration);
-      const result = await this.send(configuration, fid, unreadCount, true);
-      if (result.outcome === 'expired') await this.registrations.delete({ id: registration.id });
-      return result;
-    } catch {
-      await this.registrations.delete({ id: registration.id });
-      return { outcome: 'expired' };
-    }
+    return this.sendToRegistration(configuration, registration, unreadCount, true);
   }
 
   async sendForNotification(notification: TicketNotification): Promise<Set<string>> {
@@ -249,22 +241,42 @@ export class FcmService {
     }
 
     const unreadCount = await this.notifications.count({ where: { userId: notification.userId, isRead: false } });
-    const results = await Promise.all(registrations.map(async registration => {
-      try {
-        const fid = this.decryptRegistration(registration, configuration);
-        const result = await this.send(configuration, fid, unreadCount, false);
-        if (result.outcome === 'expired') await this.registrations.delete({ id: registration.id });
-        return { deviceId: registration.deviceId, result };
-      } catch {
-        await this.registrations.delete({ id: registration.id }).catch(() => undefined);
-        return { deviceId: registration.deviceId, result: { outcome: 'expired' as const } };
-      }
-    }));
+    const results = await Promise.all(registrations.map(async registration => ({
+      deviceId: registration.deviceId,
+      result: await this.sendToRegistration(configuration, registration, unreadCount, false),
+    })));
     return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
   }
 
-  private decryptRegistration(registration: FcmDeviceRegistration, configuration: FcmConfiguration): string {
-    return this.decryptFid(registration.encryptedFid, configuration.encryptionKey);
+  private async sendToRegistration(
+    configuration: FcmConfiguration,
+    registration: FcmDeviceRegistration,
+    unreadCount: number,
+    test: boolean,
+  ): Promise<FcmSendResult> {
+    let fid: string;
+    try {
+      fid = this.decryptFid(registration.encryptedFid, configuration.encryptionKey);
+    } catch {
+      this.logger.warn('Android FCM could not read the saved device registration.');
+      return { outcome: 'failed', failure: 'registration-storage' };
+    }
+
+    const result = await this.send(configuration, fid, unreadCount, test);
+    if (result.outcome !== 'expired') return result;
+
+    // A phone can refresh its registration while a send is pending. Delete only the rejected version.
+    try {
+      const removed = await this.registrations.delete({
+        id: registration.id,
+        encryptedFid: registration.encryptedFid,
+      });
+      if (removed.affected) return result;
+      this.logger.debug('Android FCM registration changed while a send was pending.');
+    } catch {
+      this.logger.warn('Android FCM could not remove a rejected device registration.');
+    }
+    return { outcome: 'failed', failure: 'registration-storage' };
   }
 
   private async send(configuration: FcmConfiguration, fid: string, unreadCount: number, test: boolean): Promise<FcmSendResult> {
@@ -312,10 +324,17 @@ export class FcmService {
       });
       if (response.ok) return { outcome: 'accepted' };
 
-      let providerError = '';
-      try { providerError = JSON.stringify(await response.json()); } catch { /* Avoid logging provider payloads. */ }
-      if (response.status === 404 || /UNREGISTERED|NOT_FOUND/.test(providerError)) {
-        return { outcome: 'expired' };
+      if (response.status === 404) {
+        try {
+          const body = await response.json() as { error?: { details?: Array<{ '@type'?: string; errorCode?: string }> } };
+          const details = body?.error?.details;
+          if (Array.isArray(details) && details.some(detail =>
+            detail?.['@type'] === 'type.googleapis.com/google.firebase.fcm.v1.FcmError' &&
+            detail.errorCode === 'UNREGISTERED',
+          )) return { outcome: 'expired' };
+        } catch {
+          // A generic or unreadable 404 does not establish that Firebase rejected this installation ID.
+        }
       }
       const failure = response.status === 401 || response.status === 403
         ? 'authentication'

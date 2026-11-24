@@ -2066,6 +2066,8 @@ export type BrowserPushSubscriptionPayload = PushSubscriptionJSON & { deviceId?:
 export type BrowserPushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
 type BrowserPushTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
   | { outcome: 'failed'; failure?: BrowserPushFailure; providerStatus?: number };
+type FcmTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
+  | { outcome: 'failed'; failure: 'authentication' | 'provider-unavailable' | 'provider-request' | 'connection' | 'registration-storage' };
 
 export const notificationsApi = {
   getSummary: async (): Promise<{ notifications: any[]; unreadCount: number }> => {
@@ -2116,7 +2118,7 @@ export const notificationsApi = {
     const response = await apiClient.post('/notifications/fcm-subscription', input);
     return response.data;
   },
-  sendFcmTestAlert: async (deviceId: string): Promise<BrowserPushTestResult> => {
+  sendFcmTestAlert: async (deviceId: string): Promise<FcmTestResult> => {
     const response = await apiClient.post('/notifications/fcm-test', { deviceId });
     return response.data;
   },

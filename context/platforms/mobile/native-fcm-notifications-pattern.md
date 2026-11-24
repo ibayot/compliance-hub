@@ -28,7 +28,7 @@ committed in-app notification -> durable row + SSE
 
 ## Store Implementation
 
-- The Android app obtains a Firebase Installation ID (FID) through the Firebase client SDK. The native launcher passes a short-lived handoff in the HTTPS URL fragment; frontend startup validates it and removes the fragment before rendering. A FID is a routing identifier, never an authentication credential. Bind it only after JWT authentication and current account approval.
+- The Android app enables installation ID registration in the Firebase Messaging manifest and completes Messaging registration before handing off the Firebase Installation ID (FID). A Firebase Installations ID obtained without Messaging registration cannot be used as an FCM delivery target. The native launcher passes a short-lived handoff in the HTTPS URL fragment; frontend startup validates it and removes the fragment before rendering. A FID is a routing identifier, never an authentication credential. Bind it only after JWT authentication and current account approval.
 - Ticketing owns the Android registration table and FCM sends. Store a keyed hash for uniqueness and encrypt the FID at rest. Never log the FID, Firebase access token, private service-account data, or complete provider response.
 - The Android `google-services.json` contains public client configuration and belongs with that Android application. The server sender requires a distinct Firebase service-account JSON file, mounted read-only into Ticketing outside the repository. Set an explicit Firebase project ID and container-visible file path; do not place service-account contents, Firebase private keys, or signing material in frontend assets or Docker Compose text.
 - Recheck current account/unit access before every send. Explicit logout removes the current device registration. Send only a generic title and body; keep ticket numbers, subjects, comments, staff identity, URLs with identifiers, MFA codes, and recovery data out of the OS notification.
@@ -47,6 +47,7 @@ committed in-app notification -> durable row + SSE
 - **PLAT-MOB-FCM-006** — MUST expose permission, server configuration, provider acceptance, and device delivery as distinct states; never promise sound or badges independently of Android settings.
 - **PLAT-MOB-FCM-007** — MUST strip the native handoff fragment before application rendering/navigation and MUST NOT treat its contents as authentication.
 - **PLAT-MOB-FCM-008** — MUST verify Firebase client package identity, app label, signing fingerprint, Digital Asset Links, service-account project, and the installed APK independently before distribution.
+- **PLAT-MOB-FCM-009** — MUST confirm Messaging registration before passing an installation ID to the server. Only a structured FCM `UNREGISTERED` result may expire that saved registration automatically. Generic provider failures must preserve it, and a rejected response must not remove a newer registration.
 
 ## Validation
 

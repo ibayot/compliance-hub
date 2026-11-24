@@ -125,6 +125,7 @@ function pushSetupMessage(config: BrowserPushConfig | null): string {
 
 function fcmSetupMessage(issue?: string): string {
   switch (issue) {
+    case 'missing-project-id': return 'The Firebase project ID is missing from Ticketing’s settings.';
     case 'missing-service-account': return 'Android alerts are not configured on this server. An administrator must mount the Firebase service-account file in Ticketing.';
     case 'invalid-service-account': return 'Ticketing could not read the Firebase service-account file. Ask an administrator to check the mounted file.';
     case 'project-mismatch': return 'The Firebase service-account file belongs to a different project. Ask an administrator to check the FO2 iCare Firebase project settings.';
@@ -132,6 +133,8 @@ function fcmSetupMessage(issue?: string): string {
     default: return 'Ticketing has not confirmed its Android alert settings. Ask an administrator to check the Firebase project and service-account setup.';
   }
 }
+
+const androidAlertsUpdateMessage = 'Update FO2 iCare from Download App in your Android browser, then reopen the app to enable alerts.';
 
 const pushFailureMessages: Record<BrowserPushFailure, string> = {
   authentication: 'The push provider rejected Ticketing’s signing credentials. Ask an administrator to check the VAPID keys and server clock. If the keys changed, enable alerts again on this device.',
@@ -238,6 +241,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushNeedsHomeScreen(appleHomeScreenRequired);
       setPushSupported(supported);
       try {
+        if (nativeFcmHandoff?.version === 1) {
+          setFcmConfigEnabled(false);
+          setPushEnabled(false);
+          setPushMessage(androidAlertsUpdateMessage);
+          return;
+        }
         const config = await notificationsApi.getPushConfig();
         if (!current) return;
         setPushConfig(config);
@@ -290,7 +299,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             } else if (!notificationPermissionGranted) {
               setPushMessage('Android notifications are off for FO2 iCare. Allow them in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.');
             } else if (!nativeFcmHandoff?.fid && !fcmStatus.registered) {
-              setPushMessage('FO2 iCare could not read its Firebase installation. Close and reopen the Android app while connected to the internet, then try again.');
+              setPushMessage('FO2 iCare could not register with Firebase. Connect to the internet and reopen the Android app, then try again.');
             } else if (!fcmStatus.registered) {
               setPushMessage('Android app alerts are off on this device. Choose Enable to register this device.');
             }
@@ -382,6 +391,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushMessage('Reopen FO2 iCare from its Android app icon, then try again.');
       return;
     }
+    if (device.version === 1) {
+      setPushMessage(androidAlertsUpdateMessage);
+      return;
+    }
     if (pushEnabled) {
       setPushBusy(true);
       try {
@@ -402,7 +415,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       return;
     }
     if (!device.fid) {
-      setPushMessage('FO2 iCare could not read its Firebase installation. Close and reopen the Android app while connected to the internet, then try again.');
+      setPushMessage('FO2 iCare could not register with Firebase. Connect to the internet and reopen the Android app, then try again.');
       return;
     }
 
@@ -546,7 +559,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         if (result.outcome === 'accepted') {
           setPushMessage('Firebase accepted the test alert. Check the Android notification panel for FO2 iCare.');
         } else if (result.outcome === 'expired' || result.outcome === 'not-enabled') {
-          if (result.outcome === 'expired') await notificationsApi.removeFcmDevice(device.deviceId).catch(() => undefined);
           setPushEnabled(false);
           setPushMessage('This Android device registration is no longer active. Reopen FO2 iCare and enable app alerts again.');
         } else if (result.outcome === 'failed') {
@@ -556,6 +568,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               ? 'Firebase is temporarily unavailable or the server timed out. Try the test again later.'
               : result.failure === 'connection'
                 ? 'Ticketing could not connect to Firebase. Ask an administrator to check outbound HTTPS access.'
+                : result.failure === 'registration-storage'
+                  ? 'Ticketing could not check the saved Android registration. Reopen FO2 iCare and try again.'
                 : 'Firebase rejected the test request. Ask an administrator to check Ticketing’s FCM logs.';
           setPushMessage(message);
         }

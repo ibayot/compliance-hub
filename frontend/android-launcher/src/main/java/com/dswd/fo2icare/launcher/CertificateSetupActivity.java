@@ -26,6 +26,7 @@ import android.widget.Toast;
 import android.util.Base64;
 
 import com.google.firebase.installations.FirebaseInstallations;
+import com.google.firebase.messaging.FirebaseMessaging;
 
 import org.json.JSONObject;
 
@@ -57,6 +58,7 @@ public final class CertificateSetupActivity extends Activity {
     private static final int POST_NOTIFICATIONS_REQUEST = 402;
     private static final long VERIFICATION_TIMEOUT_MS = 4_000;
     private static final long VERIFICATION_RETRY_DELAY_MS = 750;
+    private static final long FCM_REGISTRATION_WAIT_MS = 5_000;
     private static final String CERTIFICATE_SAVED = "certificateSaved";
     private static final String PREFERENCES = "certificate_setup";
     private static final String LAST_BROWSER_CHECK = "last_browser_check";
@@ -65,9 +67,11 @@ public final class CertificateSetupActivity extends Activity {
     private static final String NOTIFICATION_PERMISSION_ASKED = "notification_permission_asked";
     private static final String NATIVE_FCM_FRAGMENT_KEY = "fo2_fcm";
     private final Handler browserHandler = new Handler(Looper.getMainLooper());
+    private final Handler fcmHandler = new Handler(Looper.getMainLooper());
     private CustomTabsServiceConnection browserConnection;
     private boolean certificateSaved;
     private boolean resumed;
+    private boolean fcmLaunchPending;
     private String pendingBrowserCheck = "";
     private TextView setupStatus;
 
@@ -90,6 +94,12 @@ public final class CertificateSetupActivity extends Activity {
         resumed = false;
         cancelBrowserVerification();
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        fcmHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 
     @Override
@@ -406,22 +416,33 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void openHubWithFcm(String browserCheck) {
+        if (fcmLaunchPending) return;
+        fcmLaunchPending = true;
         String deviceId = getOrCreateDeviceId();
         boolean notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
                 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        if (!notificationsGranted) {
+            launchHubWithHandoff(browserCheck, deviceId, null, false);
+            return;
+        }
         AtomicBoolean launched = new AtomicBoolean(false);
         Runnable launchWithoutFid = () -> {
             if (launched.compareAndSet(false, true)) launchHubWithHandoff(browserCheck, deviceId, null, notificationsGranted);
         };
+        fcmHandler.postDelayed(launchWithoutFid, FCM_REGISTRATION_WAIT_MS);
         try {
-            FirebaseInstallations.getInstance().getId().addOnCompleteListener(task -> {
-                if (launched.compareAndSet(false, true)) {
-                    String fid = task.isSuccessful() ? task.getResult() : null;
-                    launchHubWithHandoff(browserCheck, deviceId, fid, notificationsGranted);
-                }
-            });
-            browserHandler.postDelayed(launchWithoutFid, 5_000);
+            // A Firebase Installations ID alone cannot receive messages. Register it with
+            // Cloud Messaging before allowing the web app to save it as a delivery target.
+            FirebaseMessaging.getInstance().register()
+                    .onSuccessTask(ignored -> FirebaseInstallations.getInstance().getId())
+                    .addOnCompleteListener(task -> {
+                        if (!launched.compareAndSet(false, true)) return;
+                        fcmHandler.removeCallbacks(launchWithoutFid);
+                        String fid = task.isSuccessful() ? task.getResult() : null;
+                        launchHubWithHandoff(browserCheck, deviceId, fid, notificationsGranted);
+                    });
         } catch (RuntimeException error) {
+            fcmHandler.removeCallbacks(launchWithoutFid);
             launchWithoutFid.run();
         }
     }
@@ -436,13 +457,13 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void launchHubWithHandoff(String browserCheck, String deviceId, String fid, boolean notificationsGranted) {
-        if (isFinishing()) return;
+        if (isFinishing() || isDestroyed()) return;
         Intent launch = new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class);
         // Browser Helper otherwise starts a second launcher while the first is still alive.
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         JSONObject handoff = new JSONObject();
         try {
-            handoff.put("version", 1);
+            handoff.put("version", 2);
             handoff.put("deviceId", deviceId);
             handoff.put("notificationsGranted", notificationsGranted);
             if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);

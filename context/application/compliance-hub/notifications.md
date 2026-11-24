@@ -54,6 +54,7 @@ business event -> ticket_notifications row -> SSE event for open sessions
 - **CH-NOTIFY-008** — MUST keep Android APK FCM separate from browser Web Push and retain durable in-app notification/SSE delivery if either external provider is unavailable.
 - **CH-NOTIFY-009** — MUST bind encrypted Android FCM installation registrations to the authenticated account, recheck current account approval on every send, and remove the device registration on explicit logout.
 - **CH-NOTIFY-010** — MUST keep FCM test alerts device-scoped, rate-limited, generic, and outside notification history/unread counts; label provider acceptance separately from device delivery.
+- **CH-NOTIFY-011** — MUST tell users when their installed Android launcher needs an update before it can register with Firebase Messaging. When a test fails without a confirmed expired registration, keep the user's saved Android alert setting.
 
 The Android launcher keeps delegated browser push as a fallback channel, while the signed APK uses native FCM for installed-app alerts. Keep these subscriptions separate and avoid duplicate sends on the same device. Device notification permission, browser site permission, app channel settings, and account-bound bell opt-in are separate checks.
 

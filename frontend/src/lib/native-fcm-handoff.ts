@@ -2,7 +2,7 @@ const HANDOFF_STORAGE_KEY = 'fo2-icare-native-fcm-handoff-v1';
 const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
 
 export interface NativeFcmHandoff {
-  version: 1;
+  version: 1 | 2;
   deviceId: string;
   fid?: string;
   notificationsGranted: boolean;
@@ -12,20 +12,26 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function parseHandoff(value: unknown): NativeFcmHandoff | null {
+  if (!value || typeof value !== 'object') return null;
+  const parsed = value as Partial<NativeFcmHandoff>;
+  if ((parsed.version !== 1 && parsed.version !== 2) || !isUuid(parsed.deviceId) ||
+      typeof parsed.notificationsGranted !== 'boolean') return null;
+  if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
+  return {
+    version: parsed.version,
+    deviceId: parsed.deviceId,
+    fid: parsed.version === 2 ? parsed.fid : undefined,
+    notificationsGranted: parsed.notificationsGranted,
+  };
+}
+
 function decodeHandoff(encoded: string): NativeFcmHandoff | null {
   try {
     const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/');
     const binary = window.atob(normalized + '='.repeat((4 - normalized.length % 4) % 4));
     const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as Partial<NativeFcmHandoff>;
-    if (parsed.version !== 1 || !isUuid(parsed.deviceId) || typeof parsed.notificationsGranted !== 'boolean') return null;
-    if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
-    return {
-      version: 1,
-      deviceId: parsed.deviceId,
-      fid: parsed.fid,
-      notificationsGranted: parsed.notificationsGranted,
-    };
+    return parseHandoff(JSON.parse(new TextDecoder().decode(bytes)));
   } catch {
     return null;
   }
@@ -35,10 +41,7 @@ function readStoredHandoff(): NativeFcmHandoff | null {
   try {
     const value = sessionStorage.getItem(HANDOFF_STORAGE_KEY);
     if (!value) return null;
-    const parsed = JSON.parse(value) as Partial<NativeFcmHandoff>;
-    if (parsed.version !== 1 || !isUuid(parsed.deviceId) || typeof parsed.notificationsGranted !== 'boolean') return null;
-    if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
-    return parsed as NativeFcmHandoff;
+    return parseHandoff(JSON.parse(value));
   } catch {
     return null;
   }

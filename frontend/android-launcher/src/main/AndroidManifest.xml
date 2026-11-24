@@ -8,6 +8,7 @@
         android:theme="@android:style/Theme.Translucent.NoTitleBar"
         android:usesCleartextTraffic="false">
         <meta-data android:name="asset_statements" android:resource="@string/hub_asset_statements" />
+        <meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/hub_notification" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/fo2_icare_notification_color" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="@string/fo2_icare_notification_channel_id" />

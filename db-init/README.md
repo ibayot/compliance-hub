@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.9 (from 1.1.8)
+
+Apply `20261124-add-application-changelog-v1.1.9-users.sql` to the verified Users database. This release uses the 1.1.8 Ticketing registration table and Firebase service-account configuration. Rebuild the application services and install the 1.1.9 APK over the 1.1.8 FO2 iCare app. The APK keeps the same package and signing certificate. Open **Bell → Enable → Send test alert** to verify delivery on Android.
+
 ## For release 1.1.8 (from 1.1.7)
 
 Apply `20261123-add-fcm-device-registrations-ticketing.sql` to the verified Ticketing database and `20261123-add-application-changelog-v1.1.8-users.sql` to the verified Users database. Both are additive and repeatable. The local Docker database must be updated during implementation; staging and production remain operator-managed. These SQL files are ignored by Git and must be copied separately. Configure the Ticketing Firebase service-account mount and FCM environment variables before expecting Android app alerts. Rebuild frontend, Gateway, Users, Ticketing and Compliance together, and distribute the signed APK separately after deploying the new `assetlinks.json`. The package changed to `com.dswd.fo2icare.launcher`, so this is a separate Android installation identity.
