@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.10 (from 1.1.9)
+
+Apply `20261124-add-sla-sounds-ticketing.sql` in the verified Ticketing database before rebuilding the services. Apply `20261124-add-application-changelog-v1.1.10-users.sql` in the verified Users database. Install the 1.1.10 APK over the previous FO2 iCare app and open it to refresh its existing alert registration. Verify the Home Screen badge on a numeric-badge launcher, and verify the Nearing SLA and Overdue sounds on an assigned account and an account with ticket administration access during SLA working hours.
+
 ## For release 1.1.9 (from 1.1.8)
 
 Apply `20261124-add-application-changelog-v1.1.9-users.sql` to the verified Users database. This release uses the 1.1.8 Ticketing registration table and Firebase service-account configuration. Rebuild the application services and install the 1.1.9 APK over the 1.1.8 FO2 iCare app. The APK keeps the same package and signing certificate. Open **Bell → Enable → Send test alert** to verify delivery on Android.

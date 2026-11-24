@@ -12,25 +12,40 @@ function safeTargetPath(value) {
   }
 }
 
+async function playSlaSoundInOpenApp(kind) {
+  const windows = await self.clients.matchAll({ type: 'window' });
+  const client = windows.find(item => item.focused && item.visibilityState === 'visible');
+  if (!client) return false;
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    const finish = played => { clearTimeout(timeout); channel.port1.close(); resolve(played); };
+    const timeout = setTimeout(() => finish(false), 250);
+    channel.port1.onmessage = event => finish(event.data === true);
+    client.postMessage({ type: 'FO2_SLA_SOUND', kind }, [channel.port2]);
+  });
+}
+
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     let payload = {};
     try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
     const test = payload?.test === true;
+    const slaSound = payload?.kind === 'nearing_sla' || payload?.kind === 'overdue_sla';
     const unreadCount = Number.isSafeInteger(payload?.unreadCount) && payload.unreadCount > 0
       ? payload.unreadCount
       : 0;
     // Show the OS notification independently of numeric app badge support.
+    const playedInOpenApp = slaSound && await playSlaSoundInOpenApp(payload.kind).catch(() => false);
     await self.registration.showNotification('FO2 iCare', {
-      body: test ? 'Your test alert arrived on this device.' : 'You have a new notification.',
+      body: test ? 'Your test alert arrived on this device.' : slaSound ? 'You have an SLA reminder.' : 'You have a new notification.',
       icon: '/icons/app-192.png',
       badge: '/icons/app-192.png',
-      silent: false,
-      tag: test ? 'fo2-icare-test-alert' : 'rictms-new-notification',
+      silent: playedInOpenApp,
+      tag: test ? 'fo2-icare-test-alert' : slaSound ? `fo2-${payload.kind}` : 'rictms-new-notification',
       renotify: true,
       data: { targetPath: safeTargetPath(payload?.targetPath) },
     });
-    if (test) return;
+    if (test || slaSound) return;
     if (unreadCount && typeof self.navigator.setAppBadge === 'function') {
       await self.navigator.setAppBadge(unreadCount).catch(() => undefined);
     } else if (!unreadCount && typeof self.navigator.clearAppBadge === 'function') {

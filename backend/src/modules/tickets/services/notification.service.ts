@@ -11,6 +11,8 @@ import { TicketNotification } from '../entities/ticket-notification.entity';
 import { SseService } from './sse.service';
 import { WebPushService } from './web-push.service';
 import { FcmService } from './fcm.service';
+import { SlaSoundKind } from './sla-sound-kind';
+import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 
 export interface CreateAppNotificationInput {
   ticketId?: string | null;
@@ -32,6 +34,7 @@ export class NotificationService implements OnModuleInit {
     private readonly eventBus: EventBusService,
     @Optional() private readonly webPushService?: WebPushService,
     @Optional() private readonly fcmService?: FcmService,
+    @Optional() private readonly usersClient?: UsersHttpClient,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -107,12 +110,34 @@ export class NotificationService implements OnModuleInit {
   }
 
   async createForRoles(roles: string[], input: CreateAppNotificationInput): Promise<void> {
+    await this.create(await this.getActiveIdsForRoles(roles), input);
+  }
+
+  async getActiveIdsForRoles(roles: string[]): Promise<number[]> {
     const uniqueRoles = [...new Set(roles.filter(Boolean))];
-    if (uniqueRoles.length === 0) return;
+    if (uniqueRoles.length === 0) return [];
     const users = await this.userRepo.find({
       where: { role: In(uniqueRoles) as any, active: true } as any,
       select: ['id'],
     });
-    await this.create(users.map((user) => Number(user.id)), input);
+    return users.map((user) => Number(user.id));
+  }
+
+  async sendSlaSounds(alerts: ReadonlyMap<number, SlaSoundKind>): Promise<void> {
+    if (!alerts.size) return;
+    const users = await this.userRepo.find({
+      where: { id: In([...alerts.keys()]), active: true } as any,
+      select: ['id'],
+    });
+    for (let offset = 0; offset < users.length; offset += 20) {
+      await Promise.all(users.slice(offset, offset + 20).map(async user => {
+        const kind = alerts.get(Number(user.id));
+        if (!kind || !this.usersClient) return;
+        try { await this.usersClient.requireAccountAccess(Number(user.id)); } catch { return; }
+        this.sseService.emitSlaSound(Number(user.id), kind);
+        const android = await this.fcmService?.sendSlaSound(Number(user.id), kind).catch(() => undefined);
+        await this.webPushService?.sendSlaSound(Number(user.id), kind, android ?? new Set()).catch(() => undefined);
+      }));
+    }
   }
 }

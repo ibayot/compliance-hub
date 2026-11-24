@@ -1126,8 +1126,9 @@ export class TicketService implements OnModuleInit {
   }
 
   /**
-   * Specialized Concerns may only be owned by
+   * Normal assignment and escalation of Specialized Concerns require
    * active RICTMS staff whose role explicitly carries Specialized Support.
+   * The Pantawid proxy exception is restricted to the filing flow.
    * Keep this check centralized so creation, correction, reassignment, and
    * escalation cannot drift into different eligibility rules.
    */
@@ -1147,6 +1148,12 @@ export class TicketService implements OnModuleInit {
     const role = assignee?.role;
     return !!role && assignee?.active !== false && this.isDirectAssignableRictmsStaff(role)
       && this.roleCapSvc.isSpecializedSupport(role);
+  }
+
+  private isPantawidProxyAssignee(ticket: Ticket, actorId: number, role?: string): boolean {
+    return !!role && this.isDirectAssignableRictmsStaff(role) && this.roleCapSvc.isPantawidIct(role) &&
+      Number(ticket.assignedToId) === actorId && Number(ticket.createdById) === actorId &&
+      Number(ticket.requesterId) !== actorId;
   }
 
   /**
@@ -1553,22 +1560,27 @@ export class TicketService implements OnModuleInit {
     const filingDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const overtimeDate = await this.attendanceService.isOvertimeDay(filingDate) ? filingDate : null;
     const isSpecialized = ticketType === TicketType.SPECIALIZED_CONCERNS;
-    const isOvertimeProxy = !!overtimeDate && isOvertimeStaff(callerRole) && Number(requesterId) !== Number(callerId);
-    const filer = isSpecialized && (overtimeDate ? isOvertimeProxy : dto.assignedToId == null)
+    const isProxy = Number(requesterId) !== Number(callerId);
+    const isOvertimeProxy = !!overtimeDate && isOvertimeStaff(callerRole) && isProxy;
+    const isPantawidProxy = isProxy && !!callerRole && this.roleCapSvc.isPantawidIct(callerRole);
+    const filer = (isSpecialized || isPantawidProxy) && (overtimeDate ? isOvertimeProxy : dto.assignedToId == null)
       && this.isDirectAssignableRictmsStaff(callerRole)
       ? await this.usersHttpClient.getUserById(callerId)
       : null;
-    const specializedFiler = filer?.active === true && this.canOwnSpecializedTicket(filer) ? filer : null;
-    const overtimeFiler = isOvertimeProxy && (!isSpecialized || !!specializedFiler);
+    const pantawidProxyFiler = isPantawidProxy && filer?.active === true &&
+      this.isDirectAssignableRictmsStaff(filer.role) && this.roleCapSvc.isPantawidIct(filer.role) ? filer : null;
+    const specializedFiler = isSpecialized && filer?.active === true && this.canOwnSpecializedTicket(filer) ? filer : null;
+    const directFiler = pantawidProxyFiler ?? specializedFiler;
+    const overtimeFiler = isOvertimeProxy && (!isSpecialized || !!directFiler);
 
     if (overtimeDate) {
       if (dto.assignedToId != null && (!overtimeFiler || Number(dto.assignedToId) !== Number(callerId))) {
         throw new BadRequestException('OT proxy requests belong to the staff filer; personal requests remain Open for another OT participant.');
       }
       if (overtimeFiler) {
-        assignedTech = specializedFiler ?? await this.usersHttpClient.getUserById(callerId);
+        assignedTech = directFiler ?? await this.usersHttpClient.getUserById(callerId);
         if (!assignedTech || assignedTech.active === false) throw new ForbiddenException('The filer is not an active staff member.');
-        this.assertSpecializedAssigneeEligibility(ticketType, assignedTech);
+        if (!pantawidProxyFiler) this.assertSpecializedAssigneeEligibility(ticketType, assignedTech);
         assignedToId = callerId;
         const busy = await this.ticketRepo.count({ where: { assignedToId: callerId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
         shouldStartInProgress = busy === 0;
@@ -1625,10 +1637,10 @@ export class TicketService implements OnModuleInit {
       const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedToId);
       shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
       isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
-    } else if (isSpecialized) {
-      if (specializedFiler) {
+    } else if (isSpecialized || directFiler) {
+      if (directFiler) {
         assignedToId = callerId;
-        assignedTech = specializedFiler;
+        assignedTech = directFiler;
         const busy = await this.ticketRepo.count({ where: { assignedToId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
         const hasBreachedTicket = busy > 0 && await this.hasBreachedActiveTicket(assignedToId);
         shouldStartInProgress = busy === 0 || hasBreachedTicket;
@@ -1868,7 +1880,12 @@ export class TicketService implements OnModuleInit {
       ? await this.dataSource.transaction(async (manager) => {
           requester = await this.staffDirectory!.complete(manager, dto.pendingStaffId!, dto.requesterEmail!, callerId);
           requesterId = Number(requester.id);
-          if (assignedToId) this.assertRequesterAssignmentSeparation(ticketType, assignedToId, requesterId, callerId);
+          if (pantawidProxyFiler && requesterId === Number(callerId)) {
+            throw new ForbiddenException('A Pantawid proxy ticket must have a different requester.');
+          }
+          if (assignedToId) {
+            this.assertRequesterAssignmentSeparation(ticketType, assignedToId, requesterId, pantawidProxyFiler ? undefined : callerId);
+          }
           ticket.requesterId = requesterId;
           ticket.requesterUnitSnapshot = captureTicketUnit(requester);
           return manager.getRepository(Ticket).save(ticket);
@@ -1905,8 +1922,8 @@ export class TicketService implements OnModuleInit {
           previousAssigneeId: null,
           technicianId: assignedTech.id,
           technicianName: formatPersonName(assignedTech, assignedTech.email),
-          source: overtimeFiler ? 'overtime_filer' : manuallySelected ? 'ticket_creation_manual'
-            : specializedFiler ? 'specialized_filer' : 'ticket_creation_auto',
+          source: pantawidProxyFiler ? 'pantawid_proxy_filer' : overtimeFiler ? 'overtime_filer'
+            : manuallySelected ? 'ticket_creation_manual' : specializedFiler ? 'specialized_filer' : 'ticket_creation_auto',
         },
       ).catch(() => {});
     }
@@ -3501,7 +3518,8 @@ export class TicketService implements OnModuleInit {
     const isEligibleAssignedOperator =
       ticket.assignedToId === actorId &&
       (ticket.ticketType !== TicketType.SPECIALIZED_CONCERNS ||
-        this.roleCapSvc.isSpecializedSupport(actorRole as string));
+        this.roleCapSvc.isSpecializedSupport(actorRole as string) ||
+        this.isPantawidProxyAssignee(ticket, actorId, actorRole));
     const canUpdateOperationalFields = acceptedEscalation
       ? isAcceptedEscalationOperator
       : isTicketStatusAdmin || isEligibleAssignedOperator;

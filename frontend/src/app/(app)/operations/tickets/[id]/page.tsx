@@ -493,11 +493,13 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   // UI policy: if escalation is pending, no top action buttons are shown.
   // If escalation is accepted, only Update Status may appear.
   const hideTopActionButtons = !!hasPendingEscalation || ticket?.status === 'cancelled';
+  const isPantawidProxyFiler = !!user?.id && !!myCap?.isPantawidIct &&
+    Number(ticket?.createdById) === Number(user.id) && Number(ticket?.requesterId) !== Number(user.id);
   const isCurrentAssignee =
     !isRegularUser &&
     !!ticket?.assignedToId &&
     Number(ticket.assignedToId) === Number(user?.id) &&
-    (ticket.ticketType !== 'specialized_concerns' || !!myCap?.isSpecializedSupport);
+    (ticket.ticketType !== 'specialized_concerns' || !!myCap?.isSpecializedSupport || isPantawidProxyFiler);
   const canUpdateStatusNow =
     !hasPendingEscalation &&
     (hasAcceptedEscalation

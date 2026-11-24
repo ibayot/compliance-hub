@@ -14,6 +14,7 @@ def assetStatements = JsonOutput.toJson([[
 ]]).replace('"', '\\"')
 
 def generatedResources = layout.buildDirectory.dir('generated/hubResources')
+def generatedSounds = layout.buildDirectory.dir('generated/hubSounds')
 def copyLauncherIcon = tasks.register('copyLauncherIcon', Copy) {
     from('../public/icons/app-192.png')
     into(generatedResources.map { it.dir('drawable-nodpi') })
@@ -23,6 +24,11 @@ def copyRootCertificate = tasks.register('copyRootCertificate', Copy) {
     from('../../backend/assets/compliance-hub-root-ca.crt')
     into(generatedResources.map { it.dir('raw') })
     rename { 'compliance_hub_root_ca.crt' }
+}
+def copyNotificationSounds = tasks.register('copyNotificationSounds', Copy) {
+    from('../public/sounds')
+    include('routine_notification.wav', 'nearing_sla.wav', 'overdue_sla.wav')
+    into(generatedSounds.map { it.dir('raw') })
 }
 
 android {
@@ -34,8 +40,8 @@ android {
         minSdk = 24
         targetSdk = 36
         // The downloadable launcher can be updated independently of the web app.
-        versionCode = 10113
-        versionName = '1.1.9'
+        versionCode = 10114
+        versionName = '1.1.10'
         resValue 'string', 'hub_app_name', webManifest.short_name
         resValue 'string', 'hub_launch_url', origin + webManifest.start_url
         resValue 'string', 'hub_asset_statements', assetStatements
@@ -45,6 +51,7 @@ android {
     }
 
     sourceSets.main.res.srcDir(generatedResources)
+    sourceSets.main.res.srcDir(generatedSounds)
     buildTypes {
         release {
             minifyEnabled = true
@@ -54,7 +61,7 @@ android {
     }
 }
 
-tasks.named('preBuild').configure { dependsOn(copyLauncherIcon, copyRootCertificate) }
+tasks.named('preBuild').configure { dependsOn(copyLauncherIcon, copyRootCertificate, copyNotificationSounds) }
 
 dependencies {
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'

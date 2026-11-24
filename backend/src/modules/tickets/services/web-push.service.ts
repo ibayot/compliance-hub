@@ -14,6 +14,7 @@ import { Repository } from 'typeorm';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketNotification } from '../entities/ticket-notification.entity';
 import { WebPushSubscription } from '../entities/web-push-subscription.entity';
+import { SlaSoundKind } from './sla-sound-kind';
 
 export interface BrowserPushSubscriptionInput {
   endpoint: string;
@@ -259,24 +260,35 @@ export class WebPushService {
   }
 
   async sendForNotification(notification: TicketNotification, fcmAcceptedDeviceIds: ReadonlySet<string> = new Set()): Promise<void> {
+    const path = notification.targetPath;
+    const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
+    await this.sendToUser(notification.userId, targetPath, fcmAcceptedDeviceIds);
+  }
+
+  async sendSlaSound(userId: number, kind: SlaSoundKind, fcmAcceptedDeviceIds: ReadonlySet<string>): Promise<void> {
+    await this.sendToUser(userId, '/dashboard', fcmAcceptedDeviceIds, kind);
+  }
+
+  private async sendToUser(
+    userId: number, targetPath: string, fcmAcceptedDeviceIds: ReadonlySet<string>, kind?: SlaSoundKind,
+  ): Promise<void> {
     const config = this.configuration();
     if (!config) return;
-    const records = await this.subscriptions.find({ where: { userId: notification.userId } });
+    const records = await this.subscriptions.find({ where: { userId } });
     if (!records.length) return;
 
     try {
       // A push subscription can outlive a login session. Recheck the current account approval
       // before every delivery so revoked unit approval cannot continue receiving push alerts.
-      await this.usersClient.requireAccountAccess(notification.userId);
+      await this.usersClient.requireAccountAccess(userId);
     } catch {
       return;
     }
 
-    const unreadCount = await this.notifications.count({ where: { userId: notification.userId, isRead: false } });
-    const path = notification.targetPath;
-    const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
-    await Promise.all(records.map(record => this.deliver(record, config, {
-      title: 'FO2 iCare', body: 'You have a new notification.', targetPath, unreadCount,
-    }, fcmAcceptedDeviceIds)));
+    const payload = kind ? { targetPath, kind } : {
+      title: 'FO2 iCare', body: 'You have a new notification.', targetPath,
+      unreadCount: await this.notifications.count({ where: { userId, isRead: false } }),
+    };
+    await Promise.all(records.map(record => this.deliver(record, config, payload, fcmAcceptedDeviceIds)));
   }
 }

@@ -463,7 +463,7 @@ public final class CertificateSetupActivity extends Activity {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         JSONObject handoff = new JSONObject();
         try {
-            handoff.put("version", 2);
+            handoff.put("version", 3);
             handoff.put("deviceId", deviceId);
             handoff.put("notificationsGranted", notificationsGranted);
             if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);

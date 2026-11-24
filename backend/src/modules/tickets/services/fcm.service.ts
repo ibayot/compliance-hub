@@ -21,11 +21,15 @@ import { Repository } from 'typeorm';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { FcmDeviceRegistration } from '../entities/fcm-device-registration.entity';
 import { TicketNotification } from '../entities/ticket-notification.entity';
+import { SlaSoundKind } from './sla-sound-kind';
 
 export interface FcmDeviceInput {
   deviceId: string;
   fid: string;
+  deliveryVersion?: number;
 }
+
+type AndroidDeliveryKind = 'notification' | 'test' | 'badge_sync' | SlaSoundKind;
 
 export type FcmSendResult =
   | { outcome: 'accepted' | 'expired' | 'not-enabled' }
@@ -130,7 +134,8 @@ export class FcmService {
 
   private validateDeviceInput(input: FcmDeviceInput): void {
     if (!input || typeof input.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(input.deviceId) ||
-        typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid)) {
+        typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid) ||
+        (input.deliveryVersion !== undefined && input.deliveryVersion !== 2)) {
       throw new BadRequestException('A valid Android app device registration is required.');
     }
   }
@@ -196,17 +201,24 @@ export class FcmService {
     row.deviceId = input.deviceId;
     row.fidHash = fidHash;
     row.encryptedFid = this.encryptFid(input.fid, configuration.encryptionKey);
+    row.deliveryVersion = input.deliveryVersion ?? 1;
     try {
       await this.registrations.save(row);
     } catch {
       throw new BadRequestException('This Android device could not be registered. Reopen FO2 iCare and try again.');
     }
+    if (row.deliveryVersion === 2) void this.syncBadge(userId, row.deviceId).catch(() => undefined);
     return { enabled: true };
   }
 
   async removeDevice(userId: number, deviceId: string): Promise<{ removed: boolean }> {
     if (!DEVICE_ID_PATTERN.test(deviceId ?? '')) throw new BadRequestException('A valid Android app device is required.');
+    const row = await this.registrations.findOne({ where: { userId, deviceId, deliveryVersion: 2 } });
     const result = await this.registrations.delete({ userId, deviceId });
+    const config = this.configuration();
+    if (result.affected && row && config) {
+      void this.sendToRegistration(config, row, 0, 'badge_sync').catch(() => undefined);
+    }
     return { removed: (result.affected ?? 0) > 0 };
   }
 
@@ -224,26 +236,41 @@ export class FcmService {
       throw new HttpException('Please wait 30 seconds before sending another test alert.', HttpStatus.TOO_MANY_REQUESTS);
     }
     this.nextTestAlertAt.set(rateLimitKey, now + TEST_ALERT_INTERVAL_MS);
-    const unreadCount = await this.notifications.count({ where: { userId, isRead: false } });
-    return this.sendToRegistration(configuration, registration, unreadCount, true);
+    return this.sendToRegistration(configuration, registration, 0, 'test');
   }
 
   async sendForNotification(notification: TicketNotification): Promise<Set<string>> {
+    return this.sendToUser(notification.userId, 'notification');
+  }
+
+  async sendSlaSound(userId: number, kind: SlaSoundKind): Promise<Set<string>> {
+    return this.sendToUser(userId, kind);
+  }
+
+  async syncBadge(userId: number, deviceId?: string): Promise<void> {
+    await this.sendToUser(userId, 'badge_sync', deviceId);
+  }
+
+  private async sendToUser(userId: number, kind: AndroidDeliveryKind, deviceId?: string): Promise<Set<string>> {
     const configuration = this.configuration();
     if (!configuration) return new Set();
-    const registrations = await this.registrations.find({ where: { userId: notification.userId } });
+    const registrations = await this.registrations.find({ where: {
+      userId, ...(deviceId ? { deviceId } : {}), ...(kind !== 'notification' ? { deliveryVersion: 2 } : {}),
+    } });
     if (!registrations.length) return new Set();
 
     try {
-      await this.usersClient.requireAccountAccess(notification.userId);
+      await this.usersClient.requireAccountAccess(userId);
     } catch {
       return new Set();
     }
 
-    const unreadCount = await this.notifications.count({ where: { userId: notification.userId, isRead: false } });
+    const unreadCount = kind === 'notification' || kind === 'badge_sync'
+      ? await this.notifications.count({ where: { userId, isRead: false } })
+      : 0;
     const results = await Promise.all(registrations.map(async registration => ({
       deviceId: registration.deviceId,
-      result: await this.sendToRegistration(configuration, registration, unreadCount, false),
+      result: await this.sendToRegistration(configuration, registration, unreadCount, kind),
     })));
     return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
   }
@@ -252,7 +279,7 @@ export class FcmService {
     configuration: FcmConfiguration,
     registration: FcmDeviceRegistration,
     unreadCount: number,
-    test: boolean,
+    kind: AndroidDeliveryKind,
   ): Promise<FcmSendResult> {
     let fid: string;
     try {
@@ -262,7 +289,7 @@ export class FcmService {
       return { outcome: 'failed', failure: 'registration-storage' };
     }
 
-    const result = await this.send(configuration, fid, unreadCount, test);
+    const result = await this.send(configuration, fid, unreadCount, kind, registration.deliveryVersion === 2);
     if (result.outcome !== 'expired') return result;
 
     // A phone can refresh its registration while a send is pending. Delete only the rejected version.
@@ -279,7 +306,10 @@ export class FcmService {
     return { outcome: 'failed', failure: 'registration-storage' };
   }
 
-  private async send(configuration: FcmConfiguration, fid: string, unreadCount: number, test: boolean): Promise<FcmSendResult> {
+  private async send(
+    configuration: FcmConfiguration, fid: string, unreadCount: number, kind: AndroidDeliveryKind, enhancedDelivery: boolean,
+  ): Promise<FcmSendResult> {
+    const countAt = Date.now();
     let accessToken: string | null | undefined;
     try {
       const client = await configuration.auth.getClient();
@@ -294,6 +324,23 @@ export class FcmService {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FCM_SEND_TIMEOUT_MS);
     try {
+      const badgeSync = kind === 'badge_sync';
+      const count = Math.max(0, unreadCount);
+      const message = enhancedDelivery ? {
+        fid,
+        data: { kind, unreadCount: String(count), countAt: String(countAt) },
+        android: badgeSync ? { priority: 'NORMAL', collapse_key: 'fo2_badge', ttl: '300s' }
+          : { priority: 'HIGH', ttl: '60s' },
+      } : {
+        fid,
+        notification: { title: 'FO2 iCare', body: kind === 'test' ? 'This is a test notification.' : 'You have a new notification.' },
+        data: { unreadCount: String(count), targetPath: '/dashboard' },
+        android: {
+          priority: 'HIGH',
+          notification: { channel_id: 'fo2_icare_alerts', icon: 'hub_notification', color: '#147A76',
+            sound: 'default', notification_count: count },
+        },
+      };
       const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(configuration.projectId)}/messages:send`, {
         method: 'POST',
         headers: {
@@ -301,26 +348,7 @@ export class FcmService {
           'Content-Type': 'application/json',
         },
         signal: controller.signal,
-        body: JSON.stringify({
-          message: {
-            fid,
-            notification: {
-              title: 'FO2 iCare',
-              body: test ? 'This is a test notification.' : 'You have a new notification.',
-            },
-            data: { unreadCount: String(Math.max(0, unreadCount)), targetPath: '/dashboard' },
-            android: {
-              priority: 'HIGH',
-              notification: {
-                channel_id: 'fo2_icare_alerts',
-                icon: 'hub_notification',
-                color: '#147A76',
-                sound: 'default',
-                notification_count: Math.max(0, unreadCount),
-              },
-            },
-          },
-        }),
+        body: JSON.stringify({ message }),
       });
       if (response.ok) return { outcome: 'accepted' };
 

@@ -167,6 +167,13 @@ export class SseService implements OnModuleInit {
     this.emit({ type: 'NOTIFICATIONS_READ', targetUserId });
   }
 
+  emitSlaSound(targetUserId: number, kind: 'nearing_sla' | 'overdue_sla') {
+    // Short-lived audio cues are live only. Replaying them after a reconnect would sound stale reminders.
+    const event = { type: 'SLA_SOUND', payload: { kind }, targetUserId };
+    this.eventSubject.next(event);
+    void this.eventBus.publish<SseEnvelope>(SSE_EVENT_CHANNEL, { sourceId: this.instanceId, event }).catch(() => undefined);
+  }
+
   emitDutyUpdated() {
     this.emit({ type: 'DUTY_UPDATED' });
   }

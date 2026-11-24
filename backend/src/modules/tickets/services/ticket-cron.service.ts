@@ -12,6 +12,7 @@ import { SseService } from './sse.service';
 import { UserRole } from '../../shared/entities';
 import { NotificationService } from './notification.service';
 import { RoleCapabilitiesService } from '../../users/role-capabilities.service';
+import { slaSoundStep, SlaSoundKind } from './sla-sound-kind';
 
 @Injectable()
 export class TicketCronService implements OnModuleInit {
@@ -20,6 +21,7 @@ export class TicketCronService implements OnModuleInit {
   private readonly advancedOverdueTickets = new Set<string>();
   private readonly finalizedAbsenceDates = new Set<string>();
   private readonly absenceFinalizationAttempts = new Map<string, number>();
+  private runningSlaSounds = false;
 
   onModuleInit() {
     this.logger.log('TicketCronService initialized and ready for cron jobs.');
@@ -61,6 +63,7 @@ export class TicketCronService implements OnModuleInit {
     await this.processAutoUnpause();
     // Never promote queued work using a stale, pre-resume SLA deadline.
     await this.processOverdueTicketsUnpauseNext();
+    await this.processSlaSounds(config).catch(() => this.logger.warn('Scheduled SLA sounds could not be processed.'));
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -503,5 +506,93 @@ export class TicketCronService implements OnModuleInit {
         }));
       }
     }
+  }
+
+  private async processSlaSounds(config: TicketingConfig, now = new Date()): Promise<void> {
+    if (this.runningSlaSounds || config.isFlagCeremonyPaused) return;
+    this.runningSlaSounds = true;
+    try {
+      const alerts = new Map<number, SlaSoundKind>();
+      let adminIds: number[] | undefined;
+      const calendarCache = new Map<string, boolean>();
+      const windowCheck = new Map<string, boolean>();
+      const nextSecond = new Date(now.getTime() + 1000);
+      let lastId = '';
+      for (;;) {
+        const tickets = await this.ticketRepo.createQueryBuilder('t')
+          .select(['t.id', 't.assignedToId', 't.slaStartedAt', 't.slaDeadline', 't.overtimeSlaDate'])
+          .leftJoin('t.issueTypeConfig', 'issue')
+          .addSelect(['issue.id', 'issue.slaHours'])
+          .where('t.status = :status', { status: TicketStatus.IN_PROGRESS })
+          .andWhere('t.id > :lastId', { lastId })
+          .andWhere('t.assignedToId IS NOT NULL AND t.slaStartedAt IS NOT NULL AND t.slaDeadline IS NOT NULL')
+          .andWhere('t.slaPausedAt IS NULL AND COALESCE(t.isSlaWaiting, 0) = 0')
+          .andWhere('(t.slaDeadline <= :now OR TIMESTAMPDIFF(SECOND, :now, t.slaDeadline) <= COALESCE(issue.slaHours * 3600, TIMESTAMPDIFF(SECOND, t.slaStartedAt, t.slaDeadline)) * 0.4)', { now })
+          .orderBy('t.id', 'ASC').take(100).getMany();
+        if (!tickets.length) break;
+        lastId = tickets[tickets.length - 1].id;
+
+        for (const ticket of tickets) {
+          const assigneeId = ticket.assignedToId;
+          const start = ticket.slaStartedAt;
+          const deadline = ticket.slaDeadline;
+          if (!assigneeId || !start || !deadline) continue;
+          const calendar = ticket.overtimeSlaDate ? { ...config, overtimeSlaDate: ticket.overtimeSlaDate } : config;
+          const calendarKey = ticket.overtimeSlaDate || '';
+          if (!windowCheck.has(calendarKey)) {
+            // A one-second probe uses the same lunch, office-day, overtime and shift calendar as SLA.
+            windowCheck.set(calendarKey, (await this.ticketService.calculateBusinessSecondsForSla(
+              now, nextSecond, calendar, calendarCache,
+            )) > 0);
+          }
+          if (!windowCheck.get(calendarKey)) continue;
+
+          const overdue = deadline.getTime() <= now.getTime();
+          const budget = ticket.issueTypeConfig?.slaHours
+            ? Number(ticket.issueTypeConfig.slaHours) * 3600
+            : (deadline.getTime() - start.getTime()) / 1000;
+          const remaining = overdue ? 0 : await this.ticketService.calculateBusinessSecondsForSla(now, deadline, calendar, calendarCache);
+          const overdueSeconds = overdue
+            ? await this.ticketService.calculateBusinessSecondsForSla(deadline, now, calendar, calendarCache)
+            : 0;
+          const step = slaSoundStep(overdue ? 0 : Math.max(1, remaining), budget, overdueSeconds);
+          if (!step || !(await this.claimSlaSoundStep(ticket.id, assigneeId, start, deadline, step))) continue;
+
+          adminIds ??= await this.notificationService.getActiveIdsForRoles([
+            ...this.roleCapabilities.getRolesWhere('isTicketFocal'),
+            ...this.roleCapabilities.getRolesWhere('isTicketSettingsFocal'),
+          ]);
+          for (const recipient of [assigneeId, ...adminIds]) {
+            // One sound per recipient per scan, with the overdue cue taking precedence.
+            if (overdue || !alerts.has(recipient)) alerts.set(recipient, overdue ? 'overdue_sla' : 'nearing_sla');
+          }
+        }
+        if (tickets.length < 100) break;
+      }
+      await this.notificationService.sendSlaSounds(alerts);
+    } finally {
+      this.runningSlaSounds = false;
+    }
+  }
+
+  private async claimSlaSoundStep(
+    ticketId: string, assigneeId: number, start: Date, deadline: Date, step: number,
+  ): Promise<boolean> {
+    const clockKey = `${assigneeId}:${start.getTime()}`;
+    const stillActive = `t.id = ? AND t.assigned_to_id = ? AND t.sla_started_at = ? AND t.sla_deadline = ?
+      AND t.status = ? AND t.sla_paused_at IS NULL AND COALESCE(t.is_sla_waiting, 0) = 0`;
+    const activeParameters = [ticketId, assigneeId, start, deadline, TicketStatus.IN_PROGRESS];
+    const updated = await this.ticketRepo.query(
+      `UPDATE ticket_sla_sound_state s JOIN tickets t ON t.id = s.ticket_id
+        SET s.clock_key = ?, s.step = ? WHERE ${stillActive} AND (s.clock_key <> ? OR s.step < ?)`,
+      [clockKey, step, ...activeParameters, clockKey, step],
+    );
+    if (updated.affectedRows > 0) return true;
+    const inserted = await this.ticketRepo.query(
+      `INSERT IGNORE INTO ticket_sla_sound_state (ticket_id, clock_key, step)
+        SELECT t.id, ?, ? FROM tickets t WHERE ${stillActive}`,
+      [clockKey, step, ...activeParameters],
+    );
+    return inserted.affectedRows > 0;
   }
 }

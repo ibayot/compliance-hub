@@ -136,6 +136,13 @@ function fcmSetupMessage(issue?: string): string {
 
 const androidAlertsUpdateMessage = 'Update FO2 iCare from Download App in your Android browser, then reopen the app to enable alerts.';
 
+type NotificationSound = 'notification' | 'nearing_sla' | 'overdue_sla';
+const notificationSoundPaths: Record<NotificationSound, string> = {
+  notification: '/sounds/routine_notification.wav',
+  nearing_sla: '/sounds/nearing_sla.wav',
+  overdue_sla: '/sounds/overdue_sla.wav',
+};
+
 const pushFailureMessages: Record<BrowserPushFailure, string> = {
   authentication: 'The push provider rejected Ticketing’s signing credentials. Ask an administrator to check the VAPID keys and server clock. If the keys changed, enable alerts again on this device.',
   'rate-limit': 'The push provider is limiting requests. Wait a few minutes and try the test again.',
@@ -289,7 +296,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               fcmStatus = { ...fcmStatus, registered: false };
             }
             if (fcmStatus.registered && fcmConfig.enabled && notificationPermissionGranted && nativeFcmHandoff?.fid && deviceId) {
-              await notificationsApi.saveFcmDevice({ deviceId, fid: nativeFcmHandoff.fid });
+              await notificationsApi.saveFcmDevice({
+                deviceId, fid: nativeFcmHandoff.fid, deliveryVersion: nativeFcmHandoff.version === 3 ? 2 : undefined,
+              });
             }
             if (!current) return;
             const enabled = fcmStatus.registered && fcmConfig.enabled && notificationPermissionGranted;
@@ -421,7 +430,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
     setPushBusy(true);
     try {
-      await notificationsApi.saveFcmDevice({ deviceId: device.deviceId, fid: device.fid });
+      await notificationsApi.saveFcmDevice({
+        deviceId: device.deviceId, fid: device.fid, deliveryVersion: device.version === 3 ? 2 : undefined,
+      });
       setPushEnabled(true);
       setPushMessage('Android app alerts are enabled. Use Send test alert to check delivery.');
     } catch (error) {
@@ -647,11 +658,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     return () => desktopPointer.removeEventListener('change', refresh);
   }, []);
 
-  // Audio fallback plus a Web Audio context for a more noticeable multi-tone chime.
+  // The browser and the Android APK use the same audio assets.
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const audioContextRef = React.useRef<AudioContext | null>(null);
+  const audioBuffersRef = React.useRef(new Map<NotificationSound, AudioBuffer>());
   React.useEffect(() => {
-    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current = new Audio(notificationSoundPaths.notification);
     audioRef.current.preload = 'auto';
   }, []);
 
@@ -662,48 +674,45 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       window.AudioContext ||
       (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextConstructor) return null;
-    if (!audioContextRef.current) {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       audioContextRef.current = new AudioContextConstructor();
     }
     return audioContextRef.current;
   }, []);
 
-  const playNotificationSound = React.useCallback(() => {
-    const audioContext = getNotificationAudioContext();
-    if (audioContext && audioContext.state === 'running') {
-      const startedAt = audioContext.currentTime + 0.02;
-      const notes = [
-        { frequency: 659.25, offset: 0 },
-        { frequency: 783.99, offset: 0.16 },
-        { frequency: 1046.5, offset: 0.34 },
-        { frequency: 783.99, offset: 0.62 },
-      ];
-
-      notes.forEach(({ frequency, offset }) => {
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        const noteStart = startedAt + offset;
-        oscillator.type = 'triangle';
-        oscillator.frequency.setValueAtTime(frequency, noteStart);
-        gain.gain.setValueAtTime(0.0001, noteStart);
-        gain.gain.exponentialRampToValueAtTime(0.2, noteStart + 0.025);
-        gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.22);
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start(noteStart);
-        oscillator.stop(noteStart + 0.24);
-      });
-      return;
+  useEffect(() => {
+    const context = getNotificationAudioContext();
+    if (!context) return;
+    const controller = new AbortController();
+    const buffers = audioBuffersRef.current;
+    for (const [kind, path] of Object.entries(notificationSoundPaths) as [NotificationSound, string][]) {
+      void fetch(path, { signal: controller.signal })
+        .then(response => response.ok ? response.arrayBuffer() : Promise.reject())
+        .then(data => context.decodeAudioData(data))
+        .then(buffer => { if (!controller.signal.aborted) buffers.set(kind, buffer); })
+        .catch(() => undefined);
     }
+    return () => controller.abort();
+  }, [getNotificationAudioContext]);
 
+  const playNotificationSound = React.useCallback(async (kind: NotificationSound = 'notification') => {
+    const audioContext = audioContextRef.current;
+    const buffer = audioBuffersRef.current.get(kind);
+    if (audioContext?.state === 'running' && buffer) {
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.start();
+      return true;
+    }
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) return false;
+    const path = notificationSoundPaths[kind];
+    if (audio.getAttribute('src') !== path) audio.setAttribute('src', path);
     audio.currentTime = 0;
     audio.volume = 1;
-    void audio.play().catch(() => {
-      // Browsers may block sound until the user interacts with the page.
-    });
-  }, [getNotificationAudioContext]);
+    return audio.play().then(() => true, () => false);
+  }, []);
 
   const unlockNotificationAudio = React.useCallback(async () => {
     if (notificationAudioUnlockedRef.current) return;
@@ -946,6 +955,27 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     }
     void fetchNotificationSummary();
   });
+
+  useSse(['SLA_SOUND'], (payload, eventType) => {
+    if (eventType !== 'SLA_SOUND' || pushEnabled || document.visibilityState !== 'visible') return;
+    if (payload?.kind === 'nearing_sla' || payload?.kind === 'overdue_sla') void playNotificationSound(payload.kind);
+  });
+
+  useEffect(() => {
+    if (!user || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const kind = event.data?.kind;
+      if (event.data?.type !== 'FO2_SLA_SOUND' || !event.ports[0]) return;
+      if (document.visibilityState !== 'visible' || !notificationAudioUnlockedRef.current ||
+          (kind !== 'nearing_sla' && kind !== 'overdue_sla')) {
+        event.ports[0].postMessage(false);
+        return;
+      }
+      void playNotificationSound(kind).then(played => event.ports[0].postMessage(played));
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [user, playNotificationSound]);
 
   useEffect(() => {
     if (!pushEnabled || !('setAppBadge' in navigator)) return;

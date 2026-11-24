@@ -2,7 +2,7 @@ const HANDOFF_STORAGE_KEY = 'fo2-icare-native-fcm-handoff-v1';
 const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
 
 export interface NativeFcmHandoff {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   deviceId: string;
   fid?: string;
   notificationsGranted: boolean;
@@ -15,13 +15,13 @@ function isUuid(value: unknown): value is string {
 function parseHandoff(value: unknown): NativeFcmHandoff | null {
   if (!value || typeof value !== 'object') return null;
   const parsed = value as Partial<NativeFcmHandoff>;
-  if ((parsed.version !== 1 && parsed.version !== 2) || !isUuid(parsed.deviceId) ||
+  if ((parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) || !isUuid(parsed.deviceId) ||
       typeof parsed.notificationsGranted !== 'boolean') return null;
   if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
   return {
     version: parsed.version,
     deviceId: parsed.deviceId,
-    fid: parsed.version === 2 ? parsed.fid : undefined,
+    fid: parsed.version >= 2 ? parsed.fid : undefined,
     notificationsGranted: parsed.notificationsGranted,
   };
 }

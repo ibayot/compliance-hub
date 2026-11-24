@@ -20,6 +20,9 @@ export class FcmDeviceRegistration {
   @Column({ name: 'encrypted_fid', type: 'text' })
   encryptedFid: string;
 
+  @Column({ name: 'delivery_version', type: 'tinyint', unsigned: true, default: 1 })
+  deliveryVersion: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

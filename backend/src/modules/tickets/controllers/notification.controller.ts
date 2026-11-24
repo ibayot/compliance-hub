@@ -144,6 +144,7 @@ export class NotificationController {
     const userId = this.userId(req);
     await this.notificationRepo.update({ userId, isRead: false }, { isRead: true });
     this.sseService?.emitNotificationsRead(Number(userId));
+    void this.fcmService?.syncBadge(userId).catch(() => undefined);
     return { success: true };
   }
 
@@ -154,7 +155,10 @@ export class NotificationController {
       { id, userId, isRead: false },
       { isRead: true },
     );
-    if (result.affected) this.sseService?.emitNotificationsRead(Number(userId));
+    if (result.affected) {
+      this.sseService?.emitNotificationsRead(Number(userId));
+      void this.fcmService?.syncBadge(userId).catch(() => undefined);
+    }
     return { success: (result.affected ?? 0) > 0 };
   }
 }
