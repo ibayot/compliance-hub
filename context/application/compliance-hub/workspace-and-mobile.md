@@ -16,6 +16,8 @@ Anchor the mobile bottom navigation to the viewport with fixed positioning and s
 
 Keep Comments and Timeline in the same equal-height row where the Ticket Details width permits, and make escalation details conditional on an existing escalation. Ticket Details and Staff Directory share the profile-photo viewer. Verify the actual requester photo, the keyboard-accessible enlargement, portrait and landscape aspect ratios, and a usable fallback when no photo is available. Check ticket filters in focal-only and ticket-management accounts, including that Escalated To Me sits with the other filters. Scroll populated tables in each preset, then check a short result, an empty result and mobile Attendance's day view. See [canonical implementations](../../inventory/canonical-implementations.md) and DS-TABLE-006.
 
+- **CH-MOBILE-001** — The installed Android APK, Android Home Screen app, and iOS standalone or full-screen app MUST keep single-finger scrolling and reserve two-finger zoom for opened attachment and profile photo viewers. Keep keyboard and on-screen zoom controls in each viewer. Preserve normal page zoom in ordinary web browser tabs and validate installed iOS and Android separately.
+
 ## Retest cases from owner feedback
 
 Use these cases when related work is requested. They record places where a broad completion claim missed a visible requirement or interaction. Establish the current result by retesting the affected state.

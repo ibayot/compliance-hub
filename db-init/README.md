@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.13 (from 1.1.12)
+
+Apply `20261124-add-application-changelog-v1.1.13-users.sql` in the verified Users database. This release uses the existing Ticketing schema. Update the signed Android APK and use a real notification to check the Home Screen badge in the phone's selected dot or number mode. Mark the notification as read to verify the badge clears.
+
 ## For release 1.1.12 (from 1.1.11)
 
 Apply `20261124-add-application-changelog-v1.1.12-users.sql` in the verified Users database. The 1.1.10 Ticketing schema already supports this release. Rebuild the application services and install the 1.1.12 APK. Allow notifications on first launch and sign in to register automatically. Check Android sound and badges with a real new ticket notification.

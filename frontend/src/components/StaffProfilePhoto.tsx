@@ -1,6 +1,9 @@
 import { useId, useState } from 'react';
-import { Avatar, Box, ButtonBase, Dialog, IconButton, Typography } from '@mui/material';
+import { Avatar, Box, ButtonBase, Dialog, IconButton, Stack, Typography } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import { MAX_IMAGE_ZOOM, useImageZoom } from '@/lib/utils/useImageZoom';
 
 type StaffProfilePhotoProps = {
   staffId?: string | null;
@@ -22,6 +25,7 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
     ? `${imageRoot}/${encodeURIComponent(normalizedStaffId)}.jpg`
     : '';
   const available = !!imageUrl && !failed;
+  const { setViewport, zoom, zoomPercent, resetZoom, changeZoom } = useImageZoom(open && available);
 
   const handleImageError = () => {
     setFailed(true);
@@ -33,7 +37,10 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
       <ButtonBase
         type="button"
         disabled={!available}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          resetZoom();
+          setOpen(true);
+        }}
         aria-label={available ? `View ${name} profile photo` : `${name} profile photo unavailable`}
         sx={{
           flexShrink: 0,
@@ -65,10 +72,15 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
         onClose={() => setOpen(false)}
         maxWidth={false}
         aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key === '+' || event.key === '=') changeZoom(1);
+          if (event.key === '-') changeZoom(-1);
+          if (event.key === '0') resetZoom();
+        }}
         PaperProps={{
           sx: {
             width: 'min(440px, calc(100vw - 24px))',
-            height: 'min(560px, calc(100vh - 32px))',
+            height: 'min(560px, calc(100dvh - 32px))',
             maxWidth: 'none',
             m: 1,
             overflow: 'visible',
@@ -105,22 +117,23 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
           >
             <CloseRoundedIcon />
           </IconButton>
-          <Box
+          <Box ref={setViewport} tabIndex={0} aria-label="Profile photo preview area"
             sx={{
               width: '100%',
               flex: 1,
               minHeight: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'visible',
+              overflow: zoom > 1 ? 'auto' : 'visible',
+              overscrollBehavior: 'contain',
+              touchAction: 'pan-x pan-y',
             }}
           >
-            <Box
+            <Box sx={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}>
+              <Box
               component="img"
               src={imageUrl}
               alt={`${name} profile photo`}
               onError={handleImageError}
+              draggable={false}
               sx={{
                 display: 'block',
                 width: '100%',
@@ -133,7 +146,8 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
                 borderRadius: '18px',
                 boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.28), 0 14px 30px rgba(0, 0, 0, 0.32), 0 32px 64px rgba(0, 0, 0, 0.52)',
               }}
-            />
+              />
+            </Box>
           </Box>
           <Typography
             id={titleId}
@@ -158,6 +172,18 @@ export default function StaffProfilePhoto({ staffId, name, size = 40 }: StaffPro
           >
             {name}
           </Typography>
+          <Stack direction="row" alignItems="center" sx={{ borderRadius: 2, color: 'text.primary', bgcolor: 'background.paper' }}>
+            <IconButton aria-label="Zoom out" disabled={zoom <= 1} onClick={() => changeZoom(-1)}>
+              <ZoomOutIcon />
+            </IconButton>
+            <ButtonBase aria-label={`Reset image zoom, current zoom ${zoomPercent}%`} onClick={resetZoom} sx={{ px: 1, minHeight: 44, borderRadius: 1,
+              '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}>
+              {zoomPercent}%
+            </ButtonBase>
+            <IconButton aria-label="Zoom in" disabled={zoom >= MAX_IMAGE_ZOOM} onClick={() => changeZoom(1)}>
+              <ZoomInIcon />
+            </IconButton>
+          </Stack>
         </Box>
       </Dialog>
     </>

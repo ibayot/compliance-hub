@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { getNativeFcmHandoff, subscribeNativeFcmHandoff } from './native-fcm-handoff';
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<unknown>;
@@ -41,6 +42,21 @@ window.addEventListener('beforeinstallprompt', (event) => {
   installPrompt = event as InstallPromptEvent;
 });
 window.addEventListener('appinstalled', () => { installPrompt = null; });
+
+function updateInstalledTouchGestures() {
+  const installed = Capacitor.isNativePlatform() || isHomeScreenApp() || !!getNativeFcmHandoff();
+  document.documentElement.toggleAttribute('data-installed-app', installed);
+}
+
+updateInstalledTouchGestures();
+subscribeNativeFcmHandoff(updateInstalledTouchGestures);
+window.addEventListener('pageshow', updateInstalledTouchGestures);
+window.addEventListener('appinstalled', updateInstalledTouchGestures);
+const preventInstalledPinch = (event: Event) => {
+  if (event.cancelable && document.documentElement.hasAttribute('data-installed-app')) event.preventDefault();
+};
+window.addEventListener('gesturestart', preventInstalledPinch, { passive: false });
+window.addEventListener('gesturechange', preventInstalledPinch, { passive: false });
 
 // Give Android Chrome the push-only worker before installation. Permission and
 // subscription still happen only when the user enables alerts.

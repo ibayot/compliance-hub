@@ -37,6 +37,10 @@ public final class FcmMessageService extends FirebaseMessagingService {
         return manager == null ? null : manager.getNotificationChannel(ROUTINE_CHANNEL);
     }
 
+    private static boolean canShowBadge(NotificationChannel channel) {
+        return channel != null && channel.canShowBadge() && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
     public static void ensureNotificationChannel(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager manager = context.getSystemService(NotificationManager.class);
@@ -77,10 +81,11 @@ public final class FcmMessageService extends FirebaseMessagingService {
         ensureNotificationChannel(this);
 
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager == null || !manager.areNotificationsEnabled()) return;
+        if (manager == null) return;
 
         Map<String, String> data = message.getData();
         String kind = data.getOrDefault("kind", "notification");
+        if (!manager.areNotificationsEnabled() && !"badge_sync".equals(kind) && !"notification".equals(kind)) return;
         try {
             switch (kind) {
                 case "badge_sync":
@@ -136,16 +141,18 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 }
             }
         }
-        if (count <= 0) {
+        if (count <= 0 || !manager.areNotificationsEnabled()) {
             manager.cancel(UNREAD_NOTIFICATION);
+            LauncherBadge.update(this, 0);
             return;
         }
         boolean badgeSync = "badge_sync".equals(kind);
+        boolean allowBadge = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || canShowBadge(routineChannel(this));
         String channel = ROUTINE_CHANNEL;
         if (badgeSync && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel routine = routineChannel(this);
-            if (routine == null || !routine.canShowBadge() || routine.getImportance() == NotificationManager.IMPORTANCE_NONE) {
+            if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
+                LauncherBadge.update(this, 0);
                 return;
             }
             // AndroidX's silent flag groups even a single notification. Use an ungrouped,
@@ -159,6 +166,10 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 .setNumber(count).setOnlyAlertOnce(badgeSync);
         if (badgeSync && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) alert.setSilent(true);
         manager.notify(UNREAD_NOTIFICATION, alert.build());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
+        }
+        LauncherBadge.update(this, allowBadge ? count : 0);
     }
 
     private NotificationCompat.Builder notification(String channel, String sound, String body) {
