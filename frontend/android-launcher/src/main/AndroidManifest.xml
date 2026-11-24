@@ -56,5 +56,10 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        <provider
+            android:name=".NotificationSoundProvider"
+            android:authorities="${applicationId}.notification-sounds"
+            android:exported="true"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

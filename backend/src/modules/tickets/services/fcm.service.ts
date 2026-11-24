@@ -25,7 +25,7 @@ import { SlaSoundKind } from './sla-sound-kind';
 
 export interface FcmDeviceInput {
   deviceId: string;
-  fid: string;
+  fid?: string;
   deliveryVersion?: number;
 }
 
@@ -134,7 +134,7 @@ export class FcmService {
 
   private validateDeviceInput(input: FcmDeviceInput): void {
     if (!input || typeof input.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(input.deviceId) ||
-        typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid) ||
+        (input.fid === undefined ? input.deliveryVersion !== 2 : typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid)) ||
         (input.deliveryVersion !== undefined && input.deliveryVersion !== 2)) {
       throw new BadRequestException('A valid Android app device registration is required.');
     }
@@ -169,7 +169,9 @@ export class FcmService {
     return fid;
   }
 
-  async getDeviceStatus(userId: number, deviceId: string): Promise<{ enabled: boolean; registered: boolean; configurationIssue?: FcmConfigurationIssue }> {
+  async getDeviceStatus(userId: number, deviceId: string): Promise<{
+    enabled: boolean; registered: boolean; deliveryVersion?: number; configurationIssue?: FcmConfigurationIssue;
+  }> {
     if (!DEVICE_ID_PATTERN.test(deviceId ?? '')) throw new BadRequestException('A valid Android app device is required.');
     await this.usersClient.requireAccountAccess(userId);
     const configuration = this.configuration();
@@ -177,14 +179,23 @@ export class FcmService {
     return {
       enabled: !!configuration,
       registered: !!registration,
+      deliveryVersion: registration?.deliveryVersion,
       configurationIssue: this.configurationIssue,
     };
   }
 
-  async saveDevice(userId: number, input: FcmDeviceInput): Promise<{ enabled: true }> {
+  async saveDevice(userId: number, input: FcmDeviceInput): Promise<{ enabled: true; deliveryVersion: number }> {
     this.validateDeviceInput(input);
     await this.usersClient.requireAccountAccess(userId);
     const configuration = this.assertConfigured();
+    if (input.fid === undefined) {
+      // The app can upgrade the delivery format of its existing opt-in even when a warm
+      // launch has not yet read Firebase's ID. A device ID alone cannot create a subscription.
+      const result = await this.registrations.update({ userId, deviceId: input.deviceId }, { deliveryVersion: 2 });
+      if (!result.affected) throw new BadRequestException('Reopen FO2 iCare to finish Android alert registration.');
+      void this.syncBadge(userId, input.deviceId).catch(() => undefined);
+      return { enabled: true, deliveryVersion: 2 };
+    }
     const fidHash = this.fidHash(input.fid);
     const matches = await this.registrations.find({
       where: [{ deviceId: input.deviceId }, { fidHash }],
@@ -197,18 +208,19 @@ export class FcmService {
       throw new BadRequestException('This account already has the maximum number of Android alert devices.');
     }
 
+    const currentDeliveryVersion = row.userId === userId && row.deviceId === input.deviceId ? row.deliveryVersion : undefined;
     row.userId = userId;
     row.deviceId = input.deviceId;
     row.fidHash = fidHash;
     row.encryptedFid = this.encryptFid(input.fid, configuration.encryptionKey);
-    row.deliveryVersion = input.deliveryVersion ?? 1;
+    row.deliveryVersion = input.deliveryVersion ?? currentDeliveryVersion ?? 1;
     try {
       await this.registrations.save(row);
     } catch {
       throw new BadRequestException('This Android device could not be registered. Reopen FO2 iCare and try again.');
     }
     if (row.deliveryVersion === 2) void this.syncBadge(userId, row.deviceId).catch(() => undefined);
-    return { enabled: true };
+    return { enabled: true, deliveryVersion: row.deliveryVersion };
   }
 
   async removeDevice(userId: number, deviceId: string): Promise<{ removed: boolean }> {

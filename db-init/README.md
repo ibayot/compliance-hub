@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.11 (from 1.1.10)
+
+Apply `20261124-add-application-changelog-v1.1.11-users.sql` in the verified Users database. This release uses the existing 1.1.10 Ticketing schema. Rebuild the application services and update FO2 iCare from the signed 1.1.11 APK. On Android, check the bell's native delivery mode, send a test alert to hear the sound, then leave a real unread ticket notification in the notification panel to check the Home Screen badge.
+
 ## For release 1.1.10 (from 1.1.9)
 
 Apply `20261124-add-sla-sounds-ticketing.sql` in the verified Ticketing database before rebuilding the services. Apply `20261124-add-application-changelog-v1.1.10-users.sql` in the verified Users database. Install the 1.1.10 APK over the previous FO2 iCare app and open it to refresh its existing alert registration. Verify the Home Screen badge on a numeric-badge launcher, and verify the Nearing SLA and Overdue sounds on an assigned account and an account with ticket administration access during SLA working hours.

@@ -55,7 +55,7 @@ import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInst
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
-import { getNativeFcmHandoff, getNotificationDeviceId, isNativeFcmClient } from '@/lib/native-fcm-handoff';
+import { getNativeFcmHandoff, getNotificationDeviceId, subscribeNativeFcmHandoff } from '@/lib/native-fcm-handoff';
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -194,14 +194,16 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushMessage, setPushMessage] = useState('');
   const [pushConfigCheckFailed, setPushConfigCheckFailed] = useState(false);
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
+  const [pushCheckAttempt, setPushCheckAttempt] = useState(0);
+  const [fcmDeliveryVersion, setFcmDeliveryVersion] = useState<number>();
   const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
   const [appInstallAnchor, setAppInstallAnchor] = useState<HTMLElement | null>(null);
   const [installHelp, setInstallHelp] = useState<'ios' | 'android' | 'browser' | null>(null);
   const notificationRequestRef = React.useRef(0);
-  const nativeFcmClient = isNativeFcmClient();
-  const nativeFcmHandoff = getNativeFcmHandoff();
+  const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
+  const nativeFcmClient = !!nativeFcmHandoff;
 
   useEffect(() => {
     const availabilityCheck = new AbortController();
@@ -233,6 +235,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setFcmConfigEnabled(false);
       setFcmConfigurationIssue(undefined);
       setFcmPermissionGranted(false);
+      setFcmDeliveryVersion(undefined);
       setPushConfigCheckFailed(false);
       setPushConfigChecking(false);
       return;
@@ -254,67 +257,58 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           setPushMessage(androidAlertsUpdateMessage);
           return;
         }
-        const config = await notificationsApi.getPushConfig();
-        if (!current) return;
-        setPushConfig(config);
-          if (nativeFcmClient) {
-            const fcmConfig = await notificationsApi.getFcmConfig();
-            const deviceId = nativeFcmHandoff?.deviceId;
-            let fcmStatus = deviceId
-              ? await notificationsApi.getFcmDeviceStatus(deviceId)
-              : { enabled: false, registered: false };
+          if (nativeFcmHandoff) {
+            const { deviceId, fid, notificationsGranted, version } = nativeFcmHandoff;
+            const [fcmConfig, status] = await Promise.all([
+              notificationsApi.getFcmConfig(), notificationsApi.getFcmDeviceStatus(deviceId),
+            ]);
             if (!current) return;
-            setFcmConfigEnabled(fcmConfig.enabled && fcmStatus.enabled);
-            setFcmConfigurationIssue(fcmConfig.configurationIssue || fcmStatus.configurationIssue);
-            setFcmPermissionGranted(!!nativeFcmHandoff?.notificationsGranted);
-
-            // Keep an already-authorized browser subscription associated with this same Android
-            // device so FCM can take precedence without creating duplicate lock-screen alerts.
-            if (supported && config.enabled && config.publicKey && deviceId) {
-              const registration = await navigator.serviceWorker.getRegistration('/');
-              const subscription = await registration?.pushManager.getSubscription();
-              if (subscription && Notification.permission === 'granted') {
-                const existingKey = subscription.options.applicationServerKey;
-                const expectedKey = decodeApplicationServerKey(config.publicKey);
-                if (existingKey && !applicationServerKeysMatch(existingKey, expectedKey)) {
-                  await notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
-                  await subscription.unsubscribe().catch(() => false);
-                } else {
-                  await notificationsApi.savePushSubscription({
-                    ...subscription.toJSON(),
-                    deviceId,
-                  });
-                }
-              }
-            }
-
-            const notificationPermissionGranted = !!nativeFcmHandoff?.notificationsGranted;
-            if (deviceId && fcmStatus.registered && !notificationPermissionGranted) {
-              // Android permissions can be revoked outside FO2 iCare. Remove the stale FCM
-              // registration so an accepted-but-hidden push cannot suppress browser fallback.
+            setFcmConfigEnabled(fcmConfig.enabled && status.enabled);
+            setFcmConfigurationIssue(fcmConfig.configurationIssue || status.configurationIssue);
+            setFcmPermissionGranted(notificationsGranted);
+            let deliveryVersion = status.deliveryVersion;
+            if (status.registered && !notificationsGranted) {
               await notificationsApi.removeFcmDevice(deviceId).catch(() => undefined);
-              fcmStatus = { ...fcmStatus, registered: false };
-            }
-            if (fcmStatus.registered && fcmConfig.enabled && notificationPermissionGranted && nativeFcmHandoff?.fid && deviceId) {
-              await notificationsApi.saveFcmDevice({
-                deviceId, fid: nativeFcmHandoff.fid, deliveryVersion: nativeFcmHandoff.version === 3 ? 2 : undefined,
-              });
+              deliveryVersion = undefined;
+            } else if (status.registered && fcmConfig.enabled && (fid || version === 3)) {
+              const saved = await notificationsApi.saveFcmDevice({ deviceId, fid, deliveryVersion: version === 3 ? 2 : undefined });
+              deliveryVersion = saved.deliveryVersion;
             }
             if (!current) return;
-            const enabled = fcmStatus.registered && fcmConfig.enabled && notificationPermissionGranted;
-            setPushEnabled(enabled);
+            setFcmDeliveryVersion(deliveryVersion);
+            setPushEnabled(status.registered && fcmConfig.enabled && notificationsGranted);
             if (!fcmConfig.enabled) {
               setPushMessage(fcmSetupMessage(fcmConfig.configurationIssue));
-            } else if (!notificationPermissionGranted) {
+            } else if (!notificationsGranted) {
               setPushMessage('Android notifications are off for FO2 iCare. Allow them in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.');
-            } else if (!nativeFcmHandoff?.fid && !fcmStatus.registered) {
+            } else if (!fid && !status.registered) {
               setPushMessage('FO2 iCare could not register with Firebase. Connect to the internet and reopen the Android app, then try again.');
-            } else if (!fcmStatus.registered) {
+            } else if (!status.registered) {
               setPushMessage('Android app alerts are off on this device. Choose Enable to register this device.');
+            }
+            // Browser fallback linkage is optional; a browser error must not block native registration.
+            if (supported && Notification.permission === 'granted') {
+              void (async () => {
+                const config = await notificationsApi.getPushConfig();
+                if (!current || !config.enabled || !config.publicKey) return;
+                const registration = await navigator.serviceWorker.getRegistration('/');
+                const subscription = await registration?.pushManager.getSubscription();
+                if (!current || !subscription) return;
+                const existingKey = subscription.options.applicationServerKey;
+                if (existingKey && !applicationServerKeysMatch(existingKey, decodeApplicationServerKey(config.publicKey))) {
+                  await notificationsApi.removePushSubscription(subscription.endpoint).catch(() => undefined);
+                  await subscription.unsubscribe().catch(() => false);
+                  return;
+                }
+                await notificationsApi.savePushSubscription({ ...subscription.toJSON(), deviceId });
+              })().catch(() => undefined);
             }
             return;
           }
 
+          const config = await notificationsApi.getPushConfig();
+          if (!current) return;
+          setPushConfig(config);
           if (supported) {
           const registration = await navigator.serviceWorker.getRegistration('/');
           const subscription = await registration?.pushManager.getSubscription();
@@ -351,32 +345,12 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     };
     void initializePush();
     return () => { current = false; };
-  }, [user]);
+  }, [user, nativeFcmHandoff, pushCheckAttempt]);
 
   const retryPushConfigCheck = async () => {
     if (pushConfigChecking || pushBusy) return;
     setPushConfigChecking(true);
-    setPushConfigCheckFailed(false);
-    setPushMessage('');
-    try {
-      if (nativeFcmClient && nativeFcmHandoff?.deviceId) {
-        const [config, status] = await Promise.all([
-          notificationsApi.getFcmConfig(),
-          notificationsApi.getFcmDeviceStatus(nativeFcmHandoff.deviceId),
-        ]);
-        setFcmConfigEnabled(config.enabled && status.enabled);
-        setFcmConfigurationIssue(config.configurationIssue || status.configurationIssue);
-        setPushEnabled(config.enabled && status.registered && nativeFcmHandoff.notificationsGranted);
-        setFcmPermissionGranted(nativeFcmHandoff.notificationsGranted);
-      } else {
-        setPushConfig(await notificationsApi.getPushConfig());
-      }
-    } catch {
-      setPushConfig({ enabled: false, publicKey: null });
-      setPushConfigCheckFailed(true);
-    } finally {
-      setPushConfigChecking(false);
-    }
+    setPushCheckAttempt(attempt => attempt + 1);
   };
 
   const handleInstallWebApp = async () => {
@@ -409,6 +383,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       try {
         await notificationsApi.removeFcmDevice(device.deviceId);
         setPushEnabled(false);
+        setFcmDeliveryVersion(undefined);
         setPushMessage('Android app alerts are off on this device.');
       } catch {
         setPushMessage('Could not turn off Android app alerts. Please try again.');
@@ -430,9 +405,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
 
     setPushBusy(true);
     try {
-      await notificationsApi.saveFcmDevice({
+      const saved = await notificationsApi.saveFcmDevice({
         deviceId: device.deviceId, fid: device.fid, deliveryVersion: device.version === 3 ? 2 : undefined,
       });
+      setFcmDeliveryVersion(saved.deliveryVersion);
       setPushEnabled(true);
       setPushMessage('Android app alerts are enabled. Use Send test alert to check delivery.');
     } catch (error) {
@@ -1477,6 +1453,20 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                         ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
                         : 'Enable alerts here as well as in your device and browser settings.')}
               </Typography>
+              {nativeFcmClient && pushEnabled && !pushConfigChecking && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {fcmDeliveryVersion === 2
+                    ? 'FO2 iCare sound and badge delivery is active. To check the Home Screen badge, leave a new ticket alert in the notification panel. Test alerts do not add a badge.'
+                    : 'This device is using standard Android delivery. Open the latest FO2 iCare app from its installed icon to activate the app sound and badge.'}
+                </Typography>
+              )}
+              {nativeFcmClient && pushEnabled && (nativeFcmHandoff?.routineBadgeAllowed === false ||
+                nativeFcmHandoff?.routineUsesAppSound === false) && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {nativeFcmHandoff.routineBadgeAllowed === false && 'The FO2 iCare notification category has badges turned off. '}
+                  {nativeFcmHandoff.routineUsesAppSound === false && 'Android is using a different sound setting for FO2 iCare notifications.'}
+                </Typography>
+              )}
               {pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
                 {sendingTestAlert ? 'Sending test…' : 'Send test alert'}
               </Button>}

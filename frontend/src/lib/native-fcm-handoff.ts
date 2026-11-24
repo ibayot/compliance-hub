@@ -1,11 +1,14 @@
 const HANDOFF_STORAGE_KEY = 'fo2-icare-native-fcm-handoff-v1';
 const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
+const handoffListeners = new Set<() => void>();
 
 export interface NativeFcmHandoff {
   version: 1 | 2 | 3;
   deviceId: string;
   fid?: string;
   notificationsGranted: boolean;
+  routineBadgeAllowed?: boolean;
+  routineUsesAppSound?: boolean;
 }
 
 function isUuid(value: unknown): value is string {
@@ -23,6 +26,8 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
     deviceId: parsed.deviceId,
     fid: parsed.version >= 2 ? parsed.fid : undefined,
     notificationsGranted: parsed.notificationsGranted,
+    routineBadgeAllowed: typeof parsed.routineBadgeAllowed === 'boolean' ? parsed.routineBadgeAllowed : undefined,
+    routineUsesAppSound: typeof parsed.routineUsesAppSound === 'boolean' ? parsed.routineUsesAppSound : undefined,
   };
 }
 
@@ -47,45 +52,50 @@ function readStoredHandoff(): NativeFcmHandoff | null {
   }
 }
 
+let currentHandoff = readStoredHandoff();
+
+function setNativeHandoff(handoff: NativeFcmHandoff): void {
+  if (JSON.stringify(handoff) === JSON.stringify(currentHandoff)) return;
+  currentHandoff = handoff;
+  try { sessionStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify(handoff)); }
+  catch { /* The handoff remains available in the current page even without session storage. */ }
+  handoffListeners.forEach(listener => listener());
+}
+
 function captureNativeHandoff(): void {
   if (typeof window === 'undefined' || !window.location.hash.startsWith(`#${NATIVE_FCM_FRAGMENT_KEY}`)) return;
   const encoded = window.location.hash.slice(NATIVE_FCM_FRAGMENT_KEY.length + 1);
   const handoff = decodeHandoff(encoded);
-  if (!handoff) return;
   try {
-    sessionStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify(handoff));
-    // The FID is a device routing identifier, not an authentication secret. Still, keep it out of
-    // browser history and referrers by removing the handoff fragment before the app renders.
+    // Strip the routing fragment before notifying the application, including on warm TWA launches.
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
-  } catch {
-    // Continue the app if session storage is unavailable; the current fragment is not an auth token.
-  }
+  } catch { /* Some browser contexts restrict history changes. */ }
+  if (handoff) setNativeHandoff(handoff);
 }
 
 captureNativeHandoff();
-
-export function getNativeFcmHandoff(): NativeFcmHandoff | null {
-  return readStoredHandoff();
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', captureNativeHandoff);
+  window.addEventListener('pageshow', captureNativeHandoff);
 }
 
-export function isNativeFcmClient(): boolean {
-  return !!readStoredHandoff();
+export function getNativeFcmHandoff(): NativeFcmHandoff | null {
+  return currentHandoff;
+}
+
+export function subscribeNativeFcmHandoff(listener: () => void): () => void {
+  handoffListeners.add(listener);
+  return () => { handoffListeners.delete(listener); };
 }
 
 export function clearNativeFcmFid(): void {
-  const current = readStoredHandoff();
+  const current = getNativeFcmHandoff();
   if (!current) return;
-  try {
-    sessionStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify({
-      version: current.version,
-      deviceId: current.deviceId,
-      notificationsGranted: current.notificationsGranted,
-    }));
-  } catch { /* Storage is only a convenience for the one-time device handoff. */ }
+  setNativeHandoff({ ...current, fid: undefined });
 }
 
 export function getNotificationDeviceId(): string {
-  const nativeHandoff = readStoredHandoff();
+  const nativeHandoff = getNativeFcmHandoff();
   if (nativeHandoff) return nativeHandoff.deviceId;
   const storageKey = 'fo2-icare-browser-push-device-id-v1';
   try {

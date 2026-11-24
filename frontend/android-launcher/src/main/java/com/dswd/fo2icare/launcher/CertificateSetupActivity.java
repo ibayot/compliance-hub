@@ -2,6 +2,7 @@ package com.dswd.fo2icare.launcher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.NotificationChannel;
 import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -466,6 +467,14 @@ public final class CertificateSetupActivity extends Activity {
             handoff.put("version", 3);
             handoff.put("deviceId", deviceId);
             handoff.put("notificationsGranted", notificationsGranted);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel routineChannel = FcmMessageService.routineChannel(this);
+                if (routineChannel != null) {
+                    handoff.put("routineBadgeAllowed", routineChannel.canShowBadge());
+                    handoff.put("routineUsesAppSound", NotificationSoundProvider.soundUri(this, "routine")
+                            .equals(routineChannel.getSound()));
+                }
+            }
             if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);
             String encoded = Base64.encodeToString(handoff.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
                     Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);

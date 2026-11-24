@@ -2058,6 +2058,7 @@ export interface FcmPushConfig {
 export interface FcmDeviceStatus {
   enabled: boolean;
   registered: boolean;
+  deliveryVersion?: number;
   configurationIssue?: FcmPushConfig['configurationIssue'];
 }
 
@@ -2114,7 +2115,7 @@ export const notificationsApi = {
     const response = await apiClient.get('/notifications/fcm-subscription', { params: { deviceId } });
     return response.data;
   },
-  saveFcmDevice: async (input: { deviceId: string; fid: string; deliveryVersion?: 2 }): Promise<{ enabled: true }> => {
+  saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2 }): Promise<{ enabled: true; deliveryVersion: number }> => {
     const response = await apiClient.post('/notifications/fcm-subscription', input);
     return response.data;
   },
