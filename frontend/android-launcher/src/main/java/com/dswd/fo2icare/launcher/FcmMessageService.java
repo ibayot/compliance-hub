@@ -23,6 +23,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
     private static final String LEGACY_CHANNEL = "fo2_icare_alerts";
     private static final String PREVIOUS_ROUTINE_CHANNEL = "fo2_icare_notifications_v2";
     private static final String ROUTINE_CHANNEL = "fo2_icare_notifications_v3";
+    private static final String BADGE_RESTORE_CHANNEL = "fo2_icare_unread_badge";
     private static final String TEST_CHANNEL = "fo2_icare_test_alerts_v2";
     private static final String NEARING_CHANNEL = "fo2_icare_nearing_sla_v2";
     private static final String OVERDUE_CHANNEL = "fo2_icare_overdue_sla_v2";
@@ -42,6 +43,13 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (manager == null) return;
         createChannel(context, manager, LEGACY_CHANNEL, null, "FO2 iCare Alerts", "routine", true);
         createChannel(context, manager, ROUTINE_CHANNEL, PREVIOUS_ROUTINE_CHANNEL, "FO2 iCare Notifications", "routine", true);
+        if (manager.getNotificationChannel(BADGE_RESTORE_CHANNEL) == null) {
+            NotificationChannel badgeChannel = new NotificationChannel(
+                    BADGE_RESTORE_CHANNEL, "Unread badge updates", NotificationManager.IMPORTANCE_DEFAULT);
+            badgeChannel.setSound(null, null);
+            badgeChannel.setShowBadge(true);
+            manager.createNotificationChannel(badgeChannel);
+        }
         createChannel(context, manager, TEST_CHANNEL, "fo2_icare_test_alerts", "Test alerts", "routine", false);
         createChannel(context, manager, NEARING_CHANNEL, "fo2_icare_nearing_sla", "Nearing SLA", "nearing", false);
         createChannel(context, manager, OVERDUE_CHANNEL, "fo2_icare_overdue_sla", "Overdue SLA", "overdue", false);
@@ -112,6 +120,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (at < preferences.getLong(LAST_COUNT_AT, 0)) return;
         preferences.edit().putLong(LAST_COUNT_AT, at).apply();
         boolean hasSummary = false;
+        String summaryChannel = ROUTINE_CHANNEL;
         for (StatusBarNotification active : manager.getActiveNotifications()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 String channel = active.getNotification().getChannelId();
@@ -120,19 +129,35 @@ public final class FcmMessageService extends FirebaseMessagingService {
                     continue;
                 }
             }
-            if (active.getTag() == null && active.getId() == UNREAD_NOTIFICATION) hasSummary = true;
+            if (active.getTag() == null && active.getId() == UNREAD_NOTIFICATION) {
+                hasSummary = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    summaryChannel = active.getNotification().getChannelId();
+                }
+            }
         }
         if (count <= 0) {
             manager.cancel(UNREAD_NOTIFICATION);
             return;
         }
-        NotificationCompat.Builder alert = notification(ROUTINE_CHANNEL, "routine",
-                "You have unread notifications.").setNumber(count);
-        if ("badge_sync".equals(kind)) {
-            // Keep an existing summary ungrouped so launchers can continue to badge it.
-            if (hasSummary) alert.setOnlyAlertOnce(true);
-            else alert.setSilent(true);
+        boolean badgeSync = "badge_sync".equals(kind);
+        String channel = ROUTINE_CHANNEL;
+        if (badgeSync && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel routine = routineChannel(this);
+            if (routine == null || !routine.canShowBadge() || routine.getImportance() == NotificationManager.IMPORTANCE_NONE) {
+                if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
+                return;
+            }
+            // AndroidX's silent flag groups even a single notification. Use an ungrouped,
+            // silent channel when restoring, and keep an existing notification on its channel.
+            channel = hasSummary ? summaryChannel : BADGE_RESTORE_CHANNEL;
+        } else if (!badgeSync && BADGE_RESTORE_CHANNEL.equals(summaryChannel)) {
+            // Start a real alert on the audible channel after a silent restoration.
+            manager.cancel(UNREAD_NOTIFICATION);
         }
+        NotificationCompat.Builder alert = notification(channel, "routine", "You have unread notifications.")
+                .setNumber(count).setOnlyAlertOnce(badgeSync);
+        if (badgeSync && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) alert.setSilent(true);
         manager.notify(UNREAD_NOTIFICATION, alert.build());
     }
 

@@ -17,8 +17,6 @@ import { slaSoundStep, SlaSoundKind } from './sla-sound-kind';
 @Injectable()
 export class TicketCronService implements OnModuleInit {
   private readonly logger = new Logger(TicketCronService.name);
-  // Prevent one overdue ticket from promoting the queue repeatedly every minute.
-  private readonly advancedOverdueTickets = new Set<string>();
   private readonly finalizedAbsenceDates = new Set<string>();
   private readonly absenceFinalizationAttempts = new Map<string, number>();
   private runningSlaSounds = false;
@@ -270,23 +268,9 @@ export class TicketCronService implements OnModuleInit {
     if (overdueActiveTickets.length > 0) {
       this.logger.log(`Cron check: found ${overdueActiveTickets.length} overdue active tickets.`);
     }
-    const overdueIds = new Set(overdueActiveTickets.map((ticket) => ticket.id));
-    for (const ticketId of this.advancedOverdueTickets) {
-      if (!overdueIds.has(ticketId)) this.advancedOverdueTickets.delete(ticketId);
-    }
-
-    // Every newly detected SLA breach advances one queued ticket, even when
-    // the technician already has another IN_PROGRESS ticket.
-    for (const overdueTicket of overdueActiveTickets) {
-      const techId = overdueTicket.assignedToId;
-      if (!techId || this.advancedOverdueTickets.has(overdueTicket.id)) continue;
-
-      const promoted = await this.ticketService.withAutoAssignmentLock(() => this.ticketService.unpauseNextWaitingTicketAndSetInProgress(
-        techId,
-        'cron_sla_breach_overflow',
-      ));
-      if (promoted) {
-        this.advancedOverdueTickets.add(overdueTicket.id);
+    const assigneeIds = new Set(overdueActiveTickets.map((ticket) => ticket.assignedToId));
+    for (const techId of assigneeIds) {
+      if (techId && await this.ticketService.promoteNextAfterSlaBreach(techId)) {
         this.logger.log('Cron: promoted a queued ticket after an SLA breach.');
       }
     }

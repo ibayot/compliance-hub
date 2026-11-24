@@ -797,18 +797,26 @@ export class TicketService implements OnModuleInit {
     };
   }
 
-  private async hasBreachedActiveTicket(technicianId: number): Promise<boolean> {
+  private async hasAssignmentStartSlot(technicianId: number, promotingQueue = false): Promise<boolean> {
+    const queuedWork = {
+      assignedToId: technicianId,
+      status: In([TicketStatus.ASSIGNED, TicketStatus.PAUSE]),
+      ...(promotingQueue ? { isSlaWaiting: false } : {}),
+    };
+    const activeTickets = await this.ticketRepo.find({
+      where: [{ assignedToId: technicianId, status: TicketStatus.IN_PROGRESS }, queuedWork],
+      select: { status: true, slaStartedAt: true, slaDeadline: true, slaPausedAt: true },
+    });
+    if (!activeTickets.length) return !promotingQueue;
     const now = Date.now();
-    const activeTickets =
-      (await this.ticketRepo.find({
-        // IN_PROGRESS is authoritative; legacy queue flags must not hide a breach.
-        where: { assignedToId: technicianId, status: TicketStatus.IN_PROGRESS },
-      })) || [];
 
-    return activeTickets.some(
-      (ticket) =>
-        !ticket.slaPausedAt && ticket.slaDeadline && new Date(ticket.slaDeadline).getTime() < now,
-    );
+    // Once a new ticket starts, its persisted SLA state occupies the slot for
+    // both intake and the scheduler, even if older tickets are still overdue.
+    return activeTickets.every((ticket) => {
+      if (ticket.status !== TicketStatus.IN_PROGRESS || !ticket.slaStartedAt || !ticket.slaDeadline) return false;
+      const deadline = ticket.slaDeadline.getTime();
+      return deadline < now && (!ticket.slaPausedAt || deadline <= ticket.slaPausedAt.getTime());
+    });
   }
   private async getWeeklySlaLoad(technicianId: number): Promise<number> {
     const weekStart = this.getManilaWeekStart();
@@ -1627,23 +1635,13 @@ export class TicketService implements OnModuleInit {
       }
 
       assignedToId = Number(dto.assignedToId);
-      const activeTicketsCount = await this.ticketRepo.count({
-        where: [
-          { assignedToId, status: TicketStatus.ASSIGNED },
-          { assignedToId, status: TicketStatus.IN_PROGRESS },
-          { assignedToId, status: TicketStatus.PAUSE },
-        ],
-      });
-      const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedToId);
-      shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
-      isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
+      shouldStartInProgress = await this.hasAssignmentStartSlot(assignedToId);
+      isSlaWaiting = !shouldStartInProgress;
     } else if (isSpecialized || directFiler) {
       if (directFiler) {
         assignedToId = callerId;
         assignedTech = directFiler;
-        const busy = await this.ticketRepo.count({ where: { assignedToId, status: In([TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.PAUSE]) } });
-        const hasBreachedTicket = busy > 0 && await this.hasBreachedActiveTicket(assignedToId);
-        shouldStartInProgress = busy === 0 || hasBreachedTicket;
+        shouldStartInProgress = await this.hasAssignmentStartSlot(assignedToId);
         isSlaWaiting = !shouldStartInProgress;
       }
     } else
@@ -1764,17 +1762,8 @@ export class TicketService implements OnModuleInit {
               automaticAssignmentPool = tType;
               assignedToId = assignedTech.id;
 
-              // Determine if tech is currently busy
-              const activeTicketsCount = await this.ticketRepo.count({
-                where: [
-                  { assignedToId: assignedTech.id, status: TicketStatus.ASSIGNED },
-                  { assignedToId: assignedTech.id, status: TicketStatus.IN_PROGRESS },
-                  { assignedToId: assignedTech.id, status: TicketStatus.PAUSE },
-                ],
-              });
-              const hasBreachedTicket = await this.hasBreachedActiveTicket(assignedTech.id);
-              shouldStartInProgress = activeTicketsCount === 0 || hasBreachedTicket;
-              isSlaWaiting = activeTicketsCount > 0 && !hasBreachedTicket;
+              shouldStartInProgress = await this.hasAssignmentStartSlot(assignedTech.id);
+              isSlaWaiting = !shouldStartInProgress;
 
               this.logger.log(
                 `Auto-assignment completed using ${assignmentStrategy}; SLA waiting: ${isSlaWaiting}.`,
@@ -4508,6 +4497,9 @@ export class TicketService implements OnModuleInit {
         );
       }
     }
+    const isFirstAssignment = ticket.status === TicketStatus.OPEN && !ticket.assignedToId && !ticket.overtimeDate;
+    const shouldWaitForQueue = busyCount > 0 &&
+      !(isFirstAssignment && await this.hasAssignmentStartSlot(dto.assignedToId));
     const previousAssigneeId = ticket.assignedToId;
     const wasSchedulePaused = Boolean(ticket.slaPausedAt && !ticket.isSlaWaiting);
 
@@ -4521,12 +4513,10 @@ export class TicketService implements OnModuleInit {
         ticket.status as TicketStatus,
       )
     ) {
-      // A busy new owner must receive queued work as Assigned, even when the
-      // previous owner had already started it. It resumes when their queue frees.
-      ticket.status = busyCount === 0 ? TicketStatus.IN_PROGRESS : TicketStatus.ASSIGNED;
+      ticket.status = shouldWaitForQueue ? TicketStatus.ASSIGNED : TicketStatus.IN_PROGRESS;
     }
 
-    if (busyCount > 0) {
+    if (shouldWaitForQueue) {
       ticket.isSlaWaiting = true;
       // A ticket that has already started is paused while queued for its new
       // owner. A never-started Assigned ticket has no SLA pause interval yet.
@@ -5909,12 +5899,11 @@ export class TicketService implements OnModuleInit {
       if (pending.overtimeDate && (!(await this.attendanceService.isOfficeDay(today)) || await this.attendanceService.isOvertimeDay(today))) return;
 
       pending.assignedToId = techId;
-      const hasBreachedTicket = await this.hasBreachedActiveTicket(techId);
-      const shouldStartInProgress = currentOpen === 0 || hasBreachedTicket;
+      const shouldStartInProgress = await this.hasAssignmentStartSlot(techId);
       const assignedAt = new Date();
       pending.status = shouldStartInProgress ? TicketStatus.IN_PROGRESS : TicketStatus.ASSIGNED;
       pending.lastAssignedAt = assignedAt;
-      pending.isSlaWaiting = currentOpen > 0 && !hasBreachedTicket;
+      pending.isSlaWaiting = !shouldStartInProgress;
       pending.slaPausedAt = null;
       if (shouldStartInProgress) {
         pending.slaStartedAt = assignedAt;
@@ -8162,6 +8151,13 @@ export class TicketService implements OnModuleInit {
 
     this.logger.log('Unstacked a waiting ticket for a technician.');
     return true;
+  }
+
+  async promoteNextAfterSlaBreach(techId: number): Promise<boolean> {
+    return this.withAutoAssignmentLock(async () => {
+      if (!await this.hasAssignmentStartSlot(techId, true)) return false;
+      return this.unpauseNextWaitingTicketAndSetInProgress(techId, 'cron_sla_breach_overflow');
+    });
   }
 
   async unpauseNextWaitingTicketAndSetInProgress(

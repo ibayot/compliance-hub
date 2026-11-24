@@ -248,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearInactivityTimer, navigate, queryClient]);
 
   const logout = useCallback(async (reason?: string) => {
+    markSessionSignedOut();
     if (!Capacitor.isNativePlatform()) {
       const nativeFcm = getNativeFcmHandoff();
       await Promise.race([
@@ -260,7 +261,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         new Promise<void>((resolve) => window.setTimeout(resolve, 1500)),
       ]);
     }
-    markSessionSignedOut();
     const request = authApi.logout();
     clearLocalSession(reason);
     try { await request; } catch { /* Local sign-out remains final during an outage. */ }
@@ -391,7 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (reconnecting && user) {
-      enqueueSnackbar('Connection to FO2 iCare is temporarily unavailable. Reconnecting without signing you out.', {
+      enqueueSnackbar('We couldn’t connect right now. Please try again in a moment.', {
         key: 'session-reconnecting', variant: 'warning', persist: true,
         action: <Button color="inherit" onClick={retrySession}>Retry</Button>,
       });

@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { boundedGet } from '@/lib/api/bounded-read';
+import { hasSignedOut, recoveryGeneration } from '@/lib/auth/session-recovery';
 
 export interface Issuance {
   id: string;
@@ -2067,8 +2068,17 @@ export type BrowserPushSubscriptionPayload = PushSubscriptionJSON & { deviceId?:
 export type BrowserPushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
 type BrowserPushTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
   | { outcome: 'failed'; failure?: BrowserPushFailure; providerStatus?: number };
-type FcmTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
-  | { outcome: 'failed'; failure: 'authentication' | 'provider-unavailable' | 'provider-request' | 'connection' | 'registration-storage' };
+const pendingFcmDeviceOperations = new Map<string, Promise<unknown>>();
+
+async function withFcmDeviceOperation<T>(deviceId: string, work: () => Promise<T>): Promise<T> {
+  const previous = pendingFcmDeviceOperations.get(deviceId);
+  const operation = (previous ? previous.catch(() => undefined) : Promise.resolve()).then(work);
+  pendingFcmDeviceOperations.set(deviceId, operation);
+  try { return await operation; }
+  finally {
+    if (pendingFcmDeviceOperations.get(deviceId) === operation) pendingFcmDeviceOperations.delete(deviceId);
+  }
+}
 
 export const notificationsApi = {
   getSummary: async (): Promise<{ notifications: any[]; unreadCount: number }> => {
@@ -2116,16 +2126,18 @@ export const notificationsApi = {
     return response.data;
   },
   saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2 }): Promise<{ enabled: true; deliveryVersion: number }> => {
-    const response = await apiClient.post('/notifications/fcm-subscription', input);
-    return response.data;
-  },
-  sendFcmTestAlert: async (deviceId: string): Promise<FcmTestResult> => {
-    const response = await apiClient.post('/notifications/fcm-test', { deviceId });
-    return response.data;
+    const generation = recoveryGeneration();
+    return withFcmDeviceOperation(input.deviceId, async () => {
+      if (hasSignedOut() || generation !== recoveryGeneration()) throw new Error('Sign-in session changed before Android alert registration.');
+      const response = await apiClient.post('/notifications/fcm-subscription', input, { timeout: 8000 });
+      return response.data;
+    });
   },
   removeFcmDevice: async (deviceId: string): Promise<{ removed: boolean }> => {
-    const response = await apiClient.delete('/notifications/fcm-subscription', { data: { deviceId } });
-    return response.data;
+    return withFcmDeviceOperation(deviceId, async () => {
+      const response = await apiClient.delete('/notifications/fcm-subscription', { data: { deviceId } });
+      return response.data;
+    });
   },
   unsubscribeCurrentPushSubscription: async (): Promise<void> => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;

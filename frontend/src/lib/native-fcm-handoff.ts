@@ -3,7 +3,7 @@ const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
 const handoffListeners = new Set<() => void>();
 
 export interface NativeFcmHandoff {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   deviceId: string;
   fid?: string;
   notificationsGranted: boolean;
@@ -18,7 +18,7 @@ function isUuid(value: unknown): value is string {
 function parseHandoff(value: unknown): NativeFcmHandoff | null {
   if (!value || typeof value !== 'object') return null;
   const parsed = value as Partial<NativeFcmHandoff>;
-  if ((parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) || !isUuid(parsed.deviceId) ||
+  if ((parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) || !isUuid(parsed.deviceId) ||
       typeof parsed.notificationsGranted !== 'boolean') return null;
   if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
   return {
@@ -86,12 +86,6 @@ export function getNativeFcmHandoff(): NativeFcmHandoff | null {
 export function subscribeNativeFcmHandoff(listener: () => void): () => void {
   handoffListeners.add(listener);
   return () => { handoffListeners.delete(listener); };
-}
-
-export function clearNativeFcmFid(): void {
-  const current = getNativeFcmHandoff();
-  if (!current) return;
-  setNativeHandoff({ ...current, fid: undefined });
 }
 
 export function getNotificationDeviceId(): string {

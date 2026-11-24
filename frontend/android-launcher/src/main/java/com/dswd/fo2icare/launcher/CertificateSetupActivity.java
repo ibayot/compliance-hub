@@ -1,8 +1,8 @@
 package com.dswd.fo2icare.launcher;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
@@ -59,7 +59,7 @@ public final class CertificateSetupActivity extends Activity {
     private static final int POST_NOTIFICATIONS_REQUEST = 402;
     private static final long VERIFICATION_TIMEOUT_MS = 4_000;
     private static final long VERIFICATION_RETRY_DELAY_MS = 750;
-    private static final long FCM_REGISTRATION_WAIT_MS = 5_000;
+    private static final long FCM_REGISTRATION_WAIT_MS = 8_000;
     private static final String CERTIFICATE_SAVED = "certificateSaved";
     private static final String PREFERENCES = "certificate_setup";
     private static final String LAST_BROWSER_CHECK = "last_browser_check";
@@ -73,7 +73,7 @@ public final class CertificateSetupActivity extends Activity {
     private boolean certificateSaved;
     private boolean resumed;
     private boolean fcmLaunchPending;
-    private String pendingBrowserCheck = "";
+    private boolean notificationPermissionPending;
     private TextView setupStatus;
 
     @Override
@@ -236,6 +236,15 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void continueLaunch() {
+        if (notificationPermissionPending || fcmLaunchPending) return;
+        if (!androidNotificationsAllowed()) {
+            showNotificationSetup();
+            if (canRequestNotificationPermission()
+                    && !getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_ASKED, false)) {
+                requestNotificationPermission();
+            }
+            return;
+        }
         if (!isRootCaTrusted()) {
             getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().remove(LAST_BROWSER_CHECK).apply();
             showSetupScreen();
@@ -259,6 +268,71 @@ public final class CertificateSetupActivity extends Activity {
 
         showLaunchStatus("Opening FO2 iCare…", false);
         verifyBrowserAssociation(origin, browser.provider, browserCheck, true);
+    }
+
+    private boolean androidNotificationsAllowed() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        return manager != null && manager.areNotificationsEnabled()
+                && (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                    || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED);
+    }
+
+    private boolean canRequestNotificationPermission() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                && (!getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_ASKED, false)
+                    || shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS));
+    }
+
+    private void requestNotificationPermission() {
+        if (notificationPermissionPending || !canRequestNotificationPermission()) return;
+        notificationPermissionPending = true;
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply();
+        requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, POST_NOTIFICATIONS_REQUEST);
+    }
+
+    private void showNotificationSetup() {
+        setupStatus = null;
+        LinearLayout content = new LinearLayout(this);
+        content.setPadding(dp(24), dp(24), dp(24), dp(24));
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER);
+        TextView title = new TextView(this);
+        title.setText("Allow notifications to continue");
+        title.setTextSize(22);
+        title.setGravity(Gravity.CENTER);
+        content.addView(title, fullWidth());
+        TextView message = new TextView(this);
+        message.setText("FO2 iCare uses notifications to let you know about ticket updates. After you allow them, continue with setup and sign in.");
+        message.setTextSize(16);
+        message.setGravity(Gravity.CENTER);
+        content.addView(message, fullWidth());
+        Button action = button(canRequestNotificationPermission() ? "Allow notifications" : "Open notification settings",
+                Color.rgb(23, 43, 66));
+        action.setOnClickListener(view -> {
+            if (canRequestNotificationPermission()) requestNotificationPermission();
+            else openNotificationSettings();
+        });
+        content.addView(action, buttonLayout());
+        setContentView(content);
+    }
+
+    private void openNotificationSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
+                return;
+            } catch (ActivityNotFoundException | SecurityException ignored) {
+                // Use app details when a manufacturer's Settings app omits the direct screen.
+            }
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", getPackageName(), null)));
+        } catch (ActivityNotFoundException | SecurityException ignored) {
+            showLaunchStatus("Open Android Settings, choose Apps → FO2 iCare → Notifications, and allow notifications.", false);
+        }
     }
 
     private void showLaunchStatus(String message, boolean showBrowserAction) {
@@ -346,6 +420,10 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void openInBrowser() {
+        if (!androidNotificationsAllowed()) {
+            showNotificationSetup();
+            return;
+        }
         if (!isRootCaTrusted()) {
             showSetupScreen();
             return;
@@ -385,24 +463,12 @@ public final class CertificateSetupActivity extends Activity {
     }
 
     private void openHub(String browserCheck) {
-        pendingBrowserCheck = browserCheck;
-        if (!isRootCaTrusted()) {
-            showSetupScreen();
+        if (!androidNotificationsAllowed()) {
+            showNotificationSetup();
             return;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                && !getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(NOTIFICATION_PERMISSION_ASKED, false)) {
-            getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit()
-                    .putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply();
-            new AlertDialog.Builder(this)
-                    .setTitle("Allow FO2 iCare alerts")
-                    .setMessage("Allow notifications so FO2 iCare can alert you when a ticket or other app notification arrives. You can change this later in Android Settings.")
-                    .setPositiveButton("Allow alerts", (dialog, which) ->
-                            requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, POST_NOTIFICATIONS_REQUEST))
-                    .setNegativeButton("Continue without alerts", (dialog, which) -> openHubWithFcm(browserCheck))
-                    .setOnCancelListener(dialog -> openHubWithFcm(browserCheck))
-                    .show();
+        if (!isRootCaTrusted()) {
+            showSetupScreen();
             return;
         }
         openHubWithFcm(browserCheck);
@@ -412,23 +478,19 @@ public final class CertificateSetupActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == POST_NOTIFICATIONS_REQUEST) {
-            openHubWithFcm(pendingBrowserCheck);
+            notificationPermissionPending = false;
+            if (resumed) continueLaunch();
         }
     }
 
     private void openHubWithFcm(String browserCheck) {
         if (fcmLaunchPending) return;
         fcmLaunchPending = true;
+        showLaunchStatus("Opening FO2 iCare…", false);
         String deviceId = getOrCreateDeviceId();
-        boolean notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
-                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-        if (!notificationsGranted) {
-            launchHubWithHandoff(browserCheck, deviceId, null, false);
-            return;
-        }
         AtomicBoolean launched = new AtomicBoolean(false);
         Runnable launchWithoutFid = () -> {
-            if (launched.compareAndSet(false, true)) launchHubWithHandoff(browserCheck, deviceId, null, notificationsGranted);
+            if (launched.compareAndSet(false, true)) launchHubWithHandoff(browserCheck, deviceId, null);
         };
         fcmHandler.postDelayed(launchWithoutFid, FCM_REGISTRATION_WAIT_MS);
         try {
@@ -440,7 +502,7 @@ public final class CertificateSetupActivity extends Activity {
                         if (!launched.compareAndSet(false, true)) return;
                         fcmHandler.removeCallbacks(launchWithoutFid);
                         String fid = task.isSuccessful() ? task.getResult() : null;
-                        launchHubWithHandoff(browserCheck, deviceId, fid, notificationsGranted);
+                        launchHubWithHandoff(browserCheck, deviceId, fid);
                     });
         } catch (RuntimeException error) {
             fcmHandler.removeCallbacks(launchWithoutFid);
@@ -457,16 +519,21 @@ public final class CertificateSetupActivity extends Activity {
         return created;
     }
 
-    private void launchHubWithHandoff(String browserCheck, String deviceId, String fid, boolean notificationsGranted) {
+    private void launchHubWithHandoff(String browserCheck, String deviceId, String fid) {
         if (isFinishing() || isDestroyed()) return;
+        if (!androidNotificationsAllowed()) {
+            fcmLaunchPending = false;
+            if (resumed) showNotificationSetup();
+            return;
+        }
         Intent launch = new Intent(this, com.google.androidbrowserhelper.trusted.LauncherActivity.class);
         // Browser Helper otherwise starts a second launcher while the first is still alive.
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         JSONObject handoff = new JSONObject();
         try {
-            handoff.put("version", 3);
+            handoff.put("version", 4);
             handoff.put("deviceId", deviceId);
-            handoff.put("notificationsGranted", notificationsGranted);
+            handoff.put("notificationsGranted", true);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 NotificationChannel routineChannel = FcmMessageService.routineChannel(this);
                 if (routineChannel != null) {

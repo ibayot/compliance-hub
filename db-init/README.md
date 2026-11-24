@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.12 (from 1.1.11)
+
+Apply `20261124-add-application-changelog-v1.1.12-users.sql` in the verified Users database. The 1.1.10 Ticketing schema already supports this release. Rebuild the application services and install the 1.1.12 APK. Allow notifications on first launch and sign in to register automatically. Check Android sound and badges with a real new ticket notification.
+
 ## For release 1.1.11 (from 1.1.10)
 
 Apply `20261124-add-application-changelog-v1.1.11-users.sql` in the verified Users database. This release uses the existing 1.1.10 Ticketing schema. Rebuild the application services and update FO2 iCare from the signed 1.1.11 APK. On Android, check the bell's native delivery mode, send a test alert to hear the sound, then leave a real unread ticket notification in the notification panel to check the Home Screen badge.

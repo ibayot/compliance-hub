@@ -969,7 +969,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
         if (newStatus && newStatus !== ticket?.status) {
           payload.status = newStatus as Ticket['status'];
         }
-        if (resolutionNotes !== (ticket?.resolutionNotes || '')) {
+        if (newStatus === 'resolved' && resolutionNotes !== (ticket?.resolutionNotes || '')) {
           payload.resolutionNotes = resolutionNotes;
         }
         if (statusJustification) payload.statusJustification = statusJustification;
@@ -1752,7 +1752,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                 const isStatusUnchanged =
                   newStatus === ticket?.status &&
                   (newPriority || '') === (ticket?.priority || '') &&
-                  resolutionNotes === (ticket?.resolutionNotes || '');
+                  (newStatus !== 'resolved' || resolutionNotes === (ticket?.resolutionNotes || ''));
                 const needsIssueForResolution = newStatus === 'resolved' && !activeIssueTypeId;
                 const isKbMissingNotes =
                   newStatus === 'resolved' && generateKb && !resolutionNotes.trim();
@@ -1826,7 +1826,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                       </Grid>
                     )}
 
-                    <Grid item xs={12}>
+                    {newStatus === 'resolved' && <Grid item xs={12}>
                       <Box
                         display="flex"
                         alignItems="center"
@@ -1874,7 +1874,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                             : undefined
                         }
                       />
-                    </Grid>
+                    </Grid>}
                     {newStatus === 'resolved' && (
                       <Grid item xs={12}>
                         <FormControlLabel
@@ -3593,7 +3593,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           </Button>
         </DialogActions>
       </Dialog>
-<Dialog open={kbPickerOpen} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
+<Dialog open={kbPickerOpen && editingStatus && newStatus === 'resolved'} onClose={() => setKbPickerOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Load from Knowledge Base</DialogTitle>
         <DialogContent dividers>
           <TextField

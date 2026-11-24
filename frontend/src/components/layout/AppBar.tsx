@@ -183,9 +183,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [notifError, setNotifError] = useState<string | null>(null);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [pushConfig, setPushConfig] = useState<BrowserPushConfig | null>(null);
-  const [fcmConfigEnabled, setFcmConfigEnabled] = useState(false);
-  const [fcmConfigurationIssue, setFcmConfigurationIssue] = useState<string | undefined>();
-  const [fcmPermissionGranted, setFcmPermissionGranted] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushNeedsHomeScreen, setPushNeedsHomeScreen] = useState(false);
@@ -232,9 +229,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     if (!user) {
       setPushEnabled(false);
       setPushConfig(null);
-      setFcmConfigEnabled(false);
-      setFcmConfigurationIssue(undefined);
-      setFcmPermissionGranted(false);
       setFcmDeliveryVersion(undefined);
       setPushConfigCheckFailed(false);
       setPushConfigChecking(false);
@@ -252,7 +246,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushSupported(supported);
       try {
         if (nativeFcmHandoff?.version === 1) {
-          setFcmConfigEnabled(false);
           setPushEnabled(false);
           setPushMessage(androidAlertsUpdateMessage);
           return;
@@ -263,28 +256,29 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               notificationsApi.getFcmConfig(), notificationsApi.getFcmDeviceStatus(deviceId),
             ]);
             if (!current) return;
-            setFcmConfigEnabled(fcmConfig.enabled && status.enabled);
-            setFcmConfigurationIssue(fcmConfig.configurationIssue || status.configurationIssue);
-            setFcmPermissionGranted(notificationsGranted);
             let deliveryVersion = status.deliveryVersion;
-            if (status.registered && !notificationsGranted) {
+            let registered = status.registered;
+            const deliveryReady = fcmConfig.enabled && status.enabled;
+            if (registered && !notificationsGranted) {
               await notificationsApi.removeFcmDevice(deviceId).catch(() => undefined);
               deliveryVersion = undefined;
-            } else if (status.registered && fcmConfig.enabled && (fid || version === 3)) {
-              const saved = await notificationsApi.saveFcmDevice({ deviceId, fid, deliveryVersion: version === 3 ? 2 : undefined });
+              registered = false;
+            } else if (notificationsGranted && deliveryReady &&
+              (registered ? !!fid || version >= 3 : version === 4 && !!fid)) {
+              const saved = await notificationsApi.saveFcmDevice({ deviceId, fid, deliveryVersion: version >= 3 ? 2 : undefined });
               deliveryVersion = saved.deliveryVersion;
+              registered = true;
             }
             if (!current) return;
             setFcmDeliveryVersion(deliveryVersion);
-            setPushEnabled(status.registered && fcmConfig.enabled && notificationsGranted);
-            if (!fcmConfig.enabled) {
-              setPushMessage(fcmSetupMessage(fcmConfig.configurationIssue));
+            setPushEnabled(registered && deliveryReady && notificationsGranted);
+            if (!deliveryReady) {
+              setPushMessage(fcmSetupMessage(fcmConfig.configurationIssue || status.configurationIssue));
             } else if (!notificationsGranted) {
               setPushMessage('Android notifications are off for FO2 iCare. Allow them in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.');
-            } else if (!fid && !status.registered) {
-              setPushMessage('FO2 iCare could not register with Firebase. Connect to the internet and reopen the Android app, then try again.');
-            } else if (!status.registered) {
-              setPushMessage('Android app alerts are off on this device. Choose Enable to register this device.');
+            } else if (!registered) {
+              setPushMessage(version < 4 ? androidAlertsUpdateMessage
+                : 'Open FO2 iCare again from its Android icon while connected to the internet to finish setting up alerts.');
             }
             // Browser fallback linkage is optional; a browser error must not block native registration.
             if (supported && Notification.permission === 'granted') {
@@ -338,6 +332,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         if (current) {
           setPushConfig({ enabled: false, publicKey: null });
           setPushConfigCheckFailed(true);
+          if (nativeFcmHandoff) setPushEnabled(false);
         }
       } finally {
         if (current) setPushConfigChecking(false);
@@ -346,6 +341,19 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     void initializePush();
     return () => { current = false; };
   }, [user, nativeFcmHandoff, pushCheckAttempt]);
+
+  useEffect(() => {
+    if (!user || nativeFcmHandoff?.version !== 4 || !nativeFcmHandoff.notificationsGranted ||
+        !nativeFcmHandoff.fid || pushEnabled || pushConfigChecking) return;
+    const retry = () => { if (navigator.onLine) setPushCheckAttempt(attempt => attempt + 1); };
+    const delay = Math.min(120_000, 15_000 * 2 ** Math.min(pushCheckAttempt, 3));
+    const timer = window.setTimeout(retry, delay);
+    window.addEventListener('online', retry);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [user, nativeFcmHandoff, pushEnabled, pushConfigChecking, pushCheckAttempt]);
 
   const retryPushConfigCheck = async () => {
     if (pushConfigChecking || pushBusy) return;
@@ -368,69 +376,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     }
   };
 
-  const handleFcmToggle = async () => {
-    const device = getNativeFcmHandoff();
-    if (!device?.deviceId) {
-      setPushMessage('Reopen FO2 iCare from its Android app icon, then try again.');
-      return;
-    }
-    if (device.version === 1) {
-      setPushMessage(androidAlertsUpdateMessage);
-      return;
-    }
-    if (pushEnabled) {
-      setPushBusy(true);
-      try {
-        await notificationsApi.removeFcmDevice(device.deviceId);
-        setPushEnabled(false);
-        setFcmDeliveryVersion(undefined);
-        setPushMessage('Android app alerts are off on this device.');
-      } catch {
-        setPushMessage('Could not turn off Android app alerts. Please try again.');
-      } finally { setPushBusy(false); }
-      return;
-    }
-    if (!fcmConfigEnabled) {
-      setPushMessage(fcmSetupMessage(fcmConfigurationIssue));
-      return;
-    }
-    if (!device.notificationsGranted) {
-      setPushMessage('Android notifications are off for FO2 iCare. Allow them in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.');
-      return;
-    }
-    if (!device.fid) {
-      setPushMessage('FO2 iCare could not register with Firebase. Connect to the internet and reopen the Android app, then try again.');
-      return;
-    }
-
-    setPushBusy(true);
-    try {
-      const saved = await notificationsApi.saveFcmDevice({
-        deviceId: device.deviceId, fid: device.fid, deliveryVersion: device.version === 3 ? 2 : undefined,
-      });
-      setFcmDeliveryVersion(saved.deliveryVersion);
-      setPushEnabled(true);
-      setPushMessage('Android app alerts are enabled. Use Send test alert to check delivery.');
-    } catch (error) {
-      const status = getHttpErrorStatus(error);
-      setPushMessage(status === 401
-        ? 'Your sign-in expired before alerts could be enabled. Sign in again, then retry.'
-        : status === 503
-          ? 'Android alerts are not configured on this server. Ask an administrator to mount the Firebase service-account file in Ticketing.'
-          : status === 403
-            ? 'Your account is not approved to receive app alerts. Contact your administrator.'
-            : status === 429
-              ? 'This account has reached its Android alert device limit. Turn alerts off on an old device and retry.'
-              : 'FO2 iCare could not register this Android device. Check the connection and try again.');
-    } finally { setPushBusy(false); }
-  };
-
   const handleBrowserPushToggle = async () => {
-    if (pushBusy) return;
-    if (nativeFcmClient) {
-      await handleFcmToggle();
-      return;
-    }
+    if (pushBusy || nativeFcmClient) return;
     if (pushEnabled) {
       setPushBusy(true);
       try {
@@ -526,42 +473,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   };
 
   const handleTestAlert = async () => {
-    if (!pushEnabled || pushBusy || sendingTestAlert) return;
+    if (nativeFcmClient || !pushEnabled || pushBusy || sendingTestAlert) return;
     setSendingTestAlert(true);
     setPushMessage('');
     try {
-      if (nativeFcmClient) {
-        const device = getNativeFcmHandoff();
-        if (!device?.deviceId) {
-          setPushEnabled(false);
-          setPushMessage('Reopen FO2 iCare from its Android app icon, then enable Android app alerts again.');
-          return;
-        }
-        if (!device.notificationsGranted) {
-          setPushEnabled(false);
-          setPushMessage('Android notifications are off for FO2 iCare. Allow them in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.');
-          return;
-        }
-        const result = await notificationsApi.sendFcmTestAlert(device.deviceId);
-        if (result.outcome === 'accepted') {
-          setPushMessage('Firebase accepted the test alert. Check the Android notification panel for FO2 iCare.');
-        } else if (result.outcome === 'expired' || result.outcome === 'not-enabled') {
-          setPushEnabled(false);
-          setPushMessage('This Android device registration is no longer active. Reopen FO2 iCare and enable app alerts again.');
-        } else if (result.outcome === 'failed') {
-          const message = result.failure === 'authentication'
-            ? 'Firebase rejected Ticketing’s service credentials. Ask an administrator to check the Firebase service-account permissions.'
-            : result.failure === 'provider-unavailable'
-              ? 'Firebase is temporarily unavailable or the server timed out. Try the test again later.'
-              : result.failure === 'connection'
-                ? 'Ticketing could not connect to Firebase. Ask an administrator to check outbound HTTPS access.'
-                : result.failure === 'registration-storage'
-                  ? 'Ticketing could not check the saved Android registration. Reopen FO2 iCare and try again.'
-                : 'Firebase rejected the test request. Ask an administrator to check Ticketing’s FCM logs.';
-          setPushMessage(message);
-        }
-        return;
-      }
       const registration = await getActiveWebPushWorker();
       const subscription = await registration.pushManager.getSubscription();
       if (Notification.permission !== 'granted' || !subscription) {
@@ -1346,7 +1261,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {installHelp === 'ios'
                 ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
                 : installHelp === 'android'
-                  ? 'Choose Download FO2 iCare for Android from Download App, install the APK, and trust the approved internal root certificate when prompted. Open the FO2 iCare app and enable Android app alerts from the bell menu.'
+                  ? 'Install the APK, open FO2 iCare, and allow notifications when Android asks. Follow the certificate setup, then sign in. Alerts turn on automatically.'
                   : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
             </DialogContentText>
           </DialogContent>
@@ -1414,29 +1329,24 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             <Box sx={{ px: 2, py: 1.25 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Typography variant="body2" fontWeight={600}>{nativeFcmClient ? 'Android app alerts' : 'Browser alerts'}</Typography>
-                <Button
+                {!nativeFcmClient && <Button
                   size="small"
                   onClick={() => void (pushConfigCheckFailed ? retryPushConfigCheck() : handleBrowserPushToggle())}
-                  disabled={pushBusy || sendingTestAlert || pushConfigChecking || !user || (!pushConfigCheckFailed && !pushEnabled && (nativeFcmClient
-                    ? (!fcmConfigEnabled || !fcmPermissionGranted)
-                    : (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen)))}
+                  disabled={pushBusy || sendingTestAlert || pushConfigChecking || !user ||
+                    (!pushConfigCheckFailed && !pushEnabled && (!pushSupported || !pushConfig?.enabled || pushNeedsHomeScreen))}
                 >
                   {pushConfigChecking ? 'Checking…' : pushConfigCheckFailed ? 'Retry' : pushBusy ? 'Working…' : pushEnabled ? 'Turn off' : 'Enable'}
-                </Button>
+                </Button>}
               </Box>
               <Typography variant="caption" color="text.secondary" aria-live="polite" sx={{ display: 'block', lineHeight: 1.35 }}>
                 {pushMessage || (nativeFcmClient
-                  ? pushConfigCheckFailed
-                    ? 'Could not check Android app alerts. Tap Retry to try again.'
-                    : !fcmConfigEnabled
-                    ? fcmSetupMessage(fcmConfigurationIssue)
-                    : !fcmPermissionGranted
-                      ? 'Allow notifications in Android Settings → Apps → FO2 iCare → Notifications, then reopen the app.'
-                      : pushConfigChecking
-                        ? 'Checking Android app alert setup…'
-                        : pushEnabled
-                            ? 'Android app alerts are enabled on this device. Sound and badges follow Android notification settings.'
-                            : 'Enable Android app alerts on this device to receive notifications when FO2 iCare is closed.'
+                  ? pushConfigChecking
+                    ? 'Setting up Android alerts…'
+                    : pushConfigCheckFailed
+                      ? 'Could not set up Android alerts right now. FO2 iCare will try again when the connection is available.'
+                      : pushEnabled
+                        ? 'Android alerts are on.'
+                        : androidAlertsUpdateMessage
                   : pushNeedsHomeScreen
                   ? 'In Safari, add FO2 iCare to the Home Screen as a web app to use alerts.'
                   : !window.isSecureContext
@@ -1456,7 +1366,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {nativeFcmClient && pushEnabled && !pushConfigChecking && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                   {fcmDeliveryVersion === 2
-                    ? 'FO2 iCare sound and badge delivery is active. To check the Home Screen badge, leave a new ticket alert in the notification panel. Test alerts do not add a badge.'
+                    ? 'Home Screen badges follow your Android launcher settings. Leave a new ticket alert in the notification panel to check the badge.'
                     : 'This device is using standard Android delivery. Open the latest FO2 iCare app from its installed icon to activate the app sound and badge.'}
                 </Typography>
               )}
@@ -1467,7 +1377,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   {nativeFcmHandoff.routineUsesAppSound === false && 'Android is using a different sound setting for FO2 iCare notifications.'}
                 </Typography>
               )}
-              {pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
+              {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
                 {sendingTestAlert ? 'Sending test…' : 'Send test alert'}
               </Button>}
             </Box>
