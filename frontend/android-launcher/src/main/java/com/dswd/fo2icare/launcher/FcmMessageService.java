@@ -30,6 +30,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
     private static final int UNREAD_NOTIFICATION = 7101;
     private static final String BADGE_PREFERENCES = "notification_badge";
     private static final String LAST_COUNT_AT = "last_count_at";
+    private static final String LAST_LAUNCHER_REQUEST = "last_launcher_request";
 
     static NotificationChannel routineChannel(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
@@ -39,6 +40,28 @@ public final class FcmMessageService extends FirebaseMessagingService {
 
     private static boolean canShowBadge(NotificationChannel channel) {
         return channel != null && channel.canShowBadge() && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
+    static String badgeAlertStatus(Context context) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager == null) return "MISSING";
+        for (StatusBarNotification active : manager.getActiveNotifications()) {
+            if (active.getTag() == null && active.getId() == UNREAD_NOTIFICATION) {
+                return active.getNotification().number > 0 ? "COUNTED" : "UNCOUNTED";
+            }
+        }
+        return "MISSING";
+    }
+
+    static String lastLauncherRequest(Context context) {
+        return context.getSharedPreferences(BADGE_PREFERENCES, Context.MODE_PRIVATE)
+                .getString(LAST_LAUNCHER_REQUEST, null);
+    }
+
+    private void updateLauncherBadge(int count) {
+        LauncherBadge.Result result = LauncherBadge.update(this, count);
+        getSharedPreferences(BADGE_PREFERENCES, MODE_PRIVATE).edit()
+                .putString(LAST_LAUNCHER_REQUEST, result.name()).apply();
     }
 
     public static void ensureNotificationChannel(Context context) {
@@ -143,7 +166,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         }
         if (count <= 0 || !manager.areNotificationsEnabled()) {
             manager.cancel(UNREAD_NOTIFICATION);
-            LauncherBadge.update(this, 0);
+            updateLauncherBadge(0);
             return;
         }
         boolean badgeSync = "badge_sync".equals(kind);
@@ -152,7 +175,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (badgeSync && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
-                LauncherBadge.update(this, 0);
+                updateLauncherBadge(0);
                 return;
             }
             // AndroidX's silent flag groups even a single notification. Use an ungrouped,
@@ -169,7 +192,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
         }
-        LauncherBadge.update(this, allowBadge ? count : 0);
+        updateLauncherBadge(allowBadge ? count : 0);
     }
 
     private NotificationCompat.Builder notification(String channel, String sound, String body) {

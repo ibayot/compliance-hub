@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.14 (from 1.1.13)
+
+Apply `20261124-add-application-changelog-v1.1.14-users.sql` in the verified Users database. This release uses the existing Ticketing schema. Install the signed Android update over the existing APK. After an unread ticket alert arrives, reopen the installed app from its icon and check Android badge status in the bell menu.
+
 ## For release 1.1.13 (from 1.1.12)
 
 Apply `20261124-add-application-changelog-v1.1.13-users.sql` in the verified Users database. This release uses the existing Ticketing schema. Update the signed Android APK and use a real notification to check the Home Screen badge in the phone's selected dot or number mode. Mark the notification as read to verify the badge clears.

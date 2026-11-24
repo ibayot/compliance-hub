@@ -1363,7 +1363,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                         ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
                         : 'Enable alerts here as well as in your device and browser settings.')}
               </Typography>
-              {nativeFcmClient && pushEnabled && !pushConfigChecking && (
+              {nativeFcmClient && pushEnabled && !pushConfigChecking &&
+                (fcmDeliveryVersion !== 2 || !nativeFcmHandoff?.badgeAlert) && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                   {fcmDeliveryVersion === 2
                     ? 'Home Screen badges follow your Android launcher settings. Leave a new ticket alert in the notification panel to check the badge.'
@@ -1375,6 +1376,17 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                   {nativeFcmHandoff.routineBadgeAllowed === false && 'The FO2 iCare notification category has badges turned off. '}
                   {nativeFcmHandoff.routineUsesAppSound === false && 'Android is using a different sound setting for FO2 iCare notifications.'}
+                </Typography>
+              )}
+              {nativeFcmHandoff?.badgeAlert && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere' }}>
+                  {nativeFcmHandoff.badgeAlert === 'COUNTED' ? 'Android has an active alert with an unread count.'
+                    : nativeFcmHandoff.badgeAlert === 'UNCOUNTED' ? 'Android has an active alert without an unread count.'
+                      : 'Android has no active FO2 iCare badge alert.'}
+                  {nativeFcmHandoff.badgeRequest === 'REQUESTED' && ' A badge update was sent to the launcher.'}
+                  {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android prevented the direct launcher update.'}
+                  {nativeFcmHandoff.badgeRequest === 'STANDARD' && ' Using standard Android badging.'}
+                  {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
                 </Typography>
               )}
               {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>

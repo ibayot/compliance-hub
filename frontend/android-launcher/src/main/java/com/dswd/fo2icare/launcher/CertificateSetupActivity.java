@@ -542,6 +542,13 @@ public final class CertificateSetupActivity extends Activity {
                             .equals(routineChannel.getSound()));
                 }
             }
+            try {
+                handoff.put("badgeLauncher", LauncherBadge.systemHomePackage(this));
+                handoff.put("badgeAlert", FcmMessageService.badgeAlertStatus(this));
+                handoff.put("badgeRequest", FcmMessageService.lastLauncherRequest(this));
+            } catch (Exception ignored) {
+                // These optional details must not interrupt Android alert registration.
+            }
             if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);
             String encoded = Base64.encodeToString(handoff.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
                     Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);

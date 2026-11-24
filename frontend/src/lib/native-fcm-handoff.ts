@@ -9,6 +9,9 @@ export interface NativeFcmHandoff {
   notificationsGranted: boolean;
   routineBadgeAllowed?: boolean;
   routineUsesAppSound?: boolean;
+  badgeLauncher?: string;
+  badgeAlert?: 'COUNTED' | 'UNCOUNTED' | 'MISSING';
+  badgeRequest?: 'REQUESTED' | 'BLOCKED' | 'STANDARD';
 }
 
 function isUuid(value: unknown): value is string {
@@ -28,6 +31,12 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
     notificationsGranted: parsed.notificationsGranted,
     routineBadgeAllowed: typeof parsed.routineBadgeAllowed === 'boolean' ? parsed.routineBadgeAllowed : undefined,
     routineUsesAppSound: typeof parsed.routineUsesAppSound === 'boolean' ? parsed.routineUsesAppSound : undefined,
+    badgeLauncher: typeof parsed.badgeLauncher === 'string' && parsed.badgeLauncher.length <= 150 &&
+      /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(parsed.badgeLauncher) ? parsed.badgeLauncher : undefined,
+    badgeAlert: parsed.badgeAlert === 'COUNTED' || parsed.badgeAlert === 'UNCOUNTED' || parsed.badgeAlert === 'MISSING'
+      ? parsed.badgeAlert : undefined,
+    badgeRequest: parsed.badgeRequest === 'REQUESTED' || parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'STANDARD'
+      ? parsed.badgeRequest : undefined,
   };
 }
 
