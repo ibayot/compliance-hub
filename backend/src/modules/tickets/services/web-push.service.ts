@@ -14,12 +14,14 @@ import { Repository } from 'typeorm';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { TicketNotification } from '../entities/ticket-notification.entity';
 import { WebPushSubscription } from '../entities/web-push-subscription.entity';
+import { safeNotificationPreview } from './notification-preview';
 import { SlaSoundKind } from './sla-sound-kind';
 
 export interface BrowserPushSubscriptionInput {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   deviceId?: string;
+  showPreviews?: boolean;
 }
 
 const PUSH_SERVICE_HOSTS = new Set([
@@ -30,6 +32,7 @@ const PUSH_SERVICE_HOSTS = new Set([
 ]);
 const MAX_SUBSCRIPTIONS_PER_USER = 8;
 const TEST_ALERT_INTERVAL_MS = 30_000;
+const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type PushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
 type PushResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
   | { outcome: 'failed'; failure: PushFailure; providerStatus?: number };
@@ -123,8 +126,11 @@ export class WebPushService {
       throw new BadRequestException('A valid browser push subscription is required.');
     }
     if (input.deviceId !== undefined && (typeof input.deviceId !== 'string' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.deviceId))) {
+        !DEVICE_ID_PATTERN.test(input.deviceId))) {
       throw new BadRequestException('The browser push device identifier is invalid.');
+    }
+    if (input.showPreviews !== undefined && typeof input.showPreviews !== 'boolean') {
+      throw new BadRequestException('The notification preview preference is invalid.');
     }
     let endpoint: URL;
     try { endpoint = new URL(input.endpoint); }
@@ -175,8 +181,18 @@ export class WebPushService {
     row.userId = userId;
     row.endpointHash = endpointHash;
     row.encryptedSubscription = this.encryptSubscription(input, config.encryptionKey);
+    row.deviceId = input.deviceId ?? existing?.deviceId ?? null;
+    row.showPreviews = input.showPreviews ?? existing?.showPreviews ?? true;
     await this.subscriptions.save(row);
     return { enabled: true };
+  }
+
+  async getSubscriptionStatus(userId: number, deviceId: string): Promise<{
+    registered: boolean; showPreviews?: boolean;
+  }> {
+    if (!DEVICE_ID_PATTERN.test(deviceId ?? '')) throw new BadRequestException('A valid browser alert device is required.');
+    const record = await this.subscriptions.findOne({ where: { userId, deviceId } });
+    return { registered: !!record, showPreviews: record?.showPreviews };
   }
 
   async removeSubscription(userId: number, endpoint: string): Promise<{ removed: boolean }> {
@@ -262,7 +278,7 @@ export class WebPushService {
   async sendForNotification(notification: TicketNotification, fcmAcceptedDeviceIds: ReadonlySet<string> = new Set()): Promise<void> {
     const path = notification.targetPath;
     const targetPath = path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
-    await this.sendToUser(notification.userId, targetPath, fcmAcceptedDeviceIds);
+    await this.sendToUser(notification.userId, targetPath, fcmAcceptedDeviceIds, undefined, notification);
   }
 
   async sendSlaSound(userId: number, kind: SlaSoundKind, fcmAcceptedDeviceIds: ReadonlySet<string>): Promise<void> {
@@ -271,6 +287,7 @@ export class WebPushService {
 
   private async sendToUser(
     userId: number, targetPath: string, fcmAcceptedDeviceIds: ReadonlySet<string>, kind?: SlaSoundKind,
+    notification?: TicketNotification,
   ): Promise<void> {
     const config = this.configuration();
     if (!config) return;
@@ -285,10 +302,17 @@ export class WebPushService {
       return;
     }
 
-    const payload = kind ? { targetPath, kind } : {
-      title: 'FO2 iCare', body: 'You have a new notification.', targetPath,
-      unreadCount: await this.notifications.count({ where: { userId, isRead: false } }),
-    };
-    await Promise.all(records.map(record => this.deliver(record, config, payload, fcmAcceptedDeviceIds)));
+    const unreadCount = kind ? 0 : await this.notifications.count({ where: { userId, isRead: false } });
+    await Promise.all(records.map(record => {
+      const payload = kind ? { targetPath, kind } : {
+        title: 'FO2 iCare',
+        body: record.showPreviews && notification
+          ? safeNotificationPreview(notification.eventType)
+          : 'You have a new notification.',
+        targetPath,
+        unreadCount,
+      };
+      return this.deliver(record, config, payload, fcmAcceptedDeviceIds);
+    }));
   }
 }

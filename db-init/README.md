@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.16 (from 1.1.15)
+
+Apply `20261124-add-notification-previews-ticketing.sql` to the verified Ticketing database before rebuilding Ticketing. It adds per-device preview preferences for Android FCM and browser Web Push; existing alert devices default to safe event summaries. Apply `20261124-add-application-changelog-v1.1.16-users.sql` to the verified Users database. Both changes are additive and repeatable. Update the signed Android APK to 1.1.16 for Android previews and the preview switch. Build/recreate the web services for browser/iOS previews. The local Docker databases are updated during implementation; staging/production remain user-managed. These environment-managed SQL files are ignored by Git and must be copied separately.
+
 ## For release 1.1.15 (from 1.1.14)
 
 Apply `20261124-add-application-changelog-v1.1.15-users.sql` to the verified Users database. There is no ticketing schema change and no Android APK rebuild is required; the installed launcher loads this web workflow from the deployed application. The local Docker Users database has been updated. The changelog SQL is environment-managed and ignored by Git, so copy it separately for staging/production; those environments remain user-managed.

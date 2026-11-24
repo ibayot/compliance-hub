@@ -35,6 +35,7 @@ installation alone does not imply offline use or background push
 - Provide actual 192x192 and 512x512 PNG icons for Chromium-based installation; add a maskable purpose only for artwork composed within the maskable safe area.
 - Provide an explicit Apple touch icon and web-app title for iOS home-screen installation.
 - Set `start_url`, `scope`, `id`, and `display` to the deployed application's real base path and launch behavior. Production installation requires HTTPS.
+- A custom install control MUST call the browser-owned consent prompt from the user's action and distinguish accepted, dismissed, and unavailable outcomes. The website cannot silently place a desktop shortcut; after installation, guide users to the browser's shortcut controls.
 - If an iOS Web Clip profile is offered, include only the Web Clip payload; set `FullScreen` and `IsRemovable` to `true`, include a valid PNG icon, and point it at the configured public frontend URL. Keep `IgnoreManifestScope` false unless an approved workflow requires external navigation to remain fullscreen.
 - Serve profile downloads with Apple's `application/x-apple-aspen-config` content type. A Web Clip remains a web shortcut; fullscreen launch does not establish Web Push support.
 - A service worker is not needed merely to install the web app. Add one only for an explicitly scoped offline, update, or push feature, with a cache policy that protects authenticated and sensitive responses.
@@ -50,10 +51,11 @@ installation alone does not imply offline use or background push
 - **PLAT-WEB-PWA-006** — A profile-installed iOS Web Clip MUST include its real app icon and launch URL, set `FullScreen` to `true`, and remain removable.
 - **PLAT-WEB-PWA-007** — A downloadable iOS configuration profile MUST use Apple's profile MIME type and a deployment-specific public frontend URL; local defaults MUST use `localhost` or `127.0.0.1`.
 - **PLAT-WEB-PWA-008** — A fullscreen Web Clip MUST NOT be assumed to support Web Push; validate notifications separately on the installed iOS device.
+- **PLAT-WEB-PWA-009** — A web application MUST NOT claim that installation creates a desktop shortcut unless the browser confirms that outcome. Shortcut placement remains browser/OS-controlled and must be explained after a successful install when needed.
 
 ## Validation
 
-Parse the manifest, verify every icon's MIME type and pixel dimensions, verify entry-document links, and confirm install behavior on the supported iOS and Android browsers over HTTPS. For a profile-installed Web Clip, install the downloaded profile, confirm fullscreen launch and icon, verify in-scope and external navigation behavior, remove the profile, and independently test push support. Test local development using an eligible secure context such as localhost. Validate any separately added service-worker behavior against the explicit cache and push requirements.
+Parse the manifest, verify every icon's MIME type and pixel dimensions, verify entry-document links, and confirm install behavior on supported browsers. Verify accepted, dismissed, and unavailable custom install prompts. Confirm that desktop shortcut instructions match the active browser. For a profile-installed Web Clip, install the downloaded profile, confirm fullscreen launch and icon, verify in-scope and external navigation behavior, remove the profile, and independently test push support. Test local development using an eligible secure context such as localhost. Validate any separately added service-worker behavior against the explicit cache and push requirements.
 
 ## Related
 

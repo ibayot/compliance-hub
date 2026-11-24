@@ -34,7 +34,6 @@ import {
   Feedback as FeedbackIcon,
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
-  Devices as DevicesIcon,
   Smartphone as SmartphoneIcon,
 } from '@mui/icons-material';
 import PaletteIcon from '@mui/icons-material/Palette';
@@ -103,6 +102,20 @@ function decodeApplicationServerKey(key: string): Uint8Array {
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
 }
 
+function notificationPreviewStorageKey(userId: string | number, deviceId: string): string {
+  return `fo2-icare:notification-previews:${userId}:${deviceId}`;
+}
+
+function readNotificationPreviewPreference(userId: string | number | undefined, deviceId: string): boolean {
+  if (userId === undefined || typeof window === 'undefined') return true;
+  return window.localStorage.getItem(notificationPreviewStorageKey(userId, deviceId)) !== 'false';
+}
+
+function saveNotificationPreviewPreference(userId: string | number, deviceId: string, enabled: boolean): void {
+  try { window.localStorage.setItem(notificationPreviewStorageKey(userId, deviceId), String(enabled)); }
+  catch { /* The server remains the source of truth for an active subscription. */ }
+}
+
 function applicationServerKeysMatch(actual: ArrayBuffer, expected: Uint8Array): boolean {
   const actualBytes = new Uint8Array(actual);
   return actualBytes.length === expected.length && actualBytes.every((value, index) => value === expected[index]);
@@ -160,14 +173,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const { user, myCap, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const { mode, setAppearance, layoutMode, toggleLayoutMode } = useThemeMode();
+  const { mode, setAppearance, layoutMode } = useThemeMode();
   const { canGoBack, goBack } = useMobileNavigation();
   const theme = useTheme();
   const compactHeader = useMediaQuery(theme.breakpoints.down('sm'));
   const { enqueueSnackbar } = useSnackbar();
   const [savingAppearance, setSavingAppearance] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [canChooseLayout, setCanChooseLayout] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [myShift, setMyShift] = useState<{
     clockIn: Date | null;
@@ -185,6 +197,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushConfig, setPushConfig] = useState<BrowserPushConfig | null>(null);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [showNotificationPreviews, setShowNotificationPreviews] = useState(true);
+  const [savingNotificationPreviews, setSavingNotificationPreviews] = useState(false);
   const [pushNeedsHomeScreen, setPushNeedsHomeScreen] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [sendingTestAlert, setSendingTestAlert] = useState(false);
@@ -197,7 +211,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
   const [appInstallAnchor, setAppInstallAnchor] = useState<HTMLElement | null>(null);
-  const [installHelp, setInstallHelp] = useState<'ios' | 'android' | 'browser' | null>(null);
+  const [installHelp, setInstallHelp] = useState<'ios' | 'android' | 'browser' | 'desktop-shortcut' | null>(null);
   const notificationRequestRef = React.useRef(0);
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
@@ -228,6 +242,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   useEffect(() => {
     if (!user) {
       setPushEnabled(false);
+      setShowNotificationPreviews(true);
       setPushConfig(null);
       setFcmDeliveryVersion(undefined);
       setPushConfigCheckFailed(false);
@@ -239,6 +254,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushConfigChecking(true);
       setPushConfigCheckFailed(false);
       setPushMessage('');
+      const localDeviceId = getNotificationDeviceId();
+      setShowNotificationPreviews(readNotificationPreviewPreference(user.id, localDeviceId));
       const appleHomeScreenRequired = isAppleMobileDevice() && !isHomeScreenApp();
       const supported = window.isSecureContext && 'serviceWorker' in navigator &&
         'PushManager' in window && 'Notification' in window;
@@ -258,6 +275,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             if (!current) return;
             let deliveryVersion = status.deliveryVersion;
             let registered = status.registered;
+            const previewPreference = status.registered && typeof status.showPreviews === 'boolean'
+              ? status.showPreviews
+              : readNotificationPreviewPreference(user.id, deviceId);
+            setShowNotificationPreviews(previewPreference);
             const deliveryReady = fcmConfig.enabled && status.enabled;
             if (registered && !notificationsGranted) {
               await notificationsApi.removeFcmDevice(deviceId).catch(() => undefined);
@@ -265,10 +286,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               registered = false;
             } else if (notificationsGranted && deliveryReady &&
               (registered ? !!fid || version >= 3 : version === 4 && !!fid)) {
-              const saved = await notificationsApi.saveFcmDevice({ deviceId, fid, deliveryVersion: version >= 3 ? 2 : undefined });
+              const saved = await notificationsApi.saveFcmDevice({
+                deviceId, fid, deliveryVersion: version >= 3 ? 2 : undefined, showPreviews: previewPreference,
+              });
               deliveryVersion = saved.deliveryVersion;
               registered = true;
             }
+            saveNotificationPreviewPreference(user.id, deviceId, previewPreference);
             if (!current) return;
             setFcmDeliveryVersion(deliveryVersion);
             setPushEnabled(registered && deliveryReady && notificationsGranted);
@@ -294,7 +318,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   await subscription.unsubscribe().catch(() => false);
                   return;
                 }
-                await notificationsApi.savePushSubscription({ ...subscription.toJSON(), deviceId });
+                await notificationsApi.savePushSubscription({
+                  ...subscription.toJSON(), deviceId, showPreviews: previewPreference,
+                });
               })().catch(() => undefined);
             }
             return;
@@ -308,6 +334,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           const subscription = await registration?.pushManager.getSubscription();
           if (!current) return;
           const enabled = !!subscription && Notification.permission === 'granted' && config.enabled;
+          const deviceId = getNotificationDeviceId();
+          let previewPreference = readNotificationPreviewPreference(user.id, deviceId);
           if (enabled && subscription) {
             const existingKey = subscription.options.applicationServerKey;
             const expectedKey = decodeApplicationServerKey(config.publicKey || '');
@@ -320,11 +348,21 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               }
               return;
             }
+            const savedPreference = await notificationsApi.getPushSubscriptionStatus(deviceId);
+            if (!current) return;
+            if (savedPreference.registered && typeof savedPreference.showPreviews === 'boolean') {
+              previewPreference = savedPreference.showPreviews;
+            }
+            setShowNotificationPreviews(previewPreference);
+            saveNotificationPreviewPreference(user.id, deviceId, previewPreference);
             // Keep endpoint ownership aligned with the account authenticated on this device.
             await notificationsApi.savePushSubscription({
               ...subscription.toJSON(),
-              deviceId: getNotificationDeviceId(),
+              deviceId,
+              showPreviews: previewPreference,
             });
+          } else {
+            setShowNotificationPreviews(previewPreference);
           }
           if (current) setPushEnabled(enabled);
         }
@@ -371,7 +409,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setInstallHelp('android');
       return;
     }
-    if (!await promptToInstallWebApp()) {
+    const outcome = await promptToInstallWebApp();
+    if (outcome === 'accepted') {
+      setInstallHelp('desktop-shortcut');
+    } else if (outcome === null) {
       setInstallHelp('browser');
     }
   };
@@ -442,7 +483,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         throw new Error('The browser returned an incomplete push subscription.');
       }
       pushStep = 'server-save';
-      await notificationsApi.savePushSubscription({ ...payload, deviceId: getNotificationDeviceId() });
+      const deviceId = getNotificationDeviceId();
+      await notificationsApi.savePushSubscription({
+        ...payload, deviceId, showPreviews: showNotificationPreviews,
+      });
+      saveNotificationPreviewPreference(user!.id, deviceId, showNotificationPreviews);
       setPushEnabled(true);
       setPushMessage('Browser alerts are enabled on this device.');
     } catch (error) {
@@ -470,6 +515,36 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         setPushMessage('The browser could not request notification permission. Check Android notification settings, then retry.');
       }
     } finally { setPushBusy(false); }
+  };
+
+  const handleNotificationPreviewToggle = async (enabled: boolean) => {
+    if (!user || !pushEnabled || savingNotificationPreviews) return;
+    const previous = showNotificationPreviews;
+    const deviceId = getNotificationDeviceId();
+    setShowNotificationPreviews(enabled);
+    setSavingNotificationPreviews(true);
+    setPushMessage('Saving notification preview preference…');
+    try {
+      if (nativeFcmClient) {
+        await notificationsApi.saveFcmDevice({ deviceId, showPreviews: enabled });
+      } else {
+        const registration = await navigator.serviceWorker.getRegistration('/');
+        const subscription = await registration?.pushManager.getSubscription();
+        if (!subscription) throw new Error('No browser alert subscription is active.');
+        await notificationsApi.savePushSubscription({
+          ...subscription.toJSON(), deviceId, showPreviews: enabled,
+        });
+      }
+      saveNotificationPreviewPreference(user.id, deviceId, enabled);
+      setPushMessage(enabled
+        ? 'Brief notification previews are on for this device.'
+        : 'Notification previews are off for this device.');
+    } catch {
+      setShowNotificationPreviews(previous);
+      setPushMessage('Could not save the notification preview preference. Please try again.');
+    } finally {
+      setSavingNotificationPreviews(false);
+    }
   };
 
   const handleTestAlert = async () => {
@@ -540,14 +615,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   useEffect(() => {
     fetchMyShift();
   }, [fetchMyShift]);
-
-  useEffect(() => {
-    const desktopPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
-    const refresh = () => setCanChooseLayout(!Capacitor.isNativePlatform() && desktopPointer.matches);
-    refresh();
-    desktopPointer.addEventListener('change', refresh);
-    return () => desktopPointer.removeEventListener('change', refresh);
-  }, []);
 
   // The browser and the Android APK use the same audio assets.
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -1262,7 +1329,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
                 : installHelp === 'android'
                   ? 'Install the APK, open FO2 iCare, and allow notifications when Android asks. Follow the certificate setup, then sign in. Alerts turn on automatically.'
-                  : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
+                  : installHelp === 'desktop-shortcut'
+                    ? 'FO2 iCare is installed as a web app. Your browser controls desktop shortcuts. In Chrome, open chrome://apps, right-click FO2 iCare, choose Create shortcut, select Desktop, then create it. In Edge, choose Create Desktop Shortcut in its post-install window if that option is available.'
+                    : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
@@ -1363,6 +1432,21 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                         ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
                         : 'Enable alerts here as well as in your device and browser settings.')}
               </Typography>
+              <Box sx={{ mt: 1, pt: 0.75, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={600}>Show notification previews</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
+                    Brief event summaries only. Ticket details stay private; your device may still hide previews on its lock screen.
+                  </Typography>
+                </Box>
+                <Switch
+                  size="small"
+                  checked={showNotificationPreviews}
+                  onChange={(event) => void handleNotificationPreviewToggle(event.target.checked)}
+                  disabled={!pushEnabled || savingNotificationPreviews || pushConfigChecking || !navigator.onLine}
+                  inputProps={{ 'aria-label': 'Show notification previews on this device' }}
+                />
+              </Box>
               {nativeFcmClient && pushEnabled && !pushConfigChecking &&
                 (fcmDeliveryVersion !== 2 || !nativeFcmHandoff?.badgeAlert) && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -1485,29 +1569,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </MenuItem>
-            {canChooseLayout && (
-              <MenuItem
-                onClick={(event) => {
-                  event.preventDefault();
-                  toggleLayoutMode();
-                  handleProfileMenuClose();
-                }}
-              >
-                <DevicesIcon sx={{ mr: 1 }} />
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="body2">Mobile View</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Use tablet-style cards and navigation
-                  </Typography>
-                </Box>
-                <Switch
-                  edge="end"
-                  size="small"
-                  checked={layoutMode === 'mobile'}
-                  inputProps={{ 'aria-label': 'Use Mobile View' }}
-                />
-              </MenuItem>
-            )}
             <MenuItem onClick={handleSettings}>
               <PaletteIcon sx={{ mr: 1 }} />
               Appearance & Settings

@@ -34,10 +34,13 @@ self.addEventListener('push', (event) => {
     const unreadCount = Number.isSafeInteger(payload?.unreadCount) && payload.unreadCount > 0
       ? payload.unreadCount
       : 0;
+    const previewBody = typeof payload?.body === 'string' && payload.body.length <= 160
+      ? payload.body
+      : '';
     // Show the OS notification independently of numeric app badge support.
     const playedInOpenApp = slaSound && await playSlaSoundInOpenApp(payload.kind).catch(() => false);
     await self.registration.showNotification('FO2 iCare', {
-      body: test ? 'Your test alert arrived on this device.' : slaSound ? 'You have an SLA reminder.' : 'You have a new notification.',
+      body: test ? 'Your test alert arrived on this device.' : slaSound ? 'You have an SLA reminder.' : previewBody || 'You have a new notification.',
       icon: '/icons/app-192.png',
       badge: '/icons/app-192.png',
       silent: playedInOpenApp,

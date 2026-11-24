@@ -55,6 +55,12 @@ export class NotificationController {
     return this.webPushService.saveSubscription(this.userId(req), body);
   }
 
+  @Get('push-subscription')
+  async getPushSubscription(@Request() req: any, @Query('deviceId') deviceId: string) {
+    if (!this.webPushService) throw new ServiceUnavailableException('Browser notifications are unavailable.');
+    return this.webPushService.getSubscriptionStatus(this.userId(req), deviceId ?? '');
+  }
+
   @Delete('push-subscription')
   async removePushSubscription(@Request() req: any, @Body() body: { endpoint?: string }) {
     if (!this.webPushService) return { removed: false };

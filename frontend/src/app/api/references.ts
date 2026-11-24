@@ -2060,10 +2060,16 @@ export interface FcmDeviceStatus {
   enabled: boolean;
   registered: boolean;
   deliveryVersion?: number;
+  showPreviews?: boolean;
   configurationIssue?: FcmPushConfig['configurationIssue'];
 }
 
-export type BrowserPushSubscriptionPayload = PushSubscriptionJSON & { deviceId?: string };
+export interface BrowserPushSubscriptionStatus {
+  registered: boolean;
+  showPreviews?: boolean;
+}
+
+export type BrowserPushSubscriptionPayload = PushSubscriptionJSON & { deviceId?: string; showPreviews?: boolean };
 
 export type BrowserPushFailure = 'authentication' | 'rate-limit' | 'provider-unavailable' | 'provider-request' | 'dns' | 'tls' | 'timeout' | 'connection';
 type BrowserPushTestResult = { outcome: 'accepted' | 'expired' | 'not-enabled' }
@@ -2109,6 +2115,10 @@ export const notificationsApi = {
     const response = await apiClient.post('/notifications/push-subscription', subscription);
     return response.data;
   },
+  getPushSubscriptionStatus: async (deviceId: string): Promise<BrowserPushSubscriptionStatus> => {
+    const response = await apiClient.get('/notifications/push-subscription', { params: { deviceId } });
+    return response.data;
+  },
   sendTestAlert: async (endpoint: string): Promise<BrowserPushTestResult> => {
     const response = await apiClient.post('/notifications/push-test', { endpoint });
     return response.data;
@@ -2125,7 +2135,7 @@ export const notificationsApi = {
     const response = await apiClient.get('/notifications/fcm-subscription', { params: { deviceId } });
     return response.data;
   },
-  saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2 }): Promise<{ enabled: true; deliveryVersion: number }> => {
+  saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2; showPreviews?: boolean }): Promise<{ enabled: true; deliveryVersion: number; showPreviews?: boolean }> => {
     const generation = recoveryGeneration();
     return withFcmDeviceOperation(input.deviceId, async () => {
       if (hasSignedOut() || generation !== recoveryGeneration()) throw new Error('Sign-in session changed before Android alert registration.');

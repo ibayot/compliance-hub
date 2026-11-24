@@ -3,6 +3,7 @@ import { getNativeFcmHandoff, subscribeNativeFcmHandoff } from './native-fcm-han
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<unknown>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 let installPrompt: InstallPromptEvent | null = null;
@@ -64,14 +65,14 @@ if (isAndroidBrowser() && window.isSecureContext && 'serviceWorker' in navigator
   void registerWebPushWorker().catch(() => undefined);
 }
 
-export async function promptToInstallWebApp(): Promise<boolean> {
+export async function promptToInstallWebApp(): Promise<'accepted' | 'dismissed' | null> {
   const prompt = installPrompt;
-  if (!prompt) return false;
+  if (!prompt) return null;
   installPrompt = null;
   try {
     await prompt.prompt();
-    return true;
+    return (await prompt.userChoice).outcome;
   } catch {
-    return false;
+    return null;
   }
 }

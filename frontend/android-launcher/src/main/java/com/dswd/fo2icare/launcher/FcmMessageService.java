@@ -117,15 +117,15 @@ public final class FcmMessageService extends FirebaseMessagingService {
                     break;
                 case "test":
                     manager.notify(7102, notification(TEST_CHANNEL, "routine",
-                            "Your test alert arrived on this device.").setAutoCancel(true).build());
+                            "Your test alert arrived on this device.", false).setAutoCancel(true).build());
                     break;
                 case "nearing_sla":
                     manager.notify(7103, notification(NEARING_CHANNEL, "nearing",
-                            "You have an SLA reminder.").setAutoCancel(true).build());
+                            "You have an SLA reminder.", false).setAutoCancel(true).build());
                     break;
                 case "overdue_sla":
                     manager.notify(7104, notification(OVERDUE_CHANNEL, "overdue",
-                            "You have an SLA reminder.").setAutoCancel(true).build());
+                            "You have an SLA reminder.", false).setAutoCancel(true).build());
                     break;
                 default:
                     break;
@@ -185,7 +185,10 @@ public final class FcmMessageService extends FirebaseMessagingService {
             // Start a real alert on the audible channel after a silent restoration.
             manager.cancel(UNREAD_NOTIFICATION);
         }
-        NotificationCompat.Builder alert = notification(channel, "routine", "You have unread notifications.")
+        String previewBody = data.get("previewBody");
+        boolean showPreview = previewBody != null && !previewBody.trim().isEmpty() && previewBody.length() <= 160;
+        NotificationCompat.Builder alert = notification(channel, "routine",
+                showPreview ? previewBody : "You have unread notifications.", showPreview)
                 .setNumber(count).setOnlyAlertOnce(badgeSync);
         if (badgeSync && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) alert.setSilent(true);
         manager.notify(UNREAD_NOTIFICATION, alert.build());
@@ -195,7 +198,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         updateLauncherBadge(allowBadge ? count : 0);
     }
 
-    private NotificationCompat.Builder notification(String channel, String sound, String body) {
+    private NotificationCompat.Builder notification(String channel, String sound, String body, boolean showPreview) {
         Intent launchIntent = new Intent(this, CertificateSetupActivity.class);
         launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent contentIntent = PendingIntent.getActivity(this, 0, launchIntent,
@@ -204,7 +207,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 .setSmallIcon(R.drawable.hub_notification)
                 .setColor(getColor(R.color.fo2_icare_notification_color))
                 .setContentTitle("FO2 iCare").setContentText(body).setContentIntent(contentIntent)
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setVisibility(showPreview ? NotificationCompat.VISIBILITY_PUBLIC : NotificationCompat.VISIBILITY_PRIVATE)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) builder.setSound(NotificationSoundProvider.soundUri(this, sound));
         return builder;

@@ -23,6 +23,9 @@ export class FcmDeviceRegistration {
   @Column({ name: 'delivery_version', type: 'tinyint', unsigned: true, default: 1 })
   deliveryVersion: number;
 
+  @Column({ name: 'show_previews', type: 'boolean', default: true })
+  showPreviews: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

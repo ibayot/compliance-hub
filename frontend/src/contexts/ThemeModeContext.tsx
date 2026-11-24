@@ -39,8 +39,6 @@ type ThemeModeContextValue = {
   appearanceReady: boolean;
   setAppearanceReady: (ready: boolean) => void;
   layoutMode: AppLayoutMode;
-  setLayoutMode: (mode: AppLayoutMode) => void;
-  toggleLayoutMode: () => void;
 };
 
 const ThemeModeContext = createContext<ThemeModeContextValue | undefined>(undefined);
@@ -94,19 +92,17 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     return stored === 'dark' ? 'dark' : 'light';
   });
 
-  const [layoutMode, setLayoutModeState] = useState<AppLayoutMode>(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('app-layout-mode') : null;
-    return stored === 'mobile' ? 'mobile' : 'web';
-  });
+  const [layoutMode, setLayoutMode] = useState<AppLayoutMode>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches ? 'mobile' : 'web',
+  );
 
-  const setLayoutMode = React.useCallback((nextMode: AppLayoutMode) => {
-    setLayoutModeState(nextMode);
-    localStorage.setItem('app-layout-mode', nextMode);
+  useEffect(() => {
+    const mobileViewport = window.matchMedia('(max-width: 899px)');
+    const updateLayoutMode = () => setLayoutMode(mobileViewport.matches ? 'mobile' : 'web');
+    updateLayoutMode();
+    mobileViewport.addEventListener('change', updateLayoutMode);
+    return () => mobileViewport.removeEventListener('change', updateLayoutMode);
   }, []);
-
-  const toggleLayoutMode = React.useCallback(() => {
-    setLayoutMode(layoutMode === 'web' ? 'mobile' : 'web');
-  }, [layoutMode, setLayoutMode]);
 
   const [colorTheme, setColorThemeState] = useState<AppColorTheme>(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('app-color-theme') : null;
@@ -140,8 +136,6 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       appearanceReady,
       setAppearanceReady,
       layoutMode,
-      setLayoutMode,
-      toggleLayoutMode,
     }),
     [
       mode,
@@ -151,8 +145,6 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       appearanceReady,
       setAppearanceReady,
       layoutMode,
-      setLayoutMode,
-      toggleLayoutMode,
     ],
   );
 

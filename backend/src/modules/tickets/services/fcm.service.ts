@@ -21,12 +21,14 @@ import { Repository } from 'typeorm';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
 import { FcmDeviceRegistration } from '../entities/fcm-device-registration.entity';
 import { TicketNotification } from '../entities/ticket-notification.entity';
+import { safeNotificationPreview } from './notification-preview';
 import { SlaSoundKind } from './sla-sound-kind';
 
 export interface FcmDeviceInput {
   deviceId: string;
   fid?: string;
   deliveryVersion?: number;
+  showPreviews?: boolean;
 }
 
 type AndroidDeliveryKind = 'notification' | 'test' | 'badge_sync' | SlaSoundKind;
@@ -134,8 +136,11 @@ export class FcmService {
 
   private validateDeviceInput(input: FcmDeviceInput): void {
     if (!input || typeof input.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(input.deviceId) ||
-        (input.fid === undefined ? input.deliveryVersion !== 2 : typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid)) ||
-        (input.deliveryVersion !== undefined && input.deliveryVersion !== 2)) {
+        (input.fid === undefined
+          ? input.deliveryVersion !== 2 && typeof input.showPreviews !== 'boolean'
+          : typeof input.fid !== 'string' || !FID_PATTERN.test(input.fid)) ||
+        (input.deliveryVersion !== undefined && input.deliveryVersion !== 2) ||
+        (input.showPreviews !== undefined && typeof input.showPreviews !== 'boolean')) {
       throw new BadRequestException('A valid Android app device registration is required.');
     }
   }
@@ -170,7 +175,7 @@ export class FcmService {
   }
 
   async getDeviceStatus(userId: number, deviceId: string): Promise<{
-    enabled: boolean; registered: boolean; deliveryVersion?: number; configurationIssue?: FcmConfigurationIssue;
+    enabled: boolean; registered: boolean; deliveryVersion?: number; showPreviews?: boolean; configurationIssue?: FcmConfigurationIssue;
   }> {
     if (!DEVICE_ID_PATTERN.test(deviceId ?? '')) throw new BadRequestException('A valid Android app device is required.');
     await this.usersClient.requireAccountAccess(userId);
@@ -180,21 +185,26 @@ export class FcmService {
       enabled: !!configuration,
       registered: !!registration,
       deliveryVersion: registration?.deliveryVersion,
+      showPreviews: registration?.showPreviews,
       configurationIssue: this.configurationIssue,
     };
   }
 
-  async saveDevice(userId: number, input: FcmDeviceInput): Promise<{ enabled: true; deliveryVersion: number }> {
+  async saveDevice(userId: number, input: FcmDeviceInput): Promise<{ enabled: true; deliveryVersion: number; showPreviews: boolean }> {
     this.validateDeviceInput(input);
     await this.usersClient.requireAccountAccess(userId);
     const configuration = this.assertConfigured();
     if (input.fid === undefined) {
       // The app can upgrade the delivery format of its existing opt-in even when a warm
       // launch has not yet read Firebase's ID. A device ID alone cannot create a subscription.
-      const result = await this.registrations.update({ userId, deviceId: input.deviceId }, { deliveryVersion: 2 });
+      const changes: Partial<FcmDeviceRegistration> = {};
+      if (input.deliveryVersion === 2) changes.deliveryVersion = 2;
+      if (input.showPreviews !== undefined) changes.showPreviews = input.showPreviews;
+      const result = await this.registrations.update({ userId, deviceId: input.deviceId }, changes);
       if (!result.affected) throw new BadRequestException('Reopen FO2 iCare to finish Android alert registration.');
-      void this.syncBadge(userId, input.deviceId).catch(() => undefined);
-      return { enabled: true, deliveryVersion: 2 };
+      if (input.deliveryVersion === 2) void this.syncBadge(userId, input.deviceId).catch(() => undefined);
+      const updated = await this.registrations.findOne({ where: { userId, deviceId: input.deviceId } });
+      return { enabled: true, deliveryVersion: updated?.deliveryVersion ?? 1, showPreviews: updated?.showPreviews ?? true };
     }
     const fidHash = this.fidHash(input.fid);
     const matches = await this.registrations.find({
@@ -209,18 +219,20 @@ export class FcmService {
     }
 
     const currentDeliveryVersion = row.userId === userId && row.deviceId === input.deviceId ? row.deliveryVersion : undefined;
+    const currentShowPreviews = row.userId === userId && row.deviceId === input.deviceId ? row.showPreviews : undefined;
     row.userId = userId;
     row.deviceId = input.deviceId;
     row.fidHash = fidHash;
     row.encryptedFid = this.encryptFid(input.fid, configuration.encryptionKey);
     row.deliveryVersion = input.deliveryVersion ?? currentDeliveryVersion ?? 1;
+    row.showPreviews = input.showPreviews ?? currentShowPreviews ?? true;
     try {
       await this.registrations.save(row);
     } catch {
       throw new BadRequestException('This Android device could not be registered. Reopen FO2 iCare and try again.');
     }
     if (row.deliveryVersion === 2) void this.syncBadge(userId, row.deviceId).catch(() => undefined);
-    return { enabled: true, deliveryVersion: row.deliveryVersion };
+    return { enabled: true, deliveryVersion: row.deliveryVersion, showPreviews: row.showPreviews };
   }
 
   async removeDevice(userId: number, deviceId: string): Promise<{ removed: boolean }> {
@@ -252,7 +264,7 @@ export class FcmService {
   }
 
   async sendForNotification(notification: TicketNotification): Promise<Set<string>> {
-    return this.sendToUser(notification.userId, 'notification');
+    return this.sendToUser(notification.userId, 'notification', undefined, safeNotificationPreview(notification.eventType));
   }
 
   async sendSlaSound(userId: number, kind: SlaSoundKind): Promise<Set<string>> {
@@ -263,7 +275,9 @@ export class FcmService {
     await this.sendToUser(userId, 'badge_sync', deviceId);
   }
 
-  private async sendToUser(userId: number, kind: AndroidDeliveryKind, deviceId?: string): Promise<Set<string>> {
+  private async sendToUser(
+    userId: number, kind: AndroidDeliveryKind, deviceId?: string, previewBody?: string,
+  ): Promise<Set<string>> {
     const configuration = this.configuration();
     if (!configuration) return new Set();
     const registrations = await this.registrations.find({ where: {
@@ -282,7 +296,7 @@ export class FcmService {
       : 0;
     const results = await Promise.all(registrations.map(async registration => ({
       deviceId: registration.deviceId,
-      result: await this.sendToRegistration(configuration, registration, unreadCount, kind),
+      result: await this.sendToRegistration(configuration, registration, unreadCount, kind, previewBody),
     })));
     return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
   }
@@ -292,6 +306,7 @@ export class FcmService {
     registration: FcmDeviceRegistration,
     unreadCount: number,
     kind: AndroidDeliveryKind,
+    previewBody?: string,
   ): Promise<FcmSendResult> {
     let fid: string;
     try {
@@ -301,7 +316,8 @@ export class FcmService {
       return { outcome: 'failed', failure: 'registration-storage' };
     }
 
-    const result = await this.send(configuration, fid, unreadCount, kind, registration.deliveryVersion === 2);
+    const result = await this.send(configuration, fid, unreadCount, kind,
+      registration.deliveryVersion === 2, registration.showPreviews ? previewBody : undefined);
     if (result.outcome !== 'expired') return result;
 
     // A phone can refresh its registration while a send is pending. Delete only the rejected version.
@@ -319,7 +335,8 @@ export class FcmService {
   }
 
   private async send(
-    configuration: FcmConfiguration, fid: string, unreadCount: number, kind: AndroidDeliveryKind, enhancedDelivery: boolean,
+    configuration: FcmConfiguration, fid: string, unreadCount: number, kind: AndroidDeliveryKind,
+    enhancedDelivery: boolean, previewBody?: string,
   ): Promise<FcmSendResult> {
     const countAt = Date.now();
     let accessToken: string | null | undefined;
@@ -338,19 +355,20 @@ export class FcmService {
     try {
       const badgeSync = kind === 'badge_sync';
       const count = Math.max(0, unreadCount);
+      const visibleBody = kind === 'notification' && previewBody ? previewBody : 'You have a new notification.';
       const message = enhancedDelivery ? {
         fid,
-        data: { kind, unreadCount: String(count), countAt: String(countAt) },
+        data: { kind, unreadCount: String(count), countAt: String(countAt), ...(previewBody && kind === 'notification' ? { previewBody } : {}) },
         android: badgeSync ? { priority: 'NORMAL', collapse_key: 'fo2_badge', ttl: '300s' }
           : { priority: 'HIGH', ttl: '60s' },
       } : {
         fid,
-        notification: { title: 'FO2 iCare', body: kind === 'test' ? 'This is a test notification.' : 'You have a new notification.' },
+        notification: { title: 'FO2 iCare', body: kind === 'test' ? 'This is a test notification.' : visibleBody },
         data: { unreadCount: String(count), targetPath: '/dashboard' },
         android: {
           priority: 'HIGH',
           notification: { channel_id: 'fo2_icare_alerts', icon: 'hub_notification', color: '#147A76',
-            sound: 'default', notification_count: count },
+            sound: 'default', notification_count: count, visibility: previewBody ? 'PUBLIC' : 'PRIVATE' },
         },
       };
       const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(configuration.projectId)}/messages:send`, {

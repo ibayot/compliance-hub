@@ -42,6 +42,9 @@ final class LauncherBadge {
                     update.putExtra("packageName", app.getPackageName());
                     update.putExtra("className", app.getClassName());
                     update.putExtra("notificationNum", unreadCount);
+                    // Vivo's documented launcher integration needs this background receiver flag.
+                    // Android hides the named constant from the public SDK, so use its platform value.
+                    update.addFlags(0x01000000);
                     context.sendBroadcast(update);
                     return Result.REQUESTED;
                 case "com.huawei.android.launcher":

@@ -16,6 +16,12 @@ export class WebPushSubscription {
   @Column({ name: 'encrypted_subscription', type: 'text' })
   encryptedSubscription: string;
 
+  @Column({ name: 'device_id', type: 'char', length: 36, nullable: true })
+  deviceId: string | null;
+
+  @Column({ name: 'show_previews', type: 'boolean', default: true })
+  showPreviews: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

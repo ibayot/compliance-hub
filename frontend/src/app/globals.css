@@ -400,7 +400,7 @@ body {
   align-items: flex-start;
 }
 
-/* Mobile layout mode is also available on desktop-sized screens for preview and preference use. */
+/* Layout mode follows the actual viewport so mobile navigation and spacing stay on mobile surfaces. */
 .app-shell[data-app-layout-mode='mobile'] .app-page-content {
   width: min(calc(100% - 24px), 760px) !important;
   max-width: 760px;

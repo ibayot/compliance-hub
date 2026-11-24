@@ -39,7 +39,7 @@ signed-in user gesture
 - Request permission only from a direct user gesture. Register a subscription only after permission is granted and bind it to the account from the authenticated server request; never accept a client-supplied owner ID.
 - Validate HTTPS push endpoints against supported push-service origins to prevent server-side request forgery. Hash endpoints for lookup and store the endpoint and browser encryption keys only as authenticated ciphertext at rest.
 - Recheck current account access/approval before delivery. Unsubscribe and remove the account-owned record on logout or opt-out; remove expired endpoints on push-service 404/410 responses.
-- Send generic lock-screen content. Do not include ticket IDs, subjects, comments, employee identifiers, account data, or other sensitive text. Include only a validated same-origin relative destination and the unread count needed for an available badge API.
+- Keep lock-screen content generic unless the device has enabled notification previews. For opted-in previews, send only a short allowlisted event summary; never include ticket IDs, subjects, comment text, employee identifiers, account data, or other sensitive text. Include only a validated same-origin relative destination and the unread count needed for an available badge API.
 - Push delivery is best-effort and MUST NOT delay persistence, in-app notifications, or the live event channel. Bound payload size and expiry, avoid logging endpoints or keys, and do not silently retry old notifications as new events.
 - Keep VAPID credentials and the separate authenticated-encryption key in the server environment. Generate stable keys once; changing them requires an explicit subscription migration/rotation plan. Never put private keys in the browser build.
 - Explain platform limits accurately: desktop/Android browser notifications can work without app-store installation; iOS/iPadOS Web Push requires a Home Screen web app on a supported OS. App-icon badges and sound depend on browser, installation state, OS settings, and user permission; never promise that a browser tab can badge while closed.
@@ -53,10 +53,11 @@ signed-in user gesture
 - **PLAT-WEB-PUSH-005** — MUST treat push as best-effort; delivery failures cannot block the durable notification, SSE, or in-app notification flow.
 - **PLAT-WEB-PUSH-006** — MUST clear an opt-out/logged-out device subscription and remove expired endpoints; rebind an existing browser subscription only to the currently authenticated account.
 - **PLAT-WEB-PUSH-007** — MUST disclose actual browser/OS constraints and must not imply that sound or app-icon badge behavior is guaranteed.
+- **PLAT-WEB-PUSH-008** — MUST store preview choice per authenticated device. Build any preview from an allowlist of event types, not the notification message or ticket record. Disabled previews stay generic; operating-system lock-screen preferences remain authoritative.
 
 ## Validation
 
-Verify secure-context and feature detection; opt-in and opt-out; denied permission; current account access revocation; generic payload redaction; endpoint/key encryption; notification click origin validation; stale endpoint removal; open-page duplicate-sound behavior; service-worker scope; local localhost and production HTTPS behavior. Validate iOS with a Home Screen web app and Android/desktop in their target browsers. Do not claim closed-app badge or audio parity across platforms.
+Verify secure-context and feature detection; opt-in and opt-out; denied permission; preview preference on/off per device; summary allowlisting and generic fallback; current account access revocation; generic payload redaction; endpoint/key encryption; notification click origin validation; stale endpoint removal; open-page duplicate-sound behavior; service-worker scope; local localhost and production HTTPS behavior. Validate iOS with a Home Screen web app and Android/desktop in their target browsers. Do not claim closed-app badge or audio parity across platforms.
 
 ## Related
 
