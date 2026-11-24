@@ -1519,7 +1519,14 @@ export class TicketService implements OnModuleInit {
           combinedText,
           dto.ticketType,
         );
-        if (matchedRule) {
+        // Specialized Concerns must be an explicit filing choice. A keyword
+        // rule may still correct routing between the other support types, but
+        // it must not silently turn a selected IT/Desktop/Pantawid ticket into
+        // specialized work and then reject its otherwise valid assignee.
+        if (
+          matchedRule &&
+          matchedRule.targetTicketType !== TicketType.SPECIALIZED_CONCERNS
+        ) {
           ticketType = matchedRule.targetTicketType as TicketType;
           if (matchedRule.targetCategoryId) {
             categoryId = matchedRule.targetCategoryId;

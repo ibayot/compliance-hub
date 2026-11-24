@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.15 (from 1.1.14)
+
+Apply `20261124-add-application-changelog-v1.1.15-users.sql` to the verified Users database. There is no ticketing schema change and no Android APK rebuild is required; the installed launcher loads this web workflow from the deployed application. The local Docker Users database has been updated. The changelog SQL is environment-managed and ignored by Git, so copy it separately for staging/production; those environments remain user-managed.
+
 ## For release 1.1.14 (from 1.1.13)
 
 Apply `20261124-add-application-changelog-v1.1.14-users.sql` in the verified Users database. This release uses the existing Ticketing schema. Install the signed Android update over the existing APK. After an unread ticket alert arrives, reopen the installed app from its icon and check Android badge status in the bell menu.
