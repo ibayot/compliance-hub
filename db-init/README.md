@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.18 (from 1.1.17)
+
+Apply `20261125-add-application-changelog-v1.1.18-users.sql` to the verified Users database. Rebuild the frontend and Ticketing service for the automatic Android unread badge refresh. The existing signed 1.1.17 APK handles this refresh and does not need reinstalling. The 1.1.16 Ticketing schema remains sufficient.
+
 ## For release 1.1.17 (from 1.1.16)
 
 Apply `20261124-add-application-changelog-v1.1.17-users.sql` to the verified Users database. This release uses the existing 1.1.16 Ticketing preview columns. If skipping 1.1.16, apply its Ticketing migration before rebuilding Ticketing. Rebuild the web services and update the Android app using the signed 1.1.17 APK. Check a real unread ticket notification, its preview setting and the launcher badge on the affected phone.

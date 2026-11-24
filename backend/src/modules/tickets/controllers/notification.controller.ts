@@ -104,6 +104,13 @@ export class NotificationController {
     return this.fcmService.sendTestAlert(this.userId(req), body?.deviceId ?? '');
   }
 
+  @Post('fcm-badge-sync')
+  @HttpCode(204)
+  async refreshFcmBadge(@Request() req: any, @Body() body: { deviceId?: string }) {
+    if (!this.fcmService) throw new ServiceUnavailableException('Android app alerts are unavailable.');
+    await this.fcmService.refreshDeviceBadge(this.userId(req), body?.deviceId ?? '');
+  }
+
   @Get('summary')
   async getMyNotificationSummary(@Request() req: any) {
     const userId = this.userId(req);

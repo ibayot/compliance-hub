@@ -2135,6 +2135,13 @@ export const notificationsApi = {
     const response = await apiClient.get('/notifications/fcm-subscription', { params: { deviceId } });
     return response.data;
   },
+  refreshFcmBadge: async (deviceId: string): Promise<void> => {
+    const generation = recoveryGeneration();
+    await withFcmDeviceOperation(deviceId, async () => {
+      if (hasSignedOut() || generation !== recoveryGeneration()) return;
+      await apiClient.post('/notifications/fcm-badge-sync', { deviceId }, { timeout: 8000 });
+    });
+  },
   saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2; showPreviews?: boolean }): Promise<{ enabled: true; deliveryVersion: number; showPreviews?: boolean }> => {
     const generation = recoveryGeneration();
     return withFcmDeviceOperation(input.deviceId, async () => {

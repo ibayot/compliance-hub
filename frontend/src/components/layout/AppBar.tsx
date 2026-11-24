@@ -215,6 +215,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
+  const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
+  const notificationAccountId = user?.id;
 
   useEffect(() => {
     const availabilityCheck = new AbortController();
@@ -887,6 +889,30 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     };
   }, [user, fetchNotificationSummary]);
 
+  useEffect(() => {
+    if (notificationAccountId == null || !nativeBadgeDeviceId || !pushEnabled || fcmDeliveryVersion !== 2) return;
+    let lastRequestAt = 0;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      const now = Date.now();
+      if (now - lastRequestAt < 15_000) return;
+      lastRequestAt = now;
+      // Native Android needs its own unread notification to anchor the launcher badge.
+      void notificationsApi.refreshFcmBadge(nativeBadgeDeviceId).catch(() => undefined);
+    };
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('pageshow', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pageshow', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+    };
+  }, [notificationAccountId, nativeBadgeDeviceId, pushEnabled, fcmDeliveryVersion]);
+
   // A reconnect may have missed SSE events while the browser was offline.
   // Refresh the authoritative summary immediately so the badge and list catch up.
   useEffect(() => {
@@ -1451,7 +1477,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 (fcmDeliveryVersion !== 2 || !nativeFcmHandoff?.badgeAlert) && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                   {fcmDeliveryVersion === 2
-                    ? 'Home Screen badges follow your Android launcher settings. Leave a new ticket alert in the notification panel to check the badge.'
+                    ? 'Existing unread notifications refresh the Home Screen badge when you open the app. Badge display follows your Android launcher settings.'
                     : 'This device is using standard Android delivery. Open the latest FO2 iCare app from its installed icon to activate the app sound and badge.'}
                 </Typography>
               )}

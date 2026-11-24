@@ -48,6 +48,7 @@ const FID_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_DEVICES_PER_USER = 8;
 const TEST_ALERT_INTERVAL_MS = 30_000;
+const BADGE_REFRESH_INTERVAL_MS = 15_000;
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const FCM_SEND_TIMEOUT_MS = 8_000;
 
@@ -55,6 +56,7 @@ const FCM_SEND_TIMEOUT_MS = 8_000;
 export class FcmService {
   private readonly logger = new Logger(FcmService.name);
   private readonly nextTestAlertAt = new Map<string, number>();
+  private readonly nextBadgeRefreshAt = new Map<string, number>();
   private cachedConfiguration: FcmConfiguration | null | undefined;
   private cachedConfigurationKey = '';
   private configurationIssue?: FcmConfigurationIssue;
@@ -275,6 +277,23 @@ export class FcmService {
     await this.sendToUser(userId, 'badge_sync', deviceId);
   }
 
+  async refreshDeviceBadge(userId: number, deviceId: string): Promise<void> {
+    if (typeof deviceId !== 'string' || !DEVICE_ID_PATTERN.test(deviceId)) {
+      throw new BadRequestException('A valid Android app device is required.');
+    }
+    // Only a device already owned by the caller can consume a refresh slot.
+    if (!await this.registrations.existsBy({ userId, deviceId, deliveryVersion: 2 })) return;
+    const key = `${userId}:${deviceId}`;
+    const now = Date.now();
+    for (const [entry, nextAt] of this.nextBadgeRefreshAt) {
+      if (nextAt <= now) this.nextBadgeRefreshAt.delete(entry);
+    }
+    if (this.nextBadgeRefreshAt.has(key) || this.nextBadgeRefreshAt.size >= 4096) return;
+    this.nextBadgeRefreshAt.set(key, now + BADGE_REFRESH_INTERVAL_MS);
+    // The existing sender checks ownership and current account approval and reads the count from Ticketing.
+    await this.syncBadge(userId, deviceId);
+  }
+
   private async sendToUser(
     userId: number, kind: AndroidDeliveryKind, deviceId?: string, previewBody?: string,
   ): Promise<Set<string>> {
@@ -292,6 +311,7 @@ export class FcmService {
     }
 
     const where = { userId, isRead: false };
+    const countAt = Date.now();
     const [unreadCount, latestUnread] = await Promise.all([
       kind === 'notification' || kind === 'badge_sync' ? this.notifications.count({ where }) : 0,
       kind === 'badge_sync' && registrations.some(device => device.showPreviews)
@@ -301,7 +321,7 @@ export class FcmService {
     if (latestUnread) previewBody = safeNotificationPreview(latestUnread.eventType);
     const results = await Promise.all(registrations.map(async registration => ({
       deviceId: registration.deviceId,
-      result: await this.sendToRegistration(configuration, registration, unreadCount, kind, previewBody),
+      result: await this.sendToRegistration(configuration, registration, unreadCount, kind, previewBody, countAt),
     })));
     return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
   }
@@ -312,6 +332,7 @@ export class FcmService {
     unreadCount: number,
     kind: AndroidDeliveryKind,
     previewBody?: string,
+    countAt = Date.now(),
   ): Promise<FcmSendResult> {
     let fid: string;
     try {
@@ -322,7 +343,7 @@ export class FcmService {
     }
 
     const result = await this.send(configuration, fid, unreadCount, kind,
-      registration.deliveryVersion === 2, registration.showPreviews ? previewBody : undefined);
+      registration.deliveryVersion === 2, registration.showPreviews ? previewBody : undefined, countAt);
     if (result.outcome !== 'expired') return result;
 
     // A phone can refresh its registration while a send is pending. Delete only the rejected version.
@@ -341,9 +362,8 @@ export class FcmService {
 
   private async send(
     configuration: FcmConfiguration, fid: string, unreadCount: number, kind: AndroidDeliveryKind,
-    enhancedDelivery: boolean, previewBody?: string,
+    enhancedDelivery: boolean, previewBody: string | undefined, countAt: number,
   ): Promise<FcmSendResult> {
-    const countAt = Date.now();
     let accessToken: string | null | undefined;
     try {
       const client = await configuration.auth.getClient();
