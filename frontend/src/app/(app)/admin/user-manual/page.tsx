@@ -80,7 +80,8 @@ const capabilityManuals: ManualItem[] = [
       purpose: 'As a system user I need to view my account information so that I can confirm my identity and contact details.',
       activities: [
         { name: 'Update profile information', description: 'Open Settings, then Profile & Preferences. Review your contact details, unit, position, and designation, and select Save Profile Information. Clearing an existing value asks for confirmation inside the application.' },
-        { name: 'Manage preferences and password', description: 'Use the available appearance and notification preferences. Change your password in the separate password section; changing profile information does not change your password.' }
+        { name: 'Manage preferences and password', description: 'Use the available appearance and notification preferences. Change your password in the separate password section; changing profile information does not change your password.' },
+        { name: 'Add the Android unread count widget', description: 'After installing the Android app, touch and hold a blank area on the Home Screen, open Widgets, and add FO2 iCare unread count. Tap the widget to open FO2 iCare.' }
       ],
       results: [
         { name: 'Verify identity information', description: 'As a system user I need to confirm my profile settings so that my access levels remain correct.' }

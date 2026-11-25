@@ -44,7 +44,7 @@ committed in-app notification -> durable row + SSE
 - **PLAT-MOB-FCM-003** — MUST encrypt FIDs at rest, hash them for uniqueness, and keep service-account credentials outside source control and frontend delivery.
 - **PLAT-MOB-FCM-004** — MUST use generic lock-screen content and MUST NOT put ticket or personal content in FCM payloads.
 - **PLAT-MOB-FCM-005** — MUST preserve the durable notification/SSE path when FCM is missing or unavailable and suppress duplicate Web Push only after FCM accepts a matching device alert.
-- **PLAT-MOB-FCM-006** — MUST expose permission, server configuration, provider acceptance, and device delivery as distinct states; never promise sound or badges independently of Android settings.
+- **PLAT-MOB-FCM-006** — MUST distinguish permission, server configuration, provider acceptance, and device delivery when reporting alert status. Keep actionable setup feedback available. Diagnostic detail may be temporary. Never promise sound or badges independently of Android settings.
 - **PLAT-MOB-FCM-007** — MUST strip the native handoff fragment before application rendering/navigation and MUST NOT treat its contents as authentication.
 - **PLAT-MOB-FCM-008** — MUST verify Firebase client package identity, app label, signing fingerprint, Digital Asset Links, service-account project, and the installed APK independently before distribution.
 - **PLAT-MOB-FCM-009** — MUST confirm Messaging registration before passing an installation ID to the server. Only a structured FCM `UNREGISTERED` result may expire that saved registration automatically. Generic provider failures must preserve it, and a rejected response must not remove a newer registration.

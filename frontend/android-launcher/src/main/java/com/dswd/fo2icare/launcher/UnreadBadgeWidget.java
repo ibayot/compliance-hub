@@ -44,7 +44,7 @@ public final class UnreadBadgeWidget extends AppWidgetProvider {
         }
     }
 
-    static boolean isAdded(Context context) {
+    private static boolean isAdded(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         return manager != null && manager.getAppWidgetIds(new ComponentName(context, UnreadBadgeWidget.class)).length > 0;
     }

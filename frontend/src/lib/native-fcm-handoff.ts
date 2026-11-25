@@ -2,83 +2,38 @@ const HANDOFF_STORAGE_KEY = 'fo2-icare-native-fcm-handoff-v1';
 const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
 const handoffListeners = new Set<() => void>();
 
-const BADGE_REFRESH_STATES = [
-  'INVALID', 'STALE', 'CLEARED', 'NOTIFICATIONS_BLOCKED', 'ROUTINE_CHANNEL_BLOCKED',
-  'SUMMARY_CHANNEL_BLOCKED', 'POST_FAILED', 'POSTED', 'POST_UNCONFIRMED',
-] as const;
-export type AndroidBadgeRefreshState = (typeof BADGE_REFRESH_STATES)[number];
-
-interface AndroidBadgeDiagnostics {
-  channel?: 'ROUTINE' | 'RESTORE' | 'OTHER';
-  channelAllowsBadge?: boolean;
-  restoreAllowed: boolean;
-  refresh?: AndroidBadgeRefreshState;
-  ageSeconds?: number;
-}
-
 export interface NativeFcmHandoff {
   version: 1 | 2 | 3 | 4;
   deviceId: string;
   fid?: string;
   notificationsGranted: boolean;
-  routineBadgeAllowed?: boolean;
-  routineUsesAppSound?: boolean;
-  badgeLauncher?: string;
-  badgeTarget?: string;
+  badgeRestoreAllowed?: boolean;
   badgeAlert?: 'COUNTED' | 'UNCOUNTED' | 'MISSING';
-  previewAlert?: 'PREVIEW' | 'GENERIC';
-  badgeRequest?: 'READY' | 'REQUESTED' | 'BLOCKED' | 'UNAVAILABLE' | 'STANDARD';
-  badgeDiagnostics?: AndroidBadgeDiagnostics;
-  badgeWidget?: 'ADDED' | 'AVAILABLE';
 }
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function isAndroidPackage(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 150 &&
-    /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(value);
-}
-
-function parseBadgeDiagnostics(value: unknown): AndroidBadgeDiagnostics | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const { channel, channelAllowsBadge, restoreAllowed, refresh, ageSeconds } = value as Partial<AndroidBadgeDiagnostics>;
-  if (typeof restoreAllowed !== 'boolean') return undefined;
-  const refreshState = BADGE_REFRESH_STATES.find(state => state === refresh);
-  return {
-    channel: channel === 'ROUTINE' || channel === 'RESTORE' || channel === 'OTHER' ? channel : undefined,
-    channelAllowsBadge: typeof channelAllowsBadge === 'boolean' ? channelAllowsBadge : undefined,
-    restoreAllowed,
-    refresh: refreshState,
-    ageSeconds: refreshState && typeof ageSeconds === 'number' && Number.isInteger(ageSeconds) && ageSeconds >= 0 && ageSeconds < 900
-      ? ageSeconds : undefined,
-  };
-}
-
 function parseHandoff(value: unknown): NativeFcmHandoff | null {
   if (!value || typeof value !== 'object') return null;
-  const parsed = value as Partial<NativeFcmHandoff>;
+  const parsed = value as Partial<NativeFcmHandoff> & {
+    routineBadgeAllowed?: boolean;
+    badgeDiagnostics?: { restoreAllowed?: boolean };
+  };
   if ((parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) || !isUuid(parsed.deviceId) ||
       typeof parsed.notificationsGranted !== 'boolean') return null;
   if (parsed.fid !== undefined && (typeof parsed.fid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(parsed.fid))) return null;
+  // Previous APKs carried this setting inside their diagnostic handoff.
+  const restoreAllowed = parsed.badgeRestoreAllowed ?? parsed.badgeDiagnostics?.restoreAllowed ?? parsed.routineBadgeAllowed;
   return {
     version: parsed.version,
     deviceId: parsed.deviceId,
     fid: parsed.version >= 2 ? parsed.fid : undefined,
     notificationsGranted: parsed.notificationsGranted,
-    routineBadgeAllowed: typeof parsed.routineBadgeAllowed === 'boolean' ? parsed.routineBadgeAllowed : undefined,
-    routineUsesAppSound: typeof parsed.routineUsesAppSound === 'boolean' ? parsed.routineUsesAppSound : undefined,
-    badgeLauncher: isAndroidPackage(parsed.badgeLauncher) ? parsed.badgeLauncher : undefined,
-    badgeTarget: isAndroidPackage(parsed.badgeTarget) ? parsed.badgeTarget : undefined,
+    badgeRestoreAllowed: typeof restoreAllowed === 'boolean' ? restoreAllowed : undefined,
     badgeAlert: parsed.badgeAlert === 'COUNTED' || parsed.badgeAlert === 'UNCOUNTED' || parsed.badgeAlert === 'MISSING'
       ? parsed.badgeAlert : undefined,
-    previewAlert: parsed.previewAlert === 'PREVIEW' || parsed.previewAlert === 'GENERIC' ? parsed.previewAlert : undefined,
-    badgeRequest: parsed.badgeRequest === 'READY' || parsed.badgeRequest === 'REQUESTED' ||
-      parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'UNAVAILABLE' || parsed.badgeRequest === 'STANDARD'
-      ? parsed.badgeRequest : undefined,
-    badgeDiagnostics: parseBadgeDiagnostics(parsed.badgeDiagnostics),
-    badgeWidget: parsed.badgeWidget === 'ADDED' || parsed.badgeWidget === 'AVAILABLE' ? parsed.badgeWidget : undefined,
   };
 }
 

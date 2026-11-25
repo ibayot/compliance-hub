@@ -19,7 +19,6 @@ import {
   Avatar,
   Divider,
   Badge,
-  Stack,
   Switch,
   Button,
   useMediaQuery,
@@ -50,30 +49,14 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
-import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure, type FcmBadgeRefreshOutcome } from '@/app/api/references';
+import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure } from '@/app/api/references';
 import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
-import { getNativeFcmHandoff, getNotificationDeviceId, subscribeNativeFcmHandoff, type AndroidBadgeRefreshState } from '@/lib/native-fcm-handoff';
+import { getNativeFcmHandoff, getNotificationDeviceId, subscribeNativeFcmHandoff } from '@/lib/native-fcm-handoff';
 
 const ANDROID_BADGE_RETRY_DELAY = 17_000;
-const ANDROID_BADGE_REFRESH_RESULTS: Record<AndroidBadgeRefreshState, string> = {
-  INVALID: 'The APK received the refresh but could not read its count.',
-  STALE: 'The APK ignored an older refresh after receiving a newer count.',
-  CLEARED: 'The APK received a zero count and cleared the unread summary.',
-  NOTIFICATIONS_BLOCKED: 'Android had notifications turned off when the refresh arrived.',
-  ROUTINE_CHANNEL_BLOCKED: 'The FO2 iCare Notifications channel blocked badge restoration.',
-  SUMMARY_CHANNEL_BLOCKED: 'The channel selected for the unread summary blocked badge restoration.',
-  POST_FAILED: 'Android rejected the attempt to post the unread summary.',
-  POSTED: 'Android confirmed an active counted notification from this refresh.',
-  POST_UNCONFIRMED: 'The APK requested a counted notification. Android had no matching summary when the app opened.',
-};
-const ANDROID_BADGE_CHANNEL_LABELS = {
-  ROUTINE: 'FO2 iCare Notifications',
-  RESTORE: 'Unread badge updates',
-  OTHER: 'Other FO2 iCare channel',
-};
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -226,7 +209,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
   const [pushCheckAttempt, setPushCheckAttempt] = useState(0);
   const [fcmDeliveryVersion, setFcmDeliveryVersion] = useState<number>();
-  const [badgeRefresh, setBadgeRefresh] = useState<{ outcome: FcmBadgeRefreshOutcome; retry: boolean }>();
   const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
@@ -235,10 +217,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
+  const appleMobileAlerts = !nativeFcmClient && isAppleMobileDevice();
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
   const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
-  const nativeBadgeDiagnostics = nativeFcmHandoff?.badgeDiagnostics;
-  const routineBadgeAllowed = nativeFcmHandoff?.routineBadgeAllowed;
+  const nativeBadgeRestoreAllowed = nativeFcmHandoff?.badgeRestoreAllowed;
   const notificationAccountId = user?.id;
 
   useEffect(() => {
@@ -373,7 +355,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               await subscription.unsubscribe().catch(() => false);
               if (current) {
                 setPushEnabled(false);
-                setPushMessage('Browser alert security settings changed. Enable alerts again on this device.');
+                setPushMessage('Alert security settings changed. Enable alerts again on this device.');
               }
               return;
             }
@@ -453,11 +435,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       try {
         await notificationsApi.unsubscribeCurrentPushSubscription();
         setPushEnabled(false);
-        setPushMessage('Browser alerts are off on this device.');
+        setPushMessage('Alerts are off on this device.');
         const badgeNavigator = navigator as Navigator & { clearAppBadge?: () => Promise<void> };
         await badgeNavigator.clearAppBadge?.().catch(() => undefined);
       } catch {
-        setPushMessage('Could not turn off browser alerts. Please try again.');
+        setPushMessage('Could not turn off alerts. Please try again.');
       } finally { setPushBusy(false); }
       return;
     }
@@ -518,7 +500,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       });
       saveNotificationPreviewPreference(user!.id, deviceId, showNotificationPreviews);
       setPushEnabled(true);
-      setPushMessage('Browser alerts are enabled on this device.');
+      setPushMessage('Alerts are on for this device.');
     } catch (error) {
       await newSubscription?.unsubscribe().catch(() => false);
       if (pushStep === 'service-worker') {
@@ -917,7 +899,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [user, fetchNotificationSummary]);
 
   useEffect(() => {
-    setBadgeRefresh(undefined);
     if (notificationAccountId == null || !nativeBadgeDeviceId || !pushEnabled || fcmDeliveryVersion !== 2) return;
     let lastRequestAt = 0;
     let active = true;
@@ -925,7 +906,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     let retryTimer: number | undefined;
     let priorityAttempts = 0;
     const canRestore = (nativeBadgeAlert === 'MISSING' || nativeBadgeAlert === 'UNCOUNTED') &&
-      routineBadgeAllowed !== false && nativeBadgeDiagnostics?.restoreAllowed !== false;
+      nativeBadgeRestoreAllowed !== false;
     const refresh = () => {
       if (!active || inFlight || document.visibilityState !== 'visible' || !navigator.onLine) return;
       const now = Date.now();
@@ -941,7 +922,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         .then(outcome => {
           inFlight = false;
           if (!active) return;
-          if (outcome && outcome !== 'recent') setBadgeRefresh({ outcome, retry });
           if (restore && !retry && outcome && outcome !== 'not-ready') {
             // Allow one more priority request. Firebase acceptance alone is not a device receipt.
             retryTimer = window.setTimeout(() => {
@@ -963,8 +943,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       window.removeEventListener('focus', refresh);
       window.removeEventListener('online', refresh);
     };
-  }, [notificationAccountId, nativeBadgeAlert, nativeBadgeDeviceId, nativeBadgeDiagnostics,
-    routineBadgeAllowed, pushEnabled, fcmDeliveryVersion]);
+  }, [notificationAccountId, nativeBadgeAlert, nativeBadgeDeviceId, nativeBadgeRestoreAllowed, pushEnabled, fcmDeliveryVersion]);
 
   // A reconnect may have missed SSE events while the browser was offline.
   // Refresh the authoritative summary immediately so the badge and list catch up.
@@ -1405,7 +1384,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           <DialogContent>
             <DialogContentText id="app-install-help-description">
               {installHelp === 'ios'
-                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and enable Browser alerts from the bell menu.'
+                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and select Enable under Home Screen alerts in the bell menu.'
                 : installHelp === 'android'
                   ? 'Install the APK, open FO2 iCare, and allow notifications when Android asks. Follow the certificate setup, then sign in. Alerts turn on automatically.'
                   : installHelp === 'desktop-shortcut'
@@ -1482,7 +1461,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             <Divider />
             <Box sx={{ px: 2, py: 1.25 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                <Typography variant="body2" fontWeight={600}>{nativeFcmClient ? 'Android app alerts' : 'Browser alerts'}</Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {nativeFcmClient ? 'Android app alerts' : appleMobileAlerts ? 'Home Screen alerts' : 'Browser alerts'}
+                </Typography>
                 {!nativeFcmClient && <Button
                   size="small"
                   onClick={() => void (pushConfigCheckFailed ? retryPushConfigCheck() : handleBrowserPushToggle())}
@@ -1504,25 +1485,29 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   : pushNeedsHomeScreen
                   ? 'In Safari, add FO2 iCare to the Home Screen as a web app to use alerts.'
                   : !window.isSecureContext
-                    ? 'Open FO2 iCare at its HTTPS address before enabling browser alerts.'
+                    ? 'Open FO2 iCare at its HTTPS address before enabling alerts.'
                   : !pushSupported
                     ? 'This browser or connection does not support background alerts.'
                     : pushConfigChecking
-                      ? 'Checking browser alert setup…'
+                      ? 'Checking alert setup…'
                       : pushConfigCheckFailed
                         ? 'Could not check server alert settings. Tap Retry to try again.'
                     : !pushConfig?.enabled
                       ? pushSetupMessage(pushConfig)
                       : pushEnabled
-                        ? 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
-                        : 'Enable alerts here as well as in your device and browser settings.')}
+                        ? appleMobileAlerts
+                          ? 'Home Screen alerts are on. Manage sound and badges in iOS Settings.'
+                          : 'This device is subscribed. Send a test to check delivery. Sound and badges follow device settings.'
+                        : appleMobileAlerts
+                          ? 'Select Enable and allow notifications when iOS asks.'
+                          : 'Enable alerts here as well as in your device and browser settings.')}
               </Typography>
               <Box sx={{ mt: 1, pt: 0.75, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" fontWeight={600}>Show notification previews</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
-                    Brief event summaries only. Ticket details stay private; your device may still hide previews on its lock screen.
-                  </Typography>
+                  {!nativeFcmClient && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.35 }}>
+                    FO2 iCare can send a brief summary. Your device controls when it appears.
+                  </Typography>}
                 </Box>
                 <Switch
                   size="small"
@@ -1532,88 +1517,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   inputProps={{ 'aria-label': 'Show notification previews on this device' }}
                 />
               </Box>
-              {nativeFcmClient && pushEnabled && !pushConfigChecking &&
-                (fcmDeliveryVersion !== 2 || !nativeFcmHandoff?.badgeAlert) && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {fcmDeliveryVersion === 2
-                    ? 'Existing unread notifications refresh the Home Screen badge when you open the app. Badge display follows your Android launcher settings.'
-                    : 'This device is using standard Android delivery. Open the latest FO2 iCare app from its installed icon to activate the app sound and badge.'}
-                </Typography>
-              )}
-              {nativeFcmClient && pushEnabled && (nativeFcmHandoff?.routineBadgeAllowed === false ||
-                nativeFcmHandoff?.routineUsesAppSound === false) && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {nativeFcmHandoff.routineBadgeAllowed === false && 'The FO2 iCare notification category has badges turned off. '}
-                  {nativeFcmHandoff.routineUsesAppSound === false && 'Android is using a different sound setting for FO2 iCare notifications.'}
-                </Typography>
-              )}
-              {nativeFcmHandoff?.badgeAlert && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere' }}>
-                  {nativeFcmHandoff.badgeAlert === 'COUNTED' ? 'On open, Android had an active alert with an unread count.'
-                    : nativeFcmHandoff.badgeAlert === 'UNCOUNTED' ? 'On open, Android had an active alert without an unread count.'
-                      : 'On open, Android had no active unread summary for the badge.'}
-                  {nativeFcmHandoff.badgeRequest === 'READY' && <> Direct badge method found in {nativeFcmHandoff.badgeTarget}.</>}
-                  {nativeFcmHandoff.badgeRequest === 'REQUESTED' && (nativeFcmHandoff.badgeTarget
-                    ? <> Badge update requested through {nativeFcmHandoff.badgeTarget}.</>
-                    : ' The app requested a launcher badge update.')}
-                  {nativeFcmHandoff.badgeRequest === 'UNAVAILABLE' && ' No compatible direct badge method was found. Using standard Android badging.'}
-                  {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android restricted the direct badge method. Using standard Android badging.'}
-                  {nativeFcmHandoff.badgeRequest === 'STANDARD' && ' Using standard Android badging.'}
-                  {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
-                  {nativeFcmHandoff.previewAlert === 'PREVIEW' && ' The active alert contains a preview.'}
-                  {nativeFcmHandoff.previewAlert === 'GENERIC' && ' The active alert contains generic text.'}
-                </Typography>
-              )}
-              {nativeBadgeDiagnostics && (
-                <Box component="details" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
-                  <Typography component="summary" variant="caption" sx={{ cursor: 'pointer', fontWeight: 600 }}>
-                    Android badge diagnostics
-                  </Typography>
-                  <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {nativeBadgeDiagnostics.refresh
-                        ? ANDROID_BADGE_REFRESH_RESULTS[nativeBadgeDiagnostics.refresh]
-                        : 'No badge refresh was recorded on the phone in the 15 minutes before opening.'}
-                      {nativeBadgeDiagnostics.ageSeconds !== undefined &&
-                        ` Observed ${nativeBadgeDiagnostics.ageSeconds}s before opening.`}
-                    </Typography>
-                    {nativeBadgeDiagnostics.channel && (
-                      <Typography variant="caption" color="text.secondary">
-                        Active summary channel is {ANDROID_BADGE_CHANNEL_LABELS[nativeBadgeDiagnostics.channel]}.
-                        {nativeBadgeDiagnostics.channelAllowsBadge
-                          ? ' Android reports that this channel allows badges.'
-                          : ' Android reports that this channel blocks badges.'}
-                      </Typography>
-                    )}
-                    {!nativeBadgeDiagnostics.restoreAllowed && (
-                      <Typography variant="caption" color="text.secondary">
-                        Android settings blocked silent badge restoration when you opened the app.
-                      </Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary">
-                      The phone’s result is checked when you reopen FO2 iCare from its Home Screen icon.
-                    </Typography>
-                  </Stack>
-                </Box>
-              )}
-              {nativeFcmHandoff?.badgeWidget && (nativeFcmHandoff.badgeWidget === 'ADDED' ||
-                nativeFcmHandoff.badgeRequest === 'UNAVAILABLE' || nativeFcmHandoff.badgeRequest === 'BLOCKED') && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                  {nativeFcmHandoff.badgeWidget === 'ADDED'
-                    ? 'The FO2 iCare unread count widget is on your Home Screen.'
-                    : 'For a Home Screen icon with an unread number, open Android’s Widgets menu and add FO2 iCare unread count.'}
-                </Typography>
-              )}
-              {nativeFcmClient && badgeRefresh && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  {badgeRefresh.outcome === 'accepted' && (badgeRefresh.retry
-                    ? 'Firebase accepted the second badge restore request.'
-                    : 'Firebase accepted the badge refresh request.')}
-                  {badgeRefresh.outcome === 'not-ready' && 'The device registration was unavailable during the badge refresh.'}
-                  {badgeRefresh.outcome === 'failed' && 'The latest badge refresh could not be sent.'}
-                </Typography>
-              )}
-              {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
+              {!nativeFcmClient && !appleMobileAlerts && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
                 {sendingTestAlert ? 'Sending test…' : 'Send test alert'}
               </Button>}
             </Box>

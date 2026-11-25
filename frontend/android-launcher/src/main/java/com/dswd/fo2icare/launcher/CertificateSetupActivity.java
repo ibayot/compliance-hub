@@ -1,7 +1,6 @@
 package com.dswd.fo2icare.launcher;
 
 import android.app.Activity;
-import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.Manifest;
 import android.content.ActivityNotFoundException;
@@ -79,6 +78,7 @@ public final class CertificateSetupActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        deleteSharedPreferences("badge_diagnostics");
         certificateSaved = savedInstanceState != null && savedInstanceState.getBoolean(CERTIFICATE_SAVED);
         FcmMessageService.ensureNotificationChannel(this);
     }
@@ -535,25 +535,12 @@ public final class CertificateSetupActivity extends Activity {
             handoff.put("version", 4);
             handoff.put("deviceId", deviceId);
             handoff.put("notificationsGranted", true);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel routineChannel = FcmMessageService.routineChannel(this);
-                if (routineChannel != null) {
-                    handoff.put("routineBadgeAllowed", routineChannel.canShowBadge());
-                    handoff.put("routineUsesAppSound", NotificationSoundProvider.soundUri(this, "routine")
-                            .equals(routineChannel.getSound()));
-                }
-            }
             try {
-                LauncherBadge.Result badge = FcmMessageService.refreshVisibleLauncherBadge(this);
-                handoff.put("badgeLauncher", LauncherBadge.systemHomePackage(this));
+                FcmMessageService.refreshVisibleLauncherBadge(this);
                 handoff.put("badgeAlert", FcmMessageService.badgeAlertStatus(this));
-                handoff.put("badgeRequest", badge.status.name());
-                handoff.put("badgeTarget", badge.target);
-                handoff.put("previewAlert", FcmMessageService.previewAlertStatus(this));
-                handoff.put("badgeDiagnostics", FcmMessageService.badgeDiagnostics(this));
-                handoff.put("badgeWidget", UnreadBadgeWidget.isAdded(this) ? "ADDED" : "AVAILABLE");
+                handoff.put("badgeRestoreAllowed", FcmMessageService.badgeRestoreAllowed(this));
             } catch (Exception ignored) {
-                // These optional details must not interrupt Android alert registration.
+                // Badge restoration must not interrupt Android alert registration.
             }
             if (fid != null && !fid.isEmpty()) handoff.put("fid", fid);
             String encoded = Base64.encodeToString(handoff.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
