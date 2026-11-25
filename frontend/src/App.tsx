@@ -420,7 +420,7 @@ export default function App() {
       <Route
         path="/operations/knowledge-base"
         element={
-          <ProtectedDashboard requiredCapability="isTicketModuleAccess">
+          <ProtectedDashboard requiredCapability={['isTicketModuleAccess', 'isKnowledgeBaseManage']}>
             <KnowledgeBasePage />
           </ProtectedDashboard>
         }

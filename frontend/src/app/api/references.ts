@@ -350,6 +350,7 @@ export interface Ticket {
     suffix?: string;
   } | null;
   canViewInternalNotes?: boolean;
+  kbGenerationStatus?: 'queued' | 'generating' | 'retrying' | 'failed' | 'draft' | 'published' | 'disabled';
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
   resolutionTimeOverride?: string | null;
@@ -664,10 +665,7 @@ export interface WeeklyPerformanceSummary {
 }
 
 export interface RatingsReportResult {
-  overview: {
-    totalRatings: number;
-    avgOverallRating: number;
-  };
+  summary: { average: number; count: number };
   byTicket: Array<{
     ticketId: string;
     ticketNumber: string;
@@ -677,16 +675,9 @@ export interface RatingsReportResult {
     submittedAt: string;
     technicianId: number | null;
   }>;
-  byTechnician: Array<{
-    techId: number;
-    techName: string;
-    avgRating: number;
-    count: number;
-  }>;
+  byTechnician: Record<string, { average: number; count: number }>;
   byDay: Array<{ date: string; avgRating: number; count: number }>;
   byWeek: Array<{ week: string; avgRating: number; count: number }>;
-  byMonth: Array<{ month: string; avgRating: number; count: number }>;
-  byQuarter: Array<{ quarter: string; avgRating: number; count: number }>;
 }
 
 export type EscalationStatus = 'pending' | 'accepted' | 'returned';
@@ -1913,6 +1904,22 @@ export const knowledgeBaseApi = {
     const res = await apiClient.get('/knowledge-base', { params: { q: query } });
     return res.data;
   },
+  searchDisabled: async (query: string) => {
+    const res = await apiClient.get('/knowledge-base/manage', { params: { q: query, enabled: false } });
+    return res.data;
+  },
+  searchDrafts: async (query: string) => {
+    const res = await apiClient.get('/knowledge-base/manage', { params: { q: query, drafts: true } });
+    return res.data;
+  },
+  publishDraft: async (id: number, draftVersion: string) => {
+    const res = await apiClient.patch(`/knowledge-base/${id}/publish`, { draftVersion });
+    return res.data;
+  },
+  setStatus: async (id: number, isEnabled: boolean) => {
+    const res = await apiClient.patch(`/knowledge-base/${id}/status`, { isEnabled });
+    return res.data;
+  },
   rateArticle: async (id: number, isHelpful: boolean) => {
     const res = await apiClient.post(`/knowledge-base/${id}/rate`, { isHelpful });
     return res.data;
@@ -1927,7 +1934,7 @@ export const knowledgeBaseApi = {
   },
   update: async (
     id: number,
-    data: { title: string; tags: string; content: string },
+    data: { title: string; tags: string; content: string; draftVersion?: string },
   ): Promise<any> => {
     const res = await apiClient.put(`/knowledge-base/${id}`, data);
     return res.data;

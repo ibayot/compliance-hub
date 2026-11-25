@@ -1,16 +1,9 @@
 import { Capacitor } from '@capacitor/core';
 import { getNativeFcmHandoff, subscribeNativeFcmHandoff } from './native-fcm-handoff';
-
-interface InstallPromptEvent extends Event {
-  prompt(): Promise<unknown>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-}
-
-let installPrompt: InstallPromptEvent | null = null;
+import { getMobileDevicePlatform } from './mobile-device';
 
 export function isAndroidBrowser(): boolean {
-  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform;
-  return !Capacitor.isNativePlatform() && /\bAndroid\b/i.test(`${platform ?? ''} ${navigator.userAgent}`);
+  return !Capacitor.isNativePlatform() && getMobileDevicePlatform() === 'android';
 }
 
 export function isHomeScreenApp(): boolean {
@@ -38,11 +31,8 @@ export async function getActiveWebPushWorker(): Promise<ServiceWorkerRegistratio
 }
 
 window.addEventListener('beforeinstallprompt', (event) => {
-  if (Capacitor.isNativePlatform()) return;
-  event.preventDefault();
-  installPrompt = event as InstallPromptEvent;
+  if (isAndroidBrowser()) event.preventDefault();
 });
-window.addEventListener('appinstalled', () => { installPrompt = null; });
 
 function updateInstalledTouchGestures() {
   const installed = Capacitor.isNativePlatform() || isHomeScreenApp() || !!getNativeFcmHandoff();
@@ -63,16 +53,4 @@ window.addEventListener('gesturechange', preventInstalledPinch, { passive: false
 // subscription still happen only when the user enables alerts.
 if (isAndroidBrowser() && window.isSecureContext && 'serviceWorker' in navigator) {
   void registerWebPushWorker().catch(() => undefined);
-}
-
-export async function promptToInstallWebApp(): Promise<'accepted' | 'dismissed' | null> {
-  const prompt = installPrompt;
-  if (!prompt) return null;
-  installPrompt = null;
-  try {
-    await prompt.prompt();
-    return (await prompt.userChoice).outcome;
-  } catch {
-    return null;
-  }
 }

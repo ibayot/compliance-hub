@@ -2330,7 +2330,7 @@ export class TicketService implements OnModuleInit {
     };
   }
 
-  async getTicketById(id: string, viewerRole?: UserRole, viewerId?: number): Promise<Ticket> {
+  async getTicketById(id: string, viewerRole?: UserRole, viewerId?: number, includeKbStatus = false): Promise<Ticket> {
     const ticket = await this.ticketRepo.findOne({
       where: { id },
       relations: ['category', 'issueTypeConfig', 'comments'],
@@ -2380,10 +2380,15 @@ export class TicketService implements OnModuleInit {
     if ([TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(ticket.status) && completedAt && config) {
       await this.calculateTicketActiveResolutionHours(ticket, completedAt, config);
     }
+    const canViewKbStatus = includeKbStatus && viewerId && viewerRole && viewerRole !== UserRole.USER &&
+      (this.roleCapSvc.isKnowledgeBaseManage(viewerRole) ||
+        [ticket.requesterId, ticket.createdById, ticket.assignedToId].some((id) => Number(id) === Number(viewerId)));
+    const kbGenerationStatus = canViewKbStatus ? await this.kbService.getTicketGenerationStatus(ticket.id) : null;
     return Object.assign(ticket, {
       effectiveResolvedAt: getEffectiveResolvedAt(ticket),
       canViewInternalNotes,
       resolutionTimeOverrides,
+      ...(kbGenerationStatus ? { kbGenerationStatus } : {}),
       ...slaState,
     });
   }
@@ -3176,6 +3181,7 @@ export class TicketService implements OnModuleInit {
     ticket: Ticket,
     expectedUpdatedAt: Date,
     interruption?: { from: TicketStatus; actorId: number; justification: string },
+    requestKbDraft = false,
   ): Promise<Ticket> {
     let promotedId: string | null = null;
     const saved = await this.dataSource.transaction(async manager => {
@@ -3187,6 +3193,7 @@ export class TicketService implements OnModuleInit {
         throw new ConflictException('This ticket changed. Refresh it before saving.');
       if (!interruption) {
         const savedTicket = await repo.save(ticket);
+        if (requestKbDraft) await this.kbService.enqueueGeneration(manager, savedTicket.id);
         if (ticket.status === TicketStatus.IN_PROGRESS && ticket.assignedToId &&
           [TicketStatus.FREEZE, TicketStatus.PAUSE].includes(current.status)) {
           // Let the returning ticket run alongside already-started work. Only
@@ -4038,9 +4045,9 @@ export class TicketService implements OnModuleInit {
       }
     }
 
-    // Mark for KB generation if requested
-    if (dto.status === TicketStatus.RESOLVED && dto.generateKb && ticket.resolutionNotes) {
-      ticket.isKbGenerationPending = true;
+    const requestKbDraft = dto.status === TicketStatus.RESOLVED && dto.generateKb === true;
+    if (requestKbDraft && !ticket.resolutionNotes?.trim()) {
+      throw new BadRequestException('Resolution notes are required to generate a Knowledge Base draft.');
     }
 
     if (automaticAssignmentDuringUpdate && !await this.canAutomaticallyAssign(
@@ -4059,7 +4066,7 @@ export class TicketService implements OnModuleInit {
       ? await this.persistDuplicateTicket(ticket, expectedUpdatedAt, actorId, actorRole, dto.statusJustification!.trim())
       : interruption
         ? await this.withAutoAssignmentLock(() => this.persistTicketUpdate(ticket, expectedUpdatedAt, interruption))
-        : await this.persistTicketUpdate(ticket, expectedUpdatedAt);
+        : await this.persistTicketUpdate(ticket, expectedUpdatedAt, undefined, requestKbDraft);
     this.sseService.emitTicketUpdated(saved.id);
 
     if (automaticAssignmentDuringUpdate) {
@@ -4071,30 +4078,10 @@ export class TicketService implements OnModuleInit {
       }).catch(() => {});
     }
 
-    // AI Knowledge Base Generation (Fire-and-forget)
-    if (saved.isKbGenerationPending) {
-      this.kbService
-        .generateKbFromTicket(
-          saved.subject,
-          saved.description,
-          saved.resolutionNotes!,
-          saved.categoryId ?? undefined,
-        )
-        .then(async () => {
-          // Successfully generated, clear the pending flag
-          await this.ticketRepo.update(saved.id, { isKbGenerationPending: false });
-        })
-        .catch(async (err) => {
-          this.logger.warn('Failed to auto-generate KB; queued for retry.');
-          await this.commentRepo.save(
-            this.commentRepo.create({
-              ticketId: saved.id,
-              userId: saved.assignedToId || 1, // System generated fallback
-              comment: `⚠️ **System Info:** The AI Knowledge Base generation encountered an API limit or error and has been queued for automatic retry in the background.\n\n**Reason:** ${err.message}`,
-              isInternal: true,
-            }),
-          );
-        });
+    if (requestKbDraft) {
+      void this.kbService.processGeneration(saved.id).catch(() => {
+        this.logger.warn('Could not start a queued Knowledge Base draft.');
+      });
     }
 
     // Log status/priority change event
@@ -5254,8 +5241,8 @@ export class TicketService implements OnModuleInit {
     viewerId?: number;
     viewerRole?: string;
   }): Promise<{
-    byDay: { date: string; avgRating: number }[];
-    byWeek: { week: string; avgRating: number }[];
+    byDay: { date: string; avgRating: number; count: number }[];
+    byWeek: { week: string; avgRating: number; count: number }[];
     byTicket: any[];
     byTechnician: Record<string, { average: number; count: number }>;
     summary: { average: number; count: number };
@@ -5263,8 +5250,9 @@ export class TicketService implements OnModuleInit {
     const qb = this.ticketRepo
       .createQueryBuilder('t')
       .addSelect('t.satisfactionFormData')
-      .where('t.satisfactionRating IS NOT NULL')
-      .andWhere('t.status != :duplicateStatus', { duplicateStatus: TicketStatus.DUPLICATE });
+      .where('t.satisfactionRating BETWEEN 1 AND 5')
+      .andWhere('t.satisfactionSubmittedAt IS NOT NULL')
+      .andWhere('t.status IN (:...ratedStatuses)', { ratedStatuses: [TicketStatus.RESOLVED, TicketStatus.CLOSED] });
 
     if (filters.year) {
       qb.andWhere('YEAR(t.satisfactionSubmittedAt) = :year', { year: filters.year });
@@ -5296,34 +5284,32 @@ export class TicketService implements OnModuleInit {
     }
 
     this.applyOvertimeReadScope(qb, 't', filters.viewerId, filters.viewerRole);
-    const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').getMany();
+    const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').addOrderBy('t.id', 'DESC').getMany();
     await this.enrichTicketsWithUsers(tickets);
 
     const byTicket = tickets.map((t) => ({
       ticketId: t.id,
       ticketNumber: t.ticketNumber,
+      subject: t.subject,
       rating: t.satisfactionRating,
       comment: t.satisfactionComment,
       formData: t.satisfactionFormData,
       submittedAt: t.satisfactionSubmittedAt,
-      technicianId: t.assignedTo?.id,
+      technicianId: t.assignedToId ?? null,
       technicianName: t.assignedTo ? formatPersonName(t.assignedTo, 'Unknown') : 'Unknown',
     }));
 
     const byTechnician: Record<string, { total: number; count: number }> = {};
     let totalSum = 0;
-    let validCount = 0;
 
     for (const t of tickets) {
-      if (!t.satisfactionRating || t.satisfactionRating <= 0) continue;
       const techName = t.assignedTo ? formatPersonName(t.assignedTo, 'Unknown').trim() : 'Unknown';
       if (!byTechnician[techName]) {
         byTechnician[techName] = { total: 0, count: 0 };
       }
-      byTechnician[techName].total += t.satisfactionRating;
+      byTechnician[techName].total += t.satisfactionRating!;
       byTechnician[techName].count += 1;
-      totalSum += t.satisfactionRating;
-      validCount += 1;
+      totalSum += t.satisfactionRating!;
     }
 
     const technicianAverages: Record<string, { average: number; count: number }> = {};
@@ -5337,23 +5323,19 @@ export class TicketService implements OnModuleInit {
     const byDayMap: Record<string, { total: number; count: number }> = {};
     const byWeekMap: Record<string, { total: number; count: number }> = {};
     for (const t of tickets) {
-      if (!t.satisfactionSubmittedAt || !t.satisfactionRating || t.satisfactionRating <= 0)
-        continue;
-      const dateStr = new Date(t.satisfactionSubmittedAt).toLocaleDateString('en-CA', {
-        timeZone: 'Asia/Manila',
-      });
+      const dateStr = this.getManilaDateString(t.satisfactionSubmittedAt!);
       if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
-      byDayMap[dateStr].total += t.satisfactionRating;
+      byDayMap[dateStr].total += t.satisfactionRating!;
       byDayMap[dateStr].count += 1;
 
-      // Week calculation
-      const d = new Date(t.satisfactionSubmittedAt);
-      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-      const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-      const weekStr = `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+      // Use the same Manila calendar day as the day chart, then locate its ISO-week Thursday.
+      const thursday = new Date(`${dateStr}T00:00:00Z`);
+      thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+      const weekYear = thursday.getUTCFullYear();
+      const weekNo = 1 + Math.floor((thursday.getTime() - Date.UTC(weekYear, 0, 1)) / (7 * 86_400_000));
+      const weekStr = `${weekYear}-W${weekNo.toString().padStart(2, '0')}`;
       if (!byWeekMap[weekStr]) byWeekMap[weekStr] = { total: 0, count: 0 };
-      byWeekMap[weekStr].total += t.satisfactionRating;
+      byWeekMap[weekStr].total += t.satisfactionRating!;
       byWeekMap[weekStr].count += 1;
     }
     const byDay = Object.keys(byDayMap)
@@ -5361,12 +5343,14 @@ export class TicketService implements OnModuleInit {
       .map((date) => ({
         date,
         avgRating: roundRating(byDayMap[date].total / byDayMap[date].count),
+        count: byDayMap[date].count,
       }));
     const byWeek = Object.keys(byWeekMap)
       .sort()
       .map((week) => ({
         week,
         avgRating: roundRating(byWeekMap[week].total / byWeekMap[week].count),
+        count: byWeekMap[week].count,
       }));
 
     return {
@@ -5375,8 +5359,8 @@ export class TicketService implements OnModuleInit {
       byTicket,
       byTechnician: technicianAverages,
       summary: {
-        average: validCount > 0 ? roundRating(totalSum / validCount) : 0,
-        count: validCount,
+        average: tickets.length ? roundRating(totalSum / tickets.length) : 0,
+        count: tickets.length,
       },
     };
   }
@@ -8239,47 +8223,10 @@ export class TicketService implements OnModuleInit {
   }
 
   /**
-   * Called by TicketCronService to retry generating KBs that failed due to API limits.
+   * Called by TicketCronService to recover pending draft generation.
    */
   async retryBenchedKbs() {
-    const pendingTickets = await this.ticketRepo.find({
-      where: {
-        status: TicketStatus.RESOLVED,
-        isKbGenerationPending: true,
-      },
-    });
-
-    if (pendingTickets.length === 0) {
-      return;
-    }
-
-    this.logger.log(`Found ${pendingTickets.length} benched KB generations. Retrying...`);
-
-    for (const ticket of pendingTickets) {
-      if (!ticket.resolutionNotes) continue;
-
-      try {
-        await this.kbService.generateKbFromTicket(
-          ticket.subject,
-          ticket.description,
-          ticket.resolutionNotes,
-        );
-
-        await this.ticketRepo.update(ticket.id, { isKbGenerationPending: false });
-        this.sseService.emitTicketUpdated(ticket.id);
-        this.logger.log('Successfully recovered and generated a KB entry.');
-
-        // Wait 15 seconds between requests to avoid rate limits again
-        await new Promise((resolve) => setTimeout(resolve, 15000));
-      } catch (err) {
-        this.logger.warn('KB retry failed; keeping the generation queued.');
-        // If it fails again (e.g. rate limit still active), just break out of the loop and try again next hour
-        if (err.message.includes('429') || err.message.includes('503')) {
-          this.logger.warn('API limit encountered during retry. Aborting current retry queue.');
-          break;
-        }
-      }
-    }
+    await this.kbService.retryPendingGenerations();
   }
 
   async getPerformanceMetrics(filters: {

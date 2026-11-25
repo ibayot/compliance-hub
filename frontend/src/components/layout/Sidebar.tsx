@@ -111,7 +111,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
       icon: KBIcon,
       path: '/operations/knowledge-base',
       service: 'ticketing',
-      capabilityKeys: ['isTicketModuleAccess'],
+      capabilityKeys: ['isTicketModuleAccess', 'isKnowledgeBaseManage'],
     },
     {
       label: 'Duties',

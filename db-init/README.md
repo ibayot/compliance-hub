@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.25 (from 1.1.24)
+
+Build the frontend and Ticketing service images first. Stop the previous Ticketing worker before applying `20261125-add-knowledge-base-draft-workflow-ticketing.sql` to the verified Ticketing database. This migration includes the article status column and preserves existing articles and eligible pending requests. Apply `20261125-add-application-changelog-v1.1.25-users.sql` to the verified Users database for the in-app notes. Start frontend and Ticketing from the built images. The installed Android APK and iOS profile use the updated web application at their existing URLs.
+
 ## For release 1.1.24 (from 1.1.23)
 
 Apply `20261125-add-application-changelog-v1.1.24-users.sql` to the verified Users database for the in-app notes. Rebuild the frontend and install the signed 1.1.24 APK. Existing iPhone Home Screen installs pick up the notification menu changes from the frontend. This release requires no schema changes or backend service rebuild when updating from 1.1.23.

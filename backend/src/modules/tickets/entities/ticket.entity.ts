@@ -227,7 +227,7 @@ export class Ticket {
   userClosed: boolean;
 
   /** Indicates if this ticket is waiting for KB generation (used for background retries) */
-  @Column({ name: 'is_kb_generation_pending', type: 'tinyint', default: 0 })
+  @Column({ name: 'is_kb_generation_pending', type: 'tinyint', default: 0, select: false })
   isKbGenerationPending: boolean;
 
   @Column({ name: 'has_unread_user', type: 'boolean', default: false })

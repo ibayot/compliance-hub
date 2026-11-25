@@ -26,7 +26,7 @@ export const CAPABILITY_CATEGORIES: CapabilityCategory[] = [
   ] },
   { name: 'Knowledge Base & Ticket Reports', columns: [
     { key: 'isTicketPerformanceAccess', label: 'Performance Summary', description: 'View staff-wide weekly performance on the dashboard without granting report management' },
-    { key: 'isKnowledgeBaseManage', label: 'Knowledge Base Manage', description: 'Create and edit Knowledge Base articles' },
+    { key: 'isKnowledgeBaseManage', label: 'Knowledge Base Manage', description: 'Review and publish drafts and manage Knowledge Base articles' },
     { key: 'isTicketReportsAccess', label: 'Ticket Reports View', description: 'View permitted assignee Overview, Ratings and Performance reports' },
     { key: 'isTicketReportsManage', label: 'Ticket Reports Manage', description: 'View all assignees, Issues and SLA Insights' },
   ] },

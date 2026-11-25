@@ -987,7 +987,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
       enqueueSnackbar('Ticket updated.', { variant: 'success' });
       if (newStatus === 'resolved' && generateKb) {
         enqueueSnackbar(
-          'AI is generating a Knowledge Base article in the background. It will be available shortly.',
+          'A Knowledge Base draft was requested for review.',
           {
             variant: 'info',
             autoHideDuration: 5000,
@@ -1886,7 +1886,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                             />
                           }
                           label={
-                            <Typography variant="body2">Generate Knowledge Base Article</Typography>
+                            <Typography variant="body2">Generate Knowledge Base Draft</Typography>
                           }
                         />
                         {generateKb && (
@@ -1896,8 +1896,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                             display="block"
                             ml={3.5}
                           >
-                            Our AI will automatically scrub sensitive data and create/update an
-                            article based on your resolution.
+                            A Knowledge Base reviewer will check the draft before it can be published.
                           </Typography>
                         )}
                       </Grid>
@@ -2232,6 +2231,21 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                     {ticket.resolutionNotes}
                   </Typography>
                 </>
+              )}
+
+              {ticket.kbGenerationStatus && (
+                <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ mt: 1.5 }} role="status">
+                  <Typography variant="body2" color="text.secondary">Knowledge Base</Typography>
+                  <Chip size="small" variant="outlined" label={{
+                    queued: 'Queued',
+                    generating: 'Generating draft',
+                    retrying: 'Queued for retry',
+                    failed: 'Generation failed',
+                    draft: 'Draft awaiting review',
+                    published: 'Published',
+                    disabled: 'Article disabled',
+                  }[ticket.kbGenerationStatus]} />
+                </Stack>
               )}
 
               {ticket.satisfactionRating && (

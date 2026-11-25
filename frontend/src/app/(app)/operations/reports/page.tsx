@@ -49,12 +49,14 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  type TooltipProps,
 } from 'recharts';
 import { ticketsApi, type TicketReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
+import { getMobileDevicePlatform } from '@/lib/mobile-device';
 
 const Table = ({ children, ...props }: any) => (
   <ResponsiveTable minWidth={680}>
@@ -79,30 +81,25 @@ function AssigneeRanking({ rows, compact }: { rows: TicketReportResult['weeklyTe
   const toggle = (id: number) => setExpandedId(current => current === id ? null : id);
 
   if (compact) return (
-    <Box component="ol" aria-label="Ticket assignee ranking" sx={{ m: 0, pl: 3, '& > li::marker': { fontWeight: 700 } }}>
-      {rows.map(row => {
+    <ReportCards>
+      {rows.map((row, index) => {
         const expanded = expandedId === row.techId;
         const detailsId = `${idPrefix}-${row.techId}`;
         return (
-          <Box component="li" key={row.techId} sx={{ py: 0.75, pl: 0.5, borderBottom: 1, borderColor: 'divider' }}>
-            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-              <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-                <Typography variant="body2" fontWeight={700}>{row.techName}</Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {row.resolvedTickets} resolved · {row.slaRate.toFixed(1)}% SLA · Score {row.weightedScore.toFixed(1)}
-                </Typography>
-                <Typography variant="caption" display="block">Avg active time {row.avgActiveResolutionHours.toFixed(1)}h</Typography>
-              </Box>
-              <IconButton aria-label={`Timing details for ${row.techName}`} aria-expanded={expanded} aria-controls={detailsId}
-                sx={{ flexShrink: 0, minWidth: 44, minHeight: 44 }} onClick={() => toggle(row.techId)}>
-                {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              </IconButton>
+          <ReportRecord key={row.techId} title={row.techName} caption={`Rank ${index + 1}`} metrics={[
+            ['Resolved', row.resolvedTickets], ['SLA rate', `${row.slaRate.toFixed(1)}%`],
+            ['Avg active time', `${row.avgActiveResolutionHours.toFixed(1)}h`], ['Score', row.weightedScore.toFixed(1)],
+          ]}>
+            <Stack alignItems="flex-start">
+              <Button size="small" aria-expanded={expanded} aria-controls={detailsId}
+                sx={{ minHeight: 44 }} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                onClick={() => toggle(row.techId)}>Timing details</Button>
             </Stack>
             <Collapse id={detailsId} in={expanded} timeout={0}>{expanded && renderTiming(row)}</Collapse>
-          </Box>
+          </ReportRecord>
         );
       })}
-    </Box>
+    </ReportCards>
   );
 
   return (
@@ -189,6 +186,70 @@ function ReportRecord({ title, caption, metrics, accent, children }: {
   );
 }
 
+type ReportRow = {
+  id: React.Key;
+  title: string;
+  caption?: string;
+  metrics: ReadonlyArray<readonly [string, React.ReactNode]>;
+  accent?: string;
+  details?: React.ReactNode;
+};
+
+function ReportRows({ label, titleColumn, captionColumn, detailsColumn, rows, mobile }: {
+  label: string;
+  titleColumn: string;
+  captionColumn?: string;
+  detailsColumn?: string;
+  rows: ReportRow[];
+  mobile: boolean;
+}) {
+  if (!rows.length) return null;
+  if (mobile) {
+    return <ReportCards>{rows.map(({ id, details, ...record }) =>
+      <ReportRecord key={id} {...record}>{details}</ReportRecord>)}</ReportCards>;
+  }
+
+  return (
+    <Table aria-label={label} size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell scope="col">{titleColumn}</TableCell>
+          {captionColumn && <TableCell scope="col">{captionColumn}</TableCell>}
+          {rows[0].metrics.map(([heading]) => <TableCell key={heading} scope="col" align="right">{heading}</TableCell>)}
+          {detailsColumn && <TableCell scope="col">{detailsColumn}</TableCell>}
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow hover key={row.id}>
+            <TableCell component="th" scope="row" sx={{
+              overflowWrap: 'anywhere',
+              ...(row.accent ? { borderInlineStart: '4px solid', borderInlineStartColor: row.accent } : {}),
+            }}>{row.title}</TableCell>
+            {captionColumn && <TableCell sx={{ overflowWrap: 'anywhere' }}>{row.caption}</TableCell>}
+            {row.metrics.map(([heading, metric]) => <TableCell key={heading} align="right">{metric}</TableCell>)}
+            {detailsColumn && <TableCell sx={{ overflowWrap: 'anywhere' }}>{row.details ?? '—'}</TableCell>}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+const ratingDateFormatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeZone: 'Asia/Manila' });
+
+function RatingTrendTooltip({ active, label, payload }: TooltipProps<number, string>) {
+  const point = payload?.[0]?.payload as { avgRating: number; count: number } | undefined;
+  if (!active || !point) return null;
+  return (
+    <Card variant="outlined" sx={{ p: 1.25 }}>
+      <Typography variant="body2" fontWeight={600}>{label}</Typography>
+      <Typography variant="body2">Average rating {point.avgRating.toFixed(2)} / 5</Typography>
+      <Typography variant="body2">Rated tickets {point.count}</Typography>
+    </Card>
+  );
+}
+
 const EMPTY_ROWS: never[] = [];
 type ReportAssignee = Awaited<ReturnType<typeof ticketsApi.getReportTechnicians>>[number];
 
@@ -265,6 +326,7 @@ export default function TicketReportsPage() {
   const queryClient = useQueryClient();
   const canManageReports = !!myCap?.isTicketReportsManage;
   const isCompactViewport = useMediaQuery('(max-width:599.95px)');
+  const mobileReportRows = getMobileDevicePlatform() !== null;
   const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
@@ -564,7 +626,7 @@ export default function TicketReportsPage() {
     if (viewMode === 'detailed') return detailedResult ? [
       { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })), headers: ['Day', 'Average Rating (out of 5)'] },
       { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })), headers: ['Week', 'Average Rating (out of 5)'] },
-      { id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table', values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })), headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'], rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, new Date(row.submittedAt).toLocaleDateString(), String(row.rating), row.comment || '—']) },
+      { id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table', values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })), headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'], rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, ratingDateFormatter.format(new Date(row.submittedAt)), String(row.rating), row.comment || '—']) },
     ] : [];
     if (!result) return [];
     const supportTypeValues = result.avgRatingByType.map((row) => ({
@@ -1540,7 +1602,7 @@ export default function TicketReportsPage() {
                           >
                             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                             <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
-                            <Tooltip />
+                            <Tooltip content={<RatingTrendTooltip />} />
                             <Bar
                               dataKey="avgRating"
                               name="Avg Rating"
@@ -1571,7 +1633,7 @@ export default function TicketReportsPage() {
                           >
                             <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                             <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
-                            <Tooltip />
+                            <Tooltip content={<RatingTrendTooltip />} />
                             <Bar
                               dataKey="avgRating"
                               name="Avg Rating"
@@ -1590,15 +1652,17 @@ export default function TicketReportsPage() {
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                         Ratings Per Ticket
                       </Typography>
-                      <ReportCards>
-                        {detailedResult.byTicket.map((ticket) => (
-                          <ReportRecord key={ticket.ticketId} title={ticket.subject}
-                            caption={`${ticket.ticketNumber} · ${new Date(ticket.submittedAt).toLocaleDateString()}`}
-                            metrics={[['Rating', <Chip size="small" label={`${ticket.rating} / 5`} color={RATING_COLOR(ticket.rating)} />]]}>
-                            {ticket.comment && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.comment}</Typography>}
-                          </ReportRecord>
-                        ))}
-                      </ReportCards>
+                      <ReportRows label="Ratings per ticket" titleColumn="Subject" captionColumn="Ticket" detailsColumn="Comment"
+                        mobile={mobileReportRows} rows={detailedResult.byTicket.map((ticket) => ({
+                          id: ticket.ticketId,
+                          title: ticket.subject,
+                          caption: ticket.ticketNumber,
+                          metrics: [
+                            ['Submitted', ratingDateFormatter.format(new Date(ticket.submittedAt))],
+                            ['Rating', <Chip size="small" label={`${ticket.rating} / 5`} color={RATING_COLOR(ticket.rating)} />],
+                          ],
+                          details: ticket.comment ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.comment}</Typography> : undefined,
+                        }))} />
                       {!detailedResult.byTicket.length && <Typography color="text.secondary">No rated tickets found.</Typography>}
                     </CardContent>
                   </Card>
@@ -1760,13 +1824,11 @@ export default function TicketReportsPage() {
                       </BarChart>
                       </ResponsiveContainer>
                     </Box>
-                    <ReportCards>
-                      {result.avgRatingByTechnician.map((row) => (
-                        <ReportRecord key={row.techId} title={row.techName} metrics={[
-                          ['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)],
-                        ]} />
-                      ))}
-                    </ReportCards>
+                    <ReportRows label="Assignee performance detail" titleColumn="Assignee" mobile={mobileReportRows}
+                      rows={result.avgRatingByTechnician.map((row) => ({
+                        id: row.techId, title: row.techName,
+                        metrics: [['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)]],
+                      }))} />
                   </>
                 )}
 
@@ -1813,13 +1875,11 @@ export default function TicketReportsPage() {
                     >
                       SLA Detail By Assignee
                     </Typography>
-                    <ReportCards>
-                      {result.slaByTechnician.map((row) => (
-                        <ReportRecord key={row.techId} title={row.techName} metrics={[
-                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
-                        ]} />
-                      ))}
-                    </ReportCards>
+                    <ReportRows label="SLA detail by assignee" titleColumn="Assignee" mobile={mobileReportRows}
+                      rows={result.slaByTechnician.map((row) => ({
+                        id: row.techId, title: row.techName,
+                        metrics: [['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`]],
+                      }))} />
                   </>
                 )}
               </Box>
@@ -1887,13 +1947,11 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Support Type</Typography>
-                    <ReportCards>
-                      {result.slaByType.map((row) => (
-                        <ReportRecord key={row.type} title={TYPE_LABELS[row.type] ?? row.type} metrics={[
-                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
-                        ]} />
-                      ))}
-                    </ReportCards>
+                    <ReportRows label="SLA by support type" titleColumn="Support type" mobile={mobileReportRows}
+                      rows={result.slaByType.map((row) => ({
+                        id: row.type, title: TYPE_LABELS[row.type] ?? row.type,
+                        metrics: [['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`]],
+                      }))} />
                   </CardContent>
                 </Card>
               </Grid>
@@ -1915,7 +1973,7 @@ export default function TicketReportsPage() {
                       assignee and efficiency is capped at 100%. Compare ticket counts when reading scores.
                       {!!result.performancePeriod?.excludedTickets && ` ${result.performancePeriod.excludedTickets} ticket(s) excluded because assignee or usable SLA timing is unavailable.`}
                     </Typography>
-                    <AssigneeRanking rows={result.weeklyTechnicianPerformance} compact={isCompactViewport} />
+                    <AssigneeRanking rows={result.weeklyTechnicianPerformance} compact={mobileReportRows} />
                   </CardContent>
                 </Card>
               </Grid>
@@ -1927,13 +1985,11 @@ export default function TicketReportsPage() {
                 <Card>
                   <CardContent>
                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>SLA by Assignee</Typography>
-                    <ReportCards>
-                      {result.slaByTechnician.map((row) => (
-                        <ReportRecord key={row.techId} title={row.techName} metrics={[
-                          ['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`],
-                        ]} />
-                      ))}
-                    </ReportCards>
+                    <ReportRows label="SLA by assignee" titleColumn="Assignee" mobile={mobileReportRows}
+                      rows={result.slaByTechnician.map((row) => ({
+                        id: row.techId, title: row.techName,
+                        metrics: [['Met SLA', row.met], ['Missed SLA', row.missed], ['Avg active resolution', `${row.avgResolutionTimeHours}h`]],
+                      }))} />
                   </CardContent>
                 </Card>
               </Grid>
@@ -1944,13 +2000,11 @@ export default function TicketReportsPage() {
               <Grid item xs={12}>
                 <Card><CardContent>
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>Assignee Performance Detail</Typography>
-                  <ReportCards>
-                      {result.avgRatingByTechnician.map((row) => (
-                        <ReportRecord key={row.techId} title={row.techName} metrics={[
-                          ['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)],
-                        ]} />
-                      ))}
-                    </ReportCards>
+                  <ReportRows label="Assignee performance detail" titleColumn="Assignee" mobile={mobileReportRows}
+                    rows={result.avgRatingByTechnician.map((row) => ({
+                      id: row.techId, title: row.techName,
+                      metrics: [['Resolved tickets', row.count], ['Rated tickets', row.ratedCount ?? 0], ['Average rating', row.avg.toFixed(2)]],
+                    }))} />
                 </CardContent></Card>
               </Grid>
             )}
@@ -2109,13 +2163,12 @@ export default function TicketReportsPage() {
                       <Typography color="text.secondary">No specific issues reported in this timeframe.</Typography>
                     </Box>
                   ) : (
-                    <ReportCards>
-                      {allIssuesAggregated.map((row) => (
-                        <ReportRecord key={JSON.stringify([row.categoryName, row.issueName])} title={row.issueName}
-                          caption={row.categoryName} accent={categoryColors[row.categoryName]?.strong}
-                          metrics={[[row.count === 1 ? 'Ticket' : 'Tickets', row.count]]} />
-                      ))}
-                    </ReportCards>
+                    <ReportRows label="Tickets by issue" titleColumn="Issue" captionColumn="Category" mobile={mobileReportRows}
+                      rows={allIssuesAggregated.map((row) => ({
+                        id: JSON.stringify([row.categoryName, row.issueName]), title: row.issueName,
+                        caption: row.categoryName, accent: categoryColors[row.categoryName]?.strong,
+                        metrics: [['Tickets', row.count]],
+                      }))} />
                   )}
                 </CardContent>
               </Card>
@@ -2180,25 +2233,28 @@ export default function TicketReportsPage() {
 
           {slaInsights.length > 0 && <Card>
             <CardContent>
-              <ReportCards>
-                {slaInsights.map((insight, index) => {
+              <ReportRows label="SLA interpretation by issue" titleColumn="Issue" captionColumn="Category" detailsColumn="Interpretation"
+                mobile={mobileReportRows} rows={slaInsights.map((insight, index) => {
                   const monitored = insight.configuredSlaHours > 0;
                   const interpretation = !monitored ? 'No SLA configured.' : insight.isFailingSla
                     ? 'Consider extending SLA' : insight.avgResolutionHours < insight.configuredSlaHours * 0.5
                       ? 'SLA is very generous, consider tightening' : 'SLA is balanced';
-                  return <ReportRecord key={`${insight.categoryName}:${insight.issueName}:${index}`}
-                    title={insight.issueName} caption={insight.categoryName}
-                    metrics={[
+                  return {
+                    id: `${insight.categoryName}:${insight.issueName}:${index}`, title: insight.issueName, caption: insight.categoryName,
+                    metrics: [
                       ['Resolved tickets', insight.resolvedTicketsCount],
                       ['Configured SLA', monitored ? `${insight.configuredSlaHours.toFixed(1)}h` : 'None'],
                       ['Avg active resolution', insight.avgResolutionHours == null ? '—' : `${insight.avgResolutionHours.toFixed(1)}h`],
-                    ]}>
-                    <Chip size="small" label={!monitored ? 'Unmonitored' : insight.isFailingSla ? 'Failing' : 'Healthy'}
-                      color={!monitored ? 'default' : insight.isFailingSla ? 'error' : 'success'} />
-                    <Typography variant="body2">{interpretation}</Typography>
-                  </ReportRecord>;
-                })}
-              </ReportCards>
+                    ],
+                    details: (
+                      <Stack spacing={0.5} alignItems="flex-start">
+                        <Chip size="small" label={!monitored ? 'Unmonitored' : insight.isFailingSla ? 'Failing' : 'Healthy'}
+                          color={!monitored ? 'default' : insight.isFailingSla ? 'error' : 'success'} />
+                        <Typography variant="body2">{interpretation}</Typography>
+                      </Stack>
+                    ),
+                  };
+                })} />
             </CardContent>
           </Card>}
         </Box>

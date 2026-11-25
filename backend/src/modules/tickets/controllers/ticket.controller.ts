@@ -577,6 +577,7 @@ export class TicketController {
       id,
       req.user?.role as UserRole,
       req.user.id ?? req.user.userId,
+      true,
     );
   }
 

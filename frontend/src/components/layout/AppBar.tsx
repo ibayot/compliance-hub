@@ -50,7 +50,8 @@ import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
 import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure } from '@/app/api/references';
-import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp } from '@/lib/install-web-app';
+import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp } from '@/lib/install-web-app';
+import { getMobileDevicePlatform, type MobileDevicePlatform } from '@/lib/mobile-device';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
@@ -75,11 +76,6 @@ interface AppNotification {
 /** Detect UUID-like or numeric-id-like segments that shouldn't show verbatim in breadcrumbs */
 const isIdSegment = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) || /^\d+$/.test(s);
-
-function isAppleMobileDevice(): boolean {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (/Mac/i.test(`${navigator.platform} ${navigator.userAgent}`) && navigator.maxTouchPoints > 1);
-}
 
 const hostedAndroidApk = '/downloads/FO2-iCare.apk';
 
@@ -209,15 +205,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
   const [pushCheckAttempt, setPushCheckAttempt] = useState(0);
   const [fcmDeliveryVersion, setFcmDeliveryVersion] = useState<number>();
-  const [showDownloadApp, setShowDownloadApp] = useState(false);
-  const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
+  const [downloadPlatform, setDownloadPlatform] = useState<MobileDevicePlatform | null>(null);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
   const [appInstallAnchor, setAppInstallAnchor] = useState<HTMLElement | null>(null);
-  const [installHelp, setInstallHelp] = useState<'ios' | 'android' | 'browser' | 'desktop-shortcut' | null>(null);
+  const [showIosInstallHelp, setShowIosInstallHelp] = useState(false);
   const notificationRequestRef = React.useRef(0);
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
-  const appleMobileAlerts = !nativeFcmClient && isAppleMobileDevice();
+  const appleMobileAlerts = !nativeFcmClient && getMobileDevicePlatform() === 'ios';
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
   const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
   const nativeBadgeRestoreAllowed = nativeFcmHandoff?.badgeRestoreAllowed;
@@ -227,12 +222,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     const availabilityCheck = new AbortController();
     const updateInstallAvailability = () => {
       const installed = isHomeScreenApp();
-      const browser = !Capacitor.isNativePlatform();
-      setShowDownloadApp(browser && !installed);
-      setShowIosProfileDownload(browser && !installed && isAppleMobileDevice());
+      const browser = !Capacitor.isNativePlatform() && !nativeFcmClient;
+      setDownloadPlatform(browser && !installed ? getMobileDevicePlatform() : null);
     };
     updateInstallAvailability();
-    if (isAndroidBrowser() && !isHomeScreenApp() && window.location.protocol === 'https:') {
+    if (!nativeFcmClient && isAndroidBrowser() && !isHomeScreenApp() && window.location.protocol === 'https:') {
       void getAndroidApkUrl(availabilityCheck.signal).then((url) => {
         if (!availabilityCheck.signal.aborted) setAndroidApkUrl(url);
       });
@@ -244,7 +238,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       window.removeEventListener('appinstalled', updateInstallAvailability);
       window.removeEventListener('pageshow', updateInstallAvailability);
     };
-  }, []);
+  }, [nativeFcmClient]);
 
   useEffect(() => {
     if (!user) {
@@ -263,7 +257,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       setPushMessage('');
       const localDeviceId = getNotificationDeviceId();
       setShowNotificationPreviews(readNotificationPreviewPreference(user.id, localDeviceId));
-      const appleHomeScreenRequired = isAppleMobileDevice() && !isHomeScreenApp();
+      const appleHomeScreenRequired = getMobileDevicePlatform() === 'ios' && !isHomeScreenApp();
       const supported = window.isSecureContext && 'serviceWorker' in navigator &&
         'PushManager' in window && 'Notification' in window;
       setPushNeedsHomeScreen(appleHomeScreenRequired);
@@ -344,7 +338,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           const deviceId = getNotificationDeviceId();
           let previewPreference = readNotificationPreviewPreference(user.id, deviceId);
           if (enabled && subscription) {
-            if (isAppleMobileDevice() && isHomeScreenApp()) {
+            if (getMobileDevicePlatform() === 'ios' && isHomeScreenApp()) {
               // Refresh the existing worker without replacing the push subscription or Web Clip.
               void registration?.update().catch(() => undefined);
             }
@@ -410,24 +404,6 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     setPushCheckAttempt(attempt => attempt + 1);
   };
 
-  const handleInstallWebApp = async () => {
-    setAppInstallAnchor(null);
-    if (showIosProfileDownload) {
-      setInstallHelp('ios');
-      return;
-    }
-    if (isAndroidBrowser()) {
-      setInstallHelp('android');
-      return;
-    }
-    const outcome = await promptToInstallWebApp();
-    if (outcome === 'accepted') {
-      setInstallHelp('desktop-shortcut');
-    } else if (outcome === null) {
-      setInstallHelp('browser');
-    }
-  };
-
   const handleBrowserPushToggle = async () => {
     if (pushBusy || nativeFcmClient) return;
     if (pushEnabled) {
@@ -464,7 +440,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
       if (permission !== 'granted') {
         setPushMessage(permission === 'denied'
-          ? isAppleMobileDevice()
+          ? getMobileDevicePlatform() === 'ios'
             ? 'iOS denied notifications for this Home Screen icon. If it is listed in Settings → Notifications, allow alerts there. If the profile icon is absent from Settings and no prompt appears, use the Safari-installed web app for alerts.'
             : isAndroidBrowser()
               ? 'Allow notifications for the site in Chrome or Brave, and for FO2 iCare and its browser in Android settings. Then retry here.'
@@ -1317,7 +1293,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           </Box>
         ) : null}
 
-        {showDownloadApp && (
+        {downloadPlatform && (
           <Button
             className="app-download-app-cta"
             variant="contained"
@@ -1347,11 +1323,11 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         )}
         <Menu
           anchorEl={appInstallAnchor}
-          open={showDownloadApp && Boolean(appInstallAnchor)}
+          open={Boolean(downloadPlatform && appInstallAnchor)}
           onClose={() => setAppInstallAnchor(null)}
           MenuListProps={{ id: 'app-install-menu', 'aria-labelledby': 'app-install-button' }}
         >
-          {androidApkUrl && (
+          {downloadPlatform === 'android' && androidApkUrl && (
             <MenuItem
               component="a"
               href={androidApkUrl}
@@ -1364,38 +1340,35 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               Download FO2 iCare for Android
             </MenuItem>
           )}
-          {isAndroidBrowser() && !androidApkUrl && (
+          {downloadPlatform === 'android' && !androidApkUrl && (
             <MenuItem disabled>Android app download is not available on this server</MenuItem>
           )}
-          {!isAndroidBrowser() && <MenuItem onClick={() => void handleInstallWebApp()}>Install web app</MenuItem>}
-          {showIosProfileDownload && (
+          {downloadPlatform === 'ios' && (
+            <MenuItem onClick={() => { setAppInstallAnchor(null); setShowIosInstallHelp(true); }}>Install web app</MenuItem>
+          )}
+          {downloadPlatform === 'ios' && (
             <MenuItem component="a" href="/api/ios-profile.mobileconfig" onClick={() => setAppInstallAnchor(null)}>
               Download iOS profile (icon + secure connection)
             </MenuItem>
           )}
         </Menu>
         <Dialog
-          open={installHelp !== null}
-          onClose={() => setInstallHelp(null)}
+          open={downloadPlatform === 'ios' && showIosInstallHelp}
+          onClose={() => setShowIosInstallHelp(false)}
           aria-labelledby="app-install-help-title"
           aria-describedby="app-install-help-description"
         >
           <DialogTitle id="app-install-help-title">Install FO2 iCare</DialogTitle>
           <DialogContent>
             <DialogContentText id="app-install-help-description">
-              {installHelp === 'ios'
-                ? 'On iPhone, download and install the FO2 iCare profile. Then open Settings > General > About > Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile. Open the new Home Screen icon and select Enable under Home Screen alerts in the bell menu.'
-                : installHelp === 'android'
-                  ? 'Install the APK, open FO2 iCare, and allow notifications when Android asks. Follow the certificate setup, then sign in. Alerts turn on automatically.'
-                  : installHelp === 'desktop-shortcut'
-                    ? 'FO2 iCare is installed as a web app. Your browser controls desktop shortcuts. In Chrome, open chrome://apps, right-click FO2 iCare, choose Create shortcut, select Desktop, then create it. In Edge, choose Create Desktop Shortcut in its post-install window if that option is available.'
-                    : 'Open your browser menu and choose Install app or Add to Home screen if available.'}
+              On iPhone, download and install the FO2 iCare profile. Then open Settings &gt; General &gt; About &gt;
+              Certificate Trust Settings and enable full trust for the internal root certificate included with the FO2 iCare profile.
+              Open the new Home Screen icon and select Enable under Home Screen alerts in the bell menu.
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            {installHelp === 'ios' && <Button href="/api/ios-profile.mobileconfig">Download iOS profile</Button>}
-            {installHelp === 'android' && androidApkUrl && <Button href={androidApkUrl} download="FO2-iCare.apk">Download Android APK</Button>}
-            <Button onClick={() => setInstallHelp(null)} autoFocus>Done</Button>
+            <Button href="/api/ios-profile.mobileconfig">Download iOS profile</Button>
+            <Button onClick={() => setShowIosInstallHelp(false)} autoFocus>Done</Button>
           </DialogActions>
         </Dialog>
 
