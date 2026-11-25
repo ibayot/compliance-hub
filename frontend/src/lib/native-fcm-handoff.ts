@@ -10,13 +10,19 @@ export interface NativeFcmHandoff {
   routineBadgeAllowed?: boolean;
   routineUsesAppSound?: boolean;
   badgeLauncher?: string;
+  badgeTarget?: string;
   badgeAlert?: 'COUNTED' | 'UNCOUNTED' | 'MISSING';
   previewAlert?: 'PREVIEW' | 'GENERIC';
-  badgeRequest?: 'REQUESTED' | 'BLOCKED' | 'STANDARD';
+  badgeRequest?: 'READY' | 'REQUESTED' | 'BLOCKED' | 'UNAVAILABLE' | 'STANDARD';
 }
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isAndroidPackage(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 150 &&
+    /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(value);
 }
 
 function parseHandoff(value: unknown): NativeFcmHandoff | null {
@@ -32,12 +38,13 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
     notificationsGranted: parsed.notificationsGranted,
     routineBadgeAllowed: typeof parsed.routineBadgeAllowed === 'boolean' ? parsed.routineBadgeAllowed : undefined,
     routineUsesAppSound: typeof parsed.routineUsesAppSound === 'boolean' ? parsed.routineUsesAppSound : undefined,
-    badgeLauncher: typeof parsed.badgeLauncher === 'string' && parsed.badgeLauncher.length <= 150 &&
-      /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(parsed.badgeLauncher) ? parsed.badgeLauncher : undefined,
+    badgeLauncher: isAndroidPackage(parsed.badgeLauncher) ? parsed.badgeLauncher : undefined,
+    badgeTarget: isAndroidPackage(parsed.badgeTarget) ? parsed.badgeTarget : undefined,
     badgeAlert: parsed.badgeAlert === 'COUNTED' || parsed.badgeAlert === 'UNCOUNTED' || parsed.badgeAlert === 'MISSING'
       ? parsed.badgeAlert : undefined,
     previewAlert: parsed.previewAlert === 'PREVIEW' || parsed.previewAlert === 'GENERIC' ? parsed.previewAlert : undefined,
-    badgeRequest: parsed.badgeRequest === 'REQUESTED' || parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'STANDARD'
+    badgeRequest: parsed.badgeRequest === 'READY' || parsed.badgeRequest === 'REQUESTED' ||
+      parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'UNAVAILABLE' || parsed.badgeRequest === 'STANDARD'
       ? parsed.badgeRequest : undefined,
   };
 }

@@ -1514,9 +1514,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere' }}>
                   {nativeFcmHandoff.badgeAlert === 'COUNTED' ? 'On open, Android had an active alert with an unread count.'
                     : nativeFcmHandoff.badgeAlert === 'UNCOUNTED' ? 'On open, Android had an active alert without an unread count.'
-                      : 'On open, Android had no active FO2 iCare badge alert.'}
-                  {nativeFcmHandoff.badgeRequest === 'REQUESTED' && ' A badge update was sent to the launcher.'}
-                  {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android prevented the direct launcher update.'}
+                      : 'On open, Android had no active unread summary for the badge.'}
+                  {nativeFcmHandoff.badgeRequest === 'READY' && <> Direct badge method found in {nativeFcmHandoff.badgeTarget}.</>}
+                  {nativeFcmHandoff.badgeRequest === 'REQUESTED' && (nativeFcmHandoff.badgeTarget
+                    ? <> Badge update requested through {nativeFcmHandoff.badgeTarget}.</>
+                    : ' The app requested a launcher badge update.')}
+                  {nativeFcmHandoff.badgeRequest === 'UNAVAILABLE' && ' No compatible direct badge method was found. Using standard Android badging.'}
+                  {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android restricted the direct badge method. Using standard Android badging.'}
                   {nativeFcmHandoff.badgeRequest === 'STANDARD' && ' Using standard Android badging.'}
                   {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
                   {nativeFcmHandoff.previewAlert === 'PREVIEW' && ' The active alert contains a preview.'}

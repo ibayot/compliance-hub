@@ -543,10 +543,11 @@ public final class CertificateSetupActivity extends Activity {
                 }
             }
             try {
-                FcmMessageService.refreshVisibleLauncherBadge(this);
+                LauncherBadge.Result badge = FcmMessageService.refreshVisibleLauncherBadge(this);
                 handoff.put("badgeLauncher", LauncherBadge.systemHomePackage(this));
                 handoff.put("badgeAlert", FcmMessageService.badgeAlertStatus(this));
-                handoff.put("badgeRequest", FcmMessageService.lastLauncherRequest(this));
+                handoff.put("badgeRequest", badge.status.name());
+                handoff.put("badgeTarget", badge.target);
                 handoff.put("previewAlert", FcmMessageService.previewAlertStatus(this));
             } catch (Exception ignored) {
                 // These optional details must not interrupt Android alert registration.

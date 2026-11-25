@@ -40,8 +40,8 @@ android {
         minSdk = 24
         targetSdk = 36
         // The downloadable launcher can be updated independently of the web app.
-        versionCode = 10121
-        versionName = '1.1.19'
+        versionCode = 10122
+        versionName = '1.1.21'
         resValue 'string', 'hub_app_name', webManifest.short_name
         resValue 'string', 'hub_launch_url', origin + webManifest.start_url
         resValue 'string', 'hub_asset_statements', assetStatements

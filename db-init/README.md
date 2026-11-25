@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.21 (from 1.1.20)
+
+Apply `20261125-add-application-changelog-v1.1.21-users.sql` to the verified Users database to publish the in-app notes. Rebuild the frontend to serve the new signed 1.1.21 APK and its notification details. Install the APK over the previous version. Verify the app icon with existing unread notifications on the Vivo V2427. This release requires no schema changes or backend service rebuild when updating from 1.1.20.
+
 ## For release 1.1.20 (from 1.1.19)
 
 Apply `20261125-add-application-changelog-v1.1.20-users.sql` to the verified Users database. Rebuild the frontend and Ticketing service to enable Android priority badge restoration and the iOS Web Push update check. Keep the existing signed 1.1.19 APK and installed iOS profile. The 1.1.16 Ticketing schema remains sufficient.

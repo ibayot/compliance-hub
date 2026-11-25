@@ -31,7 +31,6 @@ public final class FcmMessageService extends FirebaseMessagingService {
     private static final int UNREAD_NOTIFICATION = 7101;
     private static final String BADGE_PREFERENCES = "notification_badge";
     private static final String LAST_COUNT_AT = "last_count_at";
-    private static final String LAST_LAUNCHER_REQUEST = "last_launcher_request";
     private static final String HAS_PREVIEW = "fo2_has_preview";
 
     static NotificationChannel routineChannel(Context context) {
@@ -66,24 +65,14 @@ public final class FcmMessageService extends FirebaseMessagingService {
         return alert.extras.getBoolean(HAS_PREVIEW) ? "PREVIEW" : "GENERIC";
     }
 
-    static String lastLauncherRequest(Context context) {
-        return context.getSharedPreferences(BADGE_PREFERENCES, Context.MODE_PRIVATE)
-                .getString(LAST_LAUNCHER_REQUEST, null);
-    }
-
-    private static void updateLauncherBadge(Context context, int count) {
-        LauncherBadge.Result result = LauncherBadge.update(context, count);
-        context.getSharedPreferences(BADGE_PREFERENCES, MODE_PRIVATE).edit()
-                .putString(LAST_LAUNCHER_REQUEST, result.name()).apply();
-    }
-
-    static void refreshVisibleLauncherBadge(Context context) {
+    static LauncherBadge.Result refreshVisibleLauncherBadge(Context context) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         Notification alert = unreadAlert(context);
-        if (manager == null || alert == null) return;
+        if (manager == null || alert == null) return LauncherBadge.update(context, null);
         boolean allowsBadge = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
                 (canShowBadge(routineChannel(context)) && canShowBadge(manager.getNotificationChannel(alert.getChannelId())));
-        updateLauncherBadge(context, allowsBadge && manager.areNotificationsEnabled() ? Math.max(0, alert.number) : 0);
+        return LauncherBadge.update(context,
+                allowsBadge && manager.areNotificationsEnabled() ? Math.max(0, alert.number) : 0);
     }
 
     public static void ensureNotificationChannel(Context context) {
@@ -188,7 +177,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         }
         if (count <= 0 || !manager.areNotificationsEnabled()) {
             manager.cancel(UNREAD_NOTIFICATION);
-            updateLauncherBadge(this, 0);
+            LauncherBadge.update(this, 0);
             return;
         }
         boolean badgeSync = "badge_sync".equals(kind);
@@ -197,7 +186,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (badgeSync && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
-                updateLauncherBadge(this, 0);
+                LauncherBadge.update(this, 0);
                 return;
             }
             // AndroidX's silent flag groups even a single notification. Use an ungrouped,
@@ -216,7 +205,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
         }
-        updateLauncherBadge(this, allowBadge ? count : 0);
+        LauncherBadge.update(this, allowBadge ? count : 0);
     }
 
     private NotificationCompat.Builder notificationWithPreview(String channel, String sound, String preview, String fallback) {
