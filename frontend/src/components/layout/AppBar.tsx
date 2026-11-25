@@ -1384,8 +1384,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 overflow: 'visible',
                 filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
                 mt: 1.5,
-                width: { xs: 'min(320px, calc(100vw - 16px))', sm: 320 },
-                maxWidth: 'calc(100vw - 16px)',
+                width: 320,
+                maxWidth: 'calc(100vw - 32px)',
+                '@media (max-width: 899.95px)': {
+                  width: 'auto',
+                  maxWidth: 'none',
+                  left: 'var(--app-phone-left-gutter) !important',
+                  right: 'var(--app-phone-right-gutter)',
+                },
                 maxHeight: 400,
                 overflowY: 'auto',
                 '& .MuiAvatar-root': {
@@ -1396,7 +1402,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                 },
                 '&:before': {
                   content: '""',
-                  display: 'block',
+                  display: { xs: 'none', md: 'block' },
                   position: 'absolute',
                   top: 0,
                   right: 14,

@@ -8,12 +8,14 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 
 /** Best-effort badge updates for launchers with a separate unread-count interface. */
 final class LauncherBadge {
     enum Result { STANDARD, REQUESTED, BLOCKED }
     private static final String VIVO_BADGE_PERMISSION = "com.vivo.notification.permission.BADGE_ICON";
+    private static final int INCLUDE_BACKGROUND_RECEIVERS = 0x01000000;
 
     private LauncherBadge() {}
 
@@ -34,24 +36,10 @@ final class LauncherBadge {
             ComponentName app = appIntent == null ? null : appIntent.getComponent();
             if (app == null) return Result.STANDARD;
 
+            if (usesVivoBadge(launcher, Build.MANUFACTURER, Build.BRAND)) {
+                return updateVivoBadge(context, launcher, app, unreadCount);
+            }
             switch (launcher) {
-                case "com.vivo.launcher":
-                case "com.bbk.launcher2":
-                case "com.bbk.launcher3":
-                    // A manifest declaration does not establish that the phone grants this permission.
-                    if (context.checkSelfPermission(VIVO_BADGE_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
-                        return Result.BLOCKED;
-                    }
-                    Intent update = new Intent("launcher.action.CHANGE_APPLICATION_NOTIFICATION_NUM");
-                    update.setPackage(launcher);
-                    update.putExtra("packageName", app.getPackageName());
-                    update.putExtra("className", app.getClassName());
-                    update.putExtra("notificationNum", unreadCount);
-                    // Vivo's documented launcher integration needs this background receiver flag.
-                    // Android hides the named constant from the public SDK, so use its platform value.
-                    update.addFlags(0x01000000);
-                    context.sendBroadcast(update);
-                    return Result.REQUESTED;
                 case "com.huawei.android.launcher":
                 case "com.hihonor.android.launcher":
                     Bundle badge = new Bundle();
@@ -72,6 +60,29 @@ final class LauncherBadge {
             // An unavailable or permission-restricted launcher must not affect notification delivery.
             return Result.BLOCKED;
         }
+    }
+
+    private static boolean usesVivoBadge(String launcher, String manufacturer, String brand) {
+        return "com.vivo.launcher".equals(launcher)
+                || "com.bbk.launcher2".equals(launcher)
+                || "com.bbk.launcher3".equals(launcher)
+                // The V2427 uses this package name, which is shared with other manufacturers.
+                || ("com.android.launcher3".equals(launcher)
+                    && ("vivo".equalsIgnoreCase(manufacturer) || "vivo".equalsIgnoreCase(brand)));
+    }
+
+    private static Result updateVivoBadge(Context context, String launcher, ComponentName app, int unreadCount) {
+        if (context.checkSelfPermission(VIVO_BADGE_PERMISSION) != PackageManager.PERMISSION_GRANTED) {
+            return Result.BLOCKED;
+        }
+        Intent update = new Intent("launcher.action.CHANGE_APPLICATION_NOTIFICATION_NUM");
+        update.setPackage(launcher);
+        update.putExtra("packageName", app.getPackageName());
+        update.putExtra("className", app.getClassName());
+        update.putExtra("notificationNum", unreadCount);
+        update.addFlags(INCLUDE_BACKGROUND_RECEIVERS);
+        context.sendBroadcast(update);
+        return Result.REQUESTED;
     }
 
     private static Result callLauncher(Context context, String launcher, String authority, String path,

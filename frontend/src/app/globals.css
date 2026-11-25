@@ -5,6 +5,8 @@
 }
 
 html {
+  --app-phone-left-gutter: max(8px, env(safe-area-inset-left, 0px));
+  --app-phone-right-gutter: max(8px, env(safe-area-inset-right, 0px));
   scrollbar-gutter: stable;
   overflow-x: clip;
 }
@@ -400,13 +402,6 @@ body {
   align-items: flex-start;
 }
 
-/* Layout mode follows the actual viewport so mobile navigation and spacing stay on mobile surfaces. */
-.app-shell[data-app-layout-mode='mobile'] .app-page-content {
-  width: min(calc(100% - 24px), 760px) !important;
-  max-width: 760px;
-  margin-inline: auto;
-}
-
 .app-shell[data-app-layout-mode='mobile'] .workspace-layout {
   gap: 16px;
 }
@@ -432,7 +427,7 @@ body {
   min-height: 44px;
 }
 
-@media (max-width: 899px) {
+@media (max-width: 899.95px) {
   body,
   #root {
     min-width: 0;
@@ -445,12 +440,13 @@ body {
     overflow-x: clip;
   }
 
+  html {
+    scrollbar-gutter: auto;
+  }
+
   .app-page-content {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin-inline: 0 !important;
-    padding-left: max(8px, env(safe-area-inset-left, 0px)) !important;
-    padding-right: max(8px, env(safe-area-inset-right, 0px)) !important;
+    padding-left: var(--app-phone-left-gutter);
+    padding-right: var(--app-phone-right-gutter);
   }
 
   .app-page-content > *,
@@ -475,6 +471,10 @@ body {
     max-width: 100%;
   }
 
+  .app-page-content .workspace-layout > .workspace-context {
+    padding-inline: 0;
+  }
+
   .app-page-content .MuiContainer-root {
     padding-left: 0;
     padding-right: 0;
@@ -492,6 +492,10 @@ body {
     max-width: 100%;
     flex-basis: 100%;
     padding: 0 !important;
+  }
+
+  .app-page-content[data-app-layout-preset='sectioned-workspace'] .MuiGrid-container.sectioned-card-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .app-page-content .MuiCard-root {
@@ -568,7 +572,7 @@ body {
   }
 
   .app-page-content[data-app-layout-preset='sectioned-workspace'] .workspace-context {
-    padding: 8px;
+    padding-block: 8px;
     border-radius: 12px;
   }
 

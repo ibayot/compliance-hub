@@ -397,24 +397,17 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
           data-app-page-family={pageFamily}
           data-app-layout-mode={layoutMode}
           sx={{
-            width: 'calc(100% - 48px)',
+            width: { xs: '100%', md: 'calc(100% - 48px)' },
             minWidth: 0,
-            maxWidth: APP_LAYOUT_MAX_WIDTH[layoutPreset],
-            mx: 'auto',
-            py: layoutPreset === 'operations-grid' ? 2.5 : 3,
+            maxWidth: { xs: 'none', md: APP_LAYOUT_MAX_WIDTH[layoutPreset] },
+            mx: { xs: 0, md: 'auto' },
+            py: { xs: 1, md: layoutPreset === 'operations-grid' ? 2.5 : 3 },
             '--app-layout-primary': (theme) => theme.palette.primary.main,
             '--app-layout-paper': (theme) => theme.palette.background.paper,
             '--app-layout-default': (theme) => theme.palette.background.default,
             '--app-layout-divider': (theme) => theme.palette.divider,
             '--app-layout-text': (theme) => theme.palette.text.primary,
             '--app-layout-muted': (theme) => theme.palette.text.secondary,
-            '@media (max-width:600px)': {
-              width: '100%',
-              maxWidth: '100%',
-              mx: 0,
-              px: 1,
-              py: 1,
-            },
           }}
         >
           {isComplianceLoading ? (

@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.19 (from 1.1.18)
+
+Apply `20261125-add-application-changelog-v1.1.19-users.sql` to the verified Users database. Rebuild the frontend for the wider phone layout and update the installed Android app to the signed 1.1.19 APK for the Vivo launcher change. The 1.1.16 Ticketing schema remains sufficient.
+
 ## For release 1.1.18 (from 1.1.17)
 
 Apply `20261125-add-application-changelog-v1.1.18-users.sql` to the verified Users database. Rebuild the frontend and Ticketing service for the automatic Android unread badge refresh. The existing signed 1.1.17 APK handles this refresh and does not need reinstalling. The 1.1.16 Ticketing schema remains sufficient.
