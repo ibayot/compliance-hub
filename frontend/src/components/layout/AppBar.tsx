@@ -49,7 +49,7 @@ import { formatPersonName } from '@/lib/utils/person-name';
 import React, { useState, useEffect } from 'react';
 import FeedbackModal from '../FeedbackModal';
 import EnvironmentOverlay from './EnvironmentOverlay';
-import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure } from '@/app/api/references';
+import { attendanceApi, notificationsApi, AttendanceStatus, BrowserPushConfig, type BrowserPushFailure, type FcmBadgeRefreshOutcome } from '@/app/api/references';
 import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInstallWebApp } from '@/lib/install-web-app';
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
@@ -207,6 +207,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
   const [pushCheckAttempt, setPushCheckAttempt] = useState(0);
   const [fcmDeliveryVersion, setFcmDeliveryVersion] = useState<number>();
+  const [badgeRefreshOutcome, setBadgeRefreshOutcome] = useState<FcmBadgeRefreshOutcome>();
   const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
@@ -216,6 +217,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
+  const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
   const notificationAccountId = user?.id;
 
   useEffect(() => {
@@ -339,6 +341,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
           const deviceId = getNotificationDeviceId();
           let previewPreference = readNotificationPreviewPreference(user.id, deviceId);
           if (enabled && subscription) {
+            if (isAppleMobileDevice() && isHomeScreenApp()) {
+              // Refresh the existing worker without replacing the push subscription or Web Clip.
+              void registration?.update().catch(() => undefined);
+            }
             const existingKey = subscription.options.applicationServerKey;
             const expectedKey = decodeApplicationServerKey(config.publicKey || '');
             if (existingKey && !applicationServerKeysMatch(existingKey, expectedKey)) {
@@ -890,15 +896,24 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [user, fetchNotificationSummary]);
 
   useEffect(() => {
+    setBadgeRefreshOutcome(undefined);
     if (notificationAccountId == null || !nativeBadgeDeviceId || !pushEnabled || fcmDeliveryVersion !== 2) return;
     let lastRequestAt = 0;
+    let active = true;
+    let restoreMissingAlert = nativeBadgeAlert === 'MISSING' || nativeBadgeAlert === 'UNCOUNTED';
     const refresh = () => {
       if (document.visibilityState !== 'visible' || !navigator.onLine) return;
       const now = Date.now();
       if (now - lastRequestAt < 15_000) return;
       lastRequestAt = now;
-      // Native Android needs its own unread notification to anchor the launcher badge.
-      void notificationsApi.refreshFcmBadge(nativeBadgeDeviceId).catch(() => undefined);
+      // Request a priority restore once for the unread notification missing at launch.
+      void notificationsApi.refreshFcmBadge(nativeBadgeDeviceId, restoreMissingAlert)
+        .then(outcome => {
+          if (!active) return;
+          if (outcome === 'accepted') restoreMissingAlert = false;
+          if (outcome !== 'recent') setBadgeRefreshOutcome(outcome);
+        })
+        .catch(() => { if (active) setBadgeRefreshOutcome('failed'); });
     };
     refresh();
     document.addEventListener('visibilitychange', refresh);
@@ -906,12 +921,13 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     window.addEventListener('focus', refresh);
     window.addEventListener('online', refresh);
     return () => {
+      active = false;
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('pageshow', refresh);
       window.removeEventListener('focus', refresh);
       window.removeEventListener('online', refresh);
     };
-  }, [notificationAccountId, nativeBadgeDeviceId, pushEnabled, fcmDeliveryVersion]);
+  }, [notificationAccountId, nativeBadgeAlert, nativeBadgeDeviceId, pushEnabled, fcmDeliveryVersion]);
 
   // A reconnect may have missed SSE events while the browser was offline.
   // Refresh the authoritative summary immediately so the badge and list catch up.
@@ -1496,15 +1512,18 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               )}
               {nativeFcmHandoff?.badgeAlert && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere' }}>
-                  {nativeFcmHandoff.badgeAlert === 'COUNTED' ? 'Android has an active alert with an unread count.'
-                    : nativeFcmHandoff.badgeAlert === 'UNCOUNTED' ? 'Android has an active alert without an unread count.'
-                      : 'Android has no active FO2 iCare badge alert.'}
+                  {nativeFcmHandoff.badgeAlert === 'COUNTED' ? 'On open, Android had an active alert with an unread count.'
+                    : nativeFcmHandoff.badgeAlert === 'UNCOUNTED' ? 'On open, Android had an active alert without an unread count.'
+                      : 'On open, Android had no active FO2 iCare badge alert.'}
                   {nativeFcmHandoff.badgeRequest === 'REQUESTED' && ' A badge update was sent to the launcher.'}
                   {nativeFcmHandoff.badgeRequest === 'BLOCKED' && ' Android prevented the direct launcher update.'}
                   {nativeFcmHandoff.badgeRequest === 'STANDARD' && ' Using standard Android badging.'}
                   {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
                   {nativeFcmHandoff.previewAlert === 'PREVIEW' && ' The active alert contains a preview.'}
                   {nativeFcmHandoff.previewAlert === 'GENERIC' && ' The active alert contains generic text.'}
+                  {badgeRefreshOutcome === 'accepted' && ' Firebase accepted the latest badge refresh.'}
+                  {badgeRefreshOutcome === 'not-ready' && ' The device registration was unavailable during the badge refresh.'}
+                  {badgeRefreshOutcome === 'failed' && ' The latest badge refresh could not be sent.'}
                 </Typography>
               )}
               {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>

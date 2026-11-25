@@ -36,6 +36,7 @@ signed-in user gesture
 ## Store Implementation
 
 - Keep the service worker at the deployed web root and scoped to its real application base path. It must handle push and notification clicks without adding offline caching or intercepting authenticated API/page requests.
+- An already subscribed iOS Home Screen app may request a service worker update on open without replacing its configuration profile, permission, or push subscription.
 - Request permission only from a direct user gesture. Register a subscription only after permission is granted and bind it to the account from the authenticated server request; never accept a client-supplied owner ID.
 - Validate HTTPS push endpoints against supported push-service origins to prevent server-side request forgery. Hash endpoints for lookup and store the endpoint and browser encryption keys only as authenticated ciphertext at rest.
 - Recheck current account access/approval before delivery. Unsubscribe and remove the account-owned record on logout or opt-out; remove expired endpoints on push-service 404/410 responses.

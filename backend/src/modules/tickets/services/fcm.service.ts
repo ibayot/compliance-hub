@@ -37,6 +37,8 @@ export type FcmSendResult =
   | { outcome: 'accepted' | 'expired' | 'not-enabled' }
   | { outcome: 'failed'; failure: 'authentication' | 'provider-unavailable' | 'provider-request' | 'connection' | 'registration-storage' };
 
+type FcmBadgeRefreshOutcome = 'accepted' | 'recent' | 'not-ready' | 'failed';
+
 type FcmConfigurationIssue = 'missing-project-id' | 'missing-service-account' | 'invalid-service-account' | 'project-mismatch' | 'missing-encryption-key';
 interface FcmConfiguration {
   projectId: string;
@@ -277,21 +279,31 @@ export class FcmService {
     await this.sendToUser(userId, 'badge_sync', deviceId);
   }
 
-  async refreshDeviceBadge(userId: number, deviceId: string): Promise<void> {
+  async refreshDeviceBadge(userId: number, deviceId: string, restoreMissingAlert: boolean): Promise<{ outcome: FcmBadgeRefreshOutcome }> {
     if (typeof deviceId !== 'string' || !DEVICE_ID_PATTERN.test(deviceId)) {
       throw new BadRequestException('A valid Android app device is required.');
     }
-    // Only a device already owned by the caller can consume a refresh slot.
-    if (!await this.registrations.existsBy({ userId, deviceId, deliveryVersion: 2 })) return;
+    const config = this.configuration();
+    if (!config) return { outcome: 'not-ready' };
+    const registration = await this.registrations.findOne({ where: { userId, deviceId, deliveryVersion: 2 } });
+    if (!registration) return { outcome: 'not-ready' };
+    try {
+      await this.usersClient.requireAccountAccess(userId);
+    } catch {
+      return { outcome: 'not-ready' };
+    }
     const key = `${userId}:${deviceId}`;
     const now = Date.now();
     for (const [entry, nextAt] of this.nextBadgeRefreshAt) {
       if (nextAt <= now) this.nextBadgeRefreshAt.delete(entry);
     }
-    if (this.nextBadgeRefreshAt.has(key) || this.nextBadgeRefreshAt.size >= 4096) return;
+    if (this.nextBadgeRefreshAt.has(key) || this.nextBadgeRefreshAt.size >= 4096) return { outcome: 'recent' };
     this.nextBadgeRefreshAt.set(key, now + BADGE_REFRESH_INTERVAL_MS);
-    // The existing sender checks ownership and current account approval and reads the count from Ticketing.
-    await this.syncBadge(userId, deviceId);
+    const { unreadCount, previewBody, countAt } = await this.getUnreadSnapshot(userId, registration.showPreviews);
+    const result = await this.sendToRegistration(config, registration, unreadCount, 'badge_sync',
+      previewBody, countAt, restoreMissingAlert);
+    if (result.outcome === 'accepted') return { outcome: 'accepted' };
+    return { outcome: result.outcome === 'expired' ? 'not-ready' : 'failed' };
   }
 
   private async sendToUser(
@@ -310,20 +322,27 @@ export class FcmService {
       return new Set();
     }
 
+    const snapshot = kind === 'notification' || kind === 'badge_sync'
+      ? await this.getUnreadSnapshot(userId, kind === 'badge_sync' && registrations.some(device => device.showPreviews))
+      : { unreadCount: 0, previewBody: undefined, countAt: Date.now() };
+    const results = await Promise.all(registrations.map(async registration => ({
+      deviceId: registration.deviceId,
+      result: await this.sendToRegistration(configuration, registration, snapshot.unreadCount, kind,
+        snapshot.previewBody ?? previewBody, snapshot.countAt),
+    })));
+    return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
+  }
+
+  private async getUnreadSnapshot(userId: number, includePreview: boolean) {
     const where = { userId, isRead: false };
     const countAt = Date.now();
-    const [unreadCount, latestUnread] = await Promise.all([
-      kind === 'notification' || kind === 'badge_sync' ? this.notifications.count({ where }) : 0,
-      kind === 'badge_sync' && registrations.some(device => device.showPreviews)
+    const [unreadCount, latest] = await Promise.all([
+      this.notifications.count({ where }),
+      includePreview
         ? this.notifications.findOne({ where, order: { id: 'DESC' }, select: { id: true, eventType: true } })
         : null,
     ]);
-    if (latestUnread) previewBody = safeNotificationPreview(latestUnread.eventType);
-    const results = await Promise.all(registrations.map(async registration => ({
-      deviceId: registration.deviceId,
-      result: await this.sendToRegistration(configuration, registration, unreadCount, kind, previewBody, countAt),
-    })));
-    return new Set(results.filter(item => item.result.outcome === 'accepted').map(item => item.deviceId));
+    return { unreadCount, countAt, previewBody: latest ? safeNotificationPreview(latest.eventType) : undefined };
   }
 
   private async sendToRegistration(
@@ -333,6 +352,7 @@ export class FcmService {
     kind: AndroidDeliveryKind,
     previewBody?: string,
     countAt = Date.now(),
+    restoreMissingAlert = false,
   ): Promise<FcmSendResult> {
     let fid: string;
     try {
@@ -343,7 +363,7 @@ export class FcmService {
     }
 
     const result = await this.send(configuration, fid, unreadCount, kind,
-      registration.deliveryVersion === 2, registration.showPreviews ? previewBody : undefined, countAt);
+      registration.deliveryVersion === 2, registration.showPreviews ? previewBody : undefined, countAt, restoreMissingAlert);
     if (result.outcome !== 'expired') return result;
 
     // A phone can refresh its registration while a send is pending. Delete only the rejected version.
@@ -362,7 +382,7 @@ export class FcmService {
 
   private async send(
     configuration: FcmConfiguration, fid: string, unreadCount: number, kind: AndroidDeliveryKind,
-    enhancedDelivery: boolean, previewBody: string | undefined, countAt: number,
+    enhancedDelivery: boolean, previewBody: string | undefined, countAt: number, restoreMissingAlert: boolean,
   ): Promise<FcmSendResult> {
     let accessToken: string | null | undefined;
     try {
@@ -380,11 +400,13 @@ export class FcmService {
     try {
       const badgeSync = kind === 'badge_sync';
       const count = Math.max(0, unreadCount);
+      // Firebase high priority is reserved for a missing user-visible unread notification.
+      const badgePriority = restoreMissingAlert && count > 0 ? 'HIGH' : 'NORMAL';
       const visibleBody = kind === 'notification' && previewBody ? previewBody : 'You have a new notification.';
       const message = enhancedDelivery ? {
         fid,
         data: { kind, unreadCount: String(count), countAt: String(countAt), ...(previewBody ? { previewBody } : {}) },
-        android: badgeSync ? { priority: 'NORMAL', collapse_key: 'fo2_badge', ttl: '300s' }
+        android: badgeSync ? { priority: badgePriority, collapse_key: 'fo2_badge', ttl: '300s' }
           : { priority: 'HIGH', ttl: '60s' },
       } : {
         fid,

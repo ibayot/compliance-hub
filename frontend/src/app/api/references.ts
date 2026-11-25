@@ -2064,6 +2064,8 @@ export interface FcmDeviceStatus {
   configurationIssue?: FcmPushConfig['configurationIssue'];
 }
 
+export type FcmBadgeRefreshOutcome = 'accepted' | 'recent' | 'not-ready' | 'failed';
+
 export interface BrowserPushSubscriptionStatus {
   registered: boolean;
   showPreviews?: boolean;
@@ -2135,11 +2137,14 @@ export const notificationsApi = {
     const response = await apiClient.get('/notifications/fcm-subscription', { params: { deviceId } });
     return response.data;
   },
-  refreshFcmBadge: async (deviceId: string): Promise<void> => {
+  refreshFcmBadge: async (deviceId: string, restoreMissingAlert: boolean): Promise<FcmBadgeRefreshOutcome | undefined> => {
     const generation = recoveryGeneration();
-    await withFcmDeviceOperation(deviceId, async () => {
+    return withFcmDeviceOperation(deviceId, async () => {
       if (hasSignedOut() || generation !== recoveryGeneration()) return;
-      await apiClient.post('/notifications/fcm-badge-sync', { deviceId }, { timeout: 8000 });
+      const response = await apiClient.post<{ outcome?: FcmBadgeRefreshOutcome }>(
+        '/notifications/fcm-badge-sync', { deviceId, restoreMissingAlert }, { timeout: 12000 },
+      );
+      return response.data?.outcome;
     });
   },
   saveFcmDevice: async (input: { deviceId: string; fid?: string; deliveryVersion?: 2; showPreviews?: boolean }): Promise<{ enabled: true; deliveryVersion: number; showPreviews?: boolean }> => {

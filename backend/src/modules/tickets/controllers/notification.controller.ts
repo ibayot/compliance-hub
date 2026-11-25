@@ -105,10 +105,10 @@ export class NotificationController {
   }
 
   @Post('fcm-badge-sync')
-  @HttpCode(204)
-  async refreshFcmBadge(@Request() req: any, @Body() body: { deviceId?: string }) {
+  @HttpCode(200)
+  async refreshFcmBadge(@Request() req: any, @Body() body: { deviceId?: string; restoreMissingAlert?: boolean }) {
     if (!this.fcmService) throw new ServiceUnavailableException('Android app alerts are unavailable.');
-    await this.fcmService.refreshDeviceBadge(this.userId(req), body?.deviceId ?? '');
+    return this.fcmService.refreshDeviceBadge(this.userId(req), body?.deviceId ?? '', body?.restoreMissingAlert === true);
   }
 
   @Get('summary')
