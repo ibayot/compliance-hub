@@ -70,6 +70,17 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        <receiver
+            android:name=".UnreadBadgeWidget"
+            android:exported="false"
+            android:label="@string/unread_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/unread_badge_widget" />
+        </receiver>
         <provider
             android:name=".NotificationSoundProvider"
             android:authorities="${applicationId}.notification-sounds"

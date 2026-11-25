@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="unread_widget_label">FO2 iCare unread count</string>
+    <string name="unread_widget_description">Open FO2 iCare and see your unread notification count on the Home Screen.</string>
+    <string name="unread_widget_overflow">99+</string>
+    <plurals name="unread_widget_open">
+        <item quantity="one">Open FO2 iCare. %1$s unread notification.</item>
+        <item quantity="other">Open FO2 iCare. %1$s unread notifications.</item>
+    </plurals>
+</resources>

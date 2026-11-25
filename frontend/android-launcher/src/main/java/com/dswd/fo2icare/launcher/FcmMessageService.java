@@ -90,10 +90,19 @@ public final class FcmMessageService extends FirebaseMessagingService {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         Notification alert = unreadAlert(context);
         if (manager == null || alert == null) return LauncherBadge.update(context, null);
+        return LauncherBadge.update(context, badgeableUnreadCount(context, manager, alert));
+    }
+
+    static int widgetUnreadCount(Context context) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        Notification alert = unreadAlert(context);
+        return manager == null || alert == null ? 0 : badgeableUnreadCount(context, manager, alert);
+    }
+
+    private static int badgeableUnreadCount(Context context, NotificationManager manager, Notification alert) {
         boolean allowsBadge = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
                 (canShowBadge(routineChannel(context)) && canShowBadge(manager.getNotificationChannel(alert.getChannelId())));
-        return LauncherBadge.update(context,
-                allowsBadge && manager.areNotificationsEnabled() ? Math.max(0, alert.number) : 0);
+        return allowsBadge && manager.areNotificationsEnabled() ? Math.max(0, alert.number) : 0;
     }
 
     public static void ensureNotificationChannel(Context context) {
@@ -211,6 +220,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (count == 0 || !notificationsEnabled) {
             manager.cancel(UNREAD_NOTIFICATION);
             LauncherBadge.update(this, 0);
+            UnreadBadgeWidget.updateAll(this, 0);
             BadgeDiagnostics.record(this, kind, count == 0 ? BadgeDiagnostics.Refresh.CLEARED
                     : BadgeDiagnostics.Refresh.NOTIFICATIONS_BLOCKED);
             return;
@@ -222,6 +232,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
             if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
                 LauncherBadge.update(this, 0);
+                UnreadBadgeWidget.updateAll(this, 0);
                 BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.ROUTINE_CHANNEL_BLOCKED);
                 return;
             }
@@ -230,6 +241,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
             channel = hasSummary ? summaryChannel : BADGE_RESTORE_CHANNEL;
             if (!canShowBadge(manager.getNotificationChannel(channel))) {
                 LauncherBadge.update(this, 0);
+                UnreadBadgeWidget.updateAll(this, 0);
                 BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.SUMMARY_CHANNEL_BLOCKED);
                 return;
             }
@@ -240,6 +252,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
         NotificationCompat.Builder alert = notificationWithPreview(channel, "routine",
                 data.get("previewBody"), "You have unread notifications.")
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setDeleteIntent(UnreadBadgeWidget.summaryDismissed(this))
                 .setNumber(count).setOnlyAlertOnce(badgeSync);
         Bundle revision = new Bundle();
         revision.putLong(BadgeDiagnostics.SUMMARY_REVISION, at);
@@ -250,7 +263,9 @@ public final class FcmMessageService extends FirebaseMessagingService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
         }
-        LauncherBadge.update(this, allowBadge ? count : 0);
+        int badgeCount = allowBadge ? count : 0;
+        LauncherBadge.update(this, badgeCount);
+        UnreadBadgeWidget.updateAll(this, badgeCount);
     }
 
     private NotificationCompat.Builder notificationWithPreview(String channel, String sound, String preview, String fallback) {

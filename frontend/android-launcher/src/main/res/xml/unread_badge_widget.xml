@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/unread_widget_description"
+    android:initialLayout="@layout/unread_badge_widget"
+    android:minWidth="48dp"
+    android:minHeight="48dp"
+    android:previewImage="@drawable/hub_launcher"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

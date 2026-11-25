@@ -29,6 +29,7 @@ export interface NativeFcmHandoff {
   previewAlert?: 'PREVIEW' | 'GENERIC';
   badgeRequest?: 'READY' | 'REQUESTED' | 'BLOCKED' | 'UNAVAILABLE' | 'STANDARD';
   badgeDiagnostics?: AndroidBadgeDiagnostics;
+  badgeWidget?: 'ADDED' | 'AVAILABLE';
 }
 
 function isUuid(value: unknown): value is string {
@@ -77,6 +78,7 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
       parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'UNAVAILABLE' || parsed.badgeRequest === 'STANDARD'
       ? parsed.badgeRequest : undefined,
     badgeDiagnostics: parseBadgeDiagnostics(parsed.badgeDiagnostics),
+    badgeWidget: parsed.badgeWidget === 'ADDED' || parsed.badgeWidget === 'AVAILABLE' ? parsed.badgeWidget : undefined,
   };
 }
 

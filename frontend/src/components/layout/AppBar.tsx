@@ -1596,6 +1596,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   </Stack>
                 </Box>
               )}
+              {nativeFcmHandoff?.badgeWidget && (nativeFcmHandoff.badgeWidget === 'ADDED' ||
+                nativeFcmHandoff.badgeRequest === 'UNAVAILABLE' || nativeFcmHandoff.badgeRequest === 'BLOCKED') && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                  {nativeFcmHandoff.badgeWidget === 'ADDED'
+                    ? 'The FO2 iCare unread count widget is on your Home Screen.'
+                    : 'For a Home Screen icon with an unread number, open Android’s Widgets menu and add FO2 iCare unread count.'}
+                </Typography>
+              )}
               {nativeFcmClient && badgeRefresh && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                   {badgeRefresh.outcome === 'accepted' && (badgeRefresh.retry

@@ -87,6 +87,7 @@ public final class CertificateSetupActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        UnreadBadgeWidget.refresh(this);
         continueLaunch();
     }
 
@@ -550,6 +551,7 @@ public final class CertificateSetupActivity extends Activity {
                 handoff.put("badgeTarget", badge.target);
                 handoff.put("previewAlert", FcmMessageService.previewAlertStatus(this));
                 handoff.put("badgeDiagnostics", FcmMessageService.badgeDiagnostics(this));
+                handoff.put("badgeWidget", UnreadBadgeWidget.isAdded(this) ? "ADDED" : "AVAILABLE");
             } catch (Exception ignored) {
                 // These optional details must not interrupt Android alert registration.
             }

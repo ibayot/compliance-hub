@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.23 (from 1.1.22)
+
+Apply `20261125-add-application-changelog-v1.1.23-users.sql` to the verified Users database for the in-app notes. Rebuild the frontend and install the signed 1.1.23 APK. Add **FO2 iCare unread count** from the Android Home Screen Widgets menu. This release requires no schema changes or backend service rebuild when updating from 1.1.22.
+
 ## For release 1.1.22 (from 1.1.21)
 
 Apply `20261125-add-application-changelog-v1.1.22-users.sql` to the verified Users database for the in-app notes. Rebuild the frontend and install the signed 1.1.22 APK. The temporary badge details are in the Android notification bell menu. This release requires no schema changes or backend service rebuild when updating from 1.1.21.
