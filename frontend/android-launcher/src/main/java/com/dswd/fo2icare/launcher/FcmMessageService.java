@@ -17,6 +17,8 @@ import androidx.core.app.NotificationCompat;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
+import org.json.JSONException;
+import org.json.JSONObject;
 import java.util.Map;
 
 /** Handles native FO2 iCare alerts and the unread notification shown to Android launchers. */
@@ -63,6 +65,25 @@ public final class FcmMessageService extends FirebaseMessagingService {
         Notification alert = unreadAlert(context);
         if (alert == null) return null;
         return alert.extras.getBoolean(HAS_PREVIEW) ? "PREVIEW" : "GENERIC";
+    }
+
+    static JSONObject badgeDiagnostics(Context context) throws JSONException {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        Notification summary = unreadAlert(context);
+        String channel = null;
+        boolean channelAllowsBadge = summary != null;
+        boolean restoreAllowed = manager != null && manager.areNotificationsEnabled();
+        if (manager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            String channelId = summary == null ? BADGE_RESTORE_CHANNEL : summary.getChannelId();
+            boolean canBadgeOnChannel = canShowBadge(manager.getNotificationChannel(channelId));
+            channelAllowsBadge = summary != null && canBadgeOnChannel;
+            restoreAllowed = restoreAllowed && canShowBadge(routineChannel(context)) && canBadgeOnChannel;
+            if (summary != null) {
+                channel = ROUTINE_CHANNEL.equals(channelId) ? "ROUTINE"
+                        : BADGE_RESTORE_CHANNEL.equals(channelId) ? "RESTORE" : "OTHER";
+            }
+        }
+        return BadgeDiagnostics.snapshot(context, summary, channel, channelAllowsBadge, restoreAllowed);
     }
 
     static LauncherBadge.Result refreshVisibleLauncherBadge(Context context) {
@@ -114,11 +135,13 @@ public final class FcmMessageService extends FirebaseMessagingService {
         super.onMessageReceived(message);
         ensureNotificationChannel(this);
 
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager == null) return;
-
         Map<String, String> data = message.getData();
         String kind = data.getOrDefault("kind", "notification");
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null) {
+            BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.POST_FAILED);
+            return;
+        }
         if (!manager.areNotificationsEnabled() && !"badge_sync".equals(kind) && !"notification".equals(kind)) return;
         try {
             switch (kind) {
@@ -142,6 +165,7 @@ public final class FcmMessageService extends FirebaseMessagingService {
                     break;
             }
         } catch (SecurityException ignored) {
+            BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.POST_FAILED);
             // Android notification permission can be revoked while the app is running.
         }
     }
@@ -153,10 +177,18 @@ public final class FcmMessageService extends FirebaseMessagingService {
             count = Integer.parseInt(data.getOrDefault("unreadCount", "0"));
             at = Long.parseLong(data.getOrDefault("countAt", Long.toString(sentAt)));
         } catch (NumberFormatException ignored) {
+            BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.INVALID);
+            return;
+        }
+        if (count < 0 || at <= 0) {
+            BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.INVALID);
             return;
         }
         android.content.SharedPreferences preferences = getSharedPreferences(BADGE_PREFERENCES, MODE_PRIVATE);
-        if (at < preferences.getLong(LAST_COUNT_AT, 0)) return;
+        if (at < preferences.getLong(LAST_COUNT_AT, 0)) {
+            BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.STALE);
+            return;
+        }
         preferences.edit().putLong(LAST_COUNT_AT, at).apply();
         boolean hasSummary = false;
         String summaryChannel = ROUTINE_CHANNEL;
@@ -175,9 +207,12 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 }
             }
         }
-        if (count <= 0 || !manager.areNotificationsEnabled()) {
+        boolean notificationsEnabled = manager.areNotificationsEnabled();
+        if (count == 0 || !notificationsEnabled) {
             manager.cancel(UNREAD_NOTIFICATION);
             LauncherBadge.update(this, 0);
+            BadgeDiagnostics.record(this, kind, count == 0 ? BadgeDiagnostics.Refresh.CLEARED
+                    : BadgeDiagnostics.Refresh.NOTIFICATIONS_BLOCKED);
             return;
         }
         boolean badgeSync = "badge_sync".equals(kind);
@@ -187,11 +222,17 @@ public final class FcmMessageService extends FirebaseMessagingService {
             if (!allowBadge) {
                 if (BADGE_RESTORE_CHANNEL.equals(summaryChannel)) manager.cancel(UNREAD_NOTIFICATION);
                 LauncherBadge.update(this, 0);
+                BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.ROUTINE_CHANNEL_BLOCKED);
                 return;
             }
             // AndroidX's silent flag groups even a single notification. Use an ungrouped,
             // silent channel when restoring, and keep an existing notification on its channel.
             channel = hasSummary ? summaryChannel : BADGE_RESTORE_CHANNEL;
+            if (!canShowBadge(manager.getNotificationChannel(channel))) {
+                LauncherBadge.update(this, 0);
+                BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.SUMMARY_CHANNEL_BLOCKED);
+                return;
+            }
         } else if (!badgeSync && BADGE_RESTORE_CHANNEL.equals(summaryChannel)) {
             // Start a real alert on the audible channel after a silent restoration.
             manager.cancel(UNREAD_NOTIFICATION);
@@ -200,8 +241,12 @@ public final class FcmMessageService extends FirebaseMessagingService {
                 data.get("previewBody"), "You have unread notifications.")
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setNumber(count).setOnlyAlertOnce(badgeSync);
+        Bundle revision = new Bundle();
+        revision.putLong(BadgeDiagnostics.SUMMARY_REVISION, at);
+        alert.addExtras(revision);
         if (badgeSync && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) alert.setSilent(true);
         manager.notify(UNREAD_NOTIFICATION, alert.build());
+        BadgeDiagnostics.record(this, kind, BadgeDiagnostics.Refresh.POST_REQUESTED, at);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             allowBadge = allowBadge && canShowBadge(manager.getNotificationChannel(channel));
         }

@@ -2,6 +2,20 @@ const HANDOFF_STORAGE_KEY = 'fo2-icare-native-fcm-handoff-v1';
 const NATIVE_FCM_FRAGMENT_KEY = 'fo2_fcm=';
 const handoffListeners = new Set<() => void>();
 
+const BADGE_REFRESH_STATES = [
+  'INVALID', 'STALE', 'CLEARED', 'NOTIFICATIONS_BLOCKED', 'ROUTINE_CHANNEL_BLOCKED',
+  'SUMMARY_CHANNEL_BLOCKED', 'POST_FAILED', 'POSTED', 'POST_UNCONFIRMED',
+] as const;
+export type AndroidBadgeRefreshState = (typeof BADGE_REFRESH_STATES)[number];
+
+interface AndroidBadgeDiagnostics {
+  channel?: 'ROUTINE' | 'RESTORE' | 'OTHER';
+  channelAllowsBadge?: boolean;
+  restoreAllowed: boolean;
+  refresh?: AndroidBadgeRefreshState;
+  ageSeconds?: number;
+}
+
 export interface NativeFcmHandoff {
   version: 1 | 2 | 3 | 4;
   deviceId: string;
@@ -14,6 +28,7 @@ export interface NativeFcmHandoff {
   badgeAlert?: 'COUNTED' | 'UNCOUNTED' | 'MISSING';
   previewAlert?: 'PREVIEW' | 'GENERIC';
   badgeRequest?: 'READY' | 'REQUESTED' | 'BLOCKED' | 'UNAVAILABLE' | 'STANDARD';
+  badgeDiagnostics?: AndroidBadgeDiagnostics;
 }
 
 function isUuid(value: unknown): value is string {
@@ -23,6 +38,21 @@ function isUuid(value: unknown): value is string {
 function isAndroidPackage(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 150 &&
     /^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+)+$/.test(value);
+}
+
+function parseBadgeDiagnostics(value: unknown): AndroidBadgeDiagnostics | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { channel, channelAllowsBadge, restoreAllowed, refresh, ageSeconds } = value as Partial<AndroidBadgeDiagnostics>;
+  if (typeof restoreAllowed !== 'boolean') return undefined;
+  const refreshState = BADGE_REFRESH_STATES.find(state => state === refresh);
+  return {
+    channel: channel === 'ROUTINE' || channel === 'RESTORE' || channel === 'OTHER' ? channel : undefined,
+    channelAllowsBadge: typeof channelAllowsBadge === 'boolean' ? channelAllowsBadge : undefined,
+    restoreAllowed,
+    refresh: refreshState,
+    ageSeconds: refreshState && typeof ageSeconds === 'number' && Number.isInteger(ageSeconds) && ageSeconds >= 0 && ageSeconds < 900
+      ? ageSeconds : undefined,
+  };
 }
 
 function parseHandoff(value: unknown): NativeFcmHandoff | null {
@@ -46,6 +76,7 @@ function parseHandoff(value: unknown): NativeFcmHandoff | null {
     badgeRequest: parsed.badgeRequest === 'READY' || parsed.badgeRequest === 'REQUESTED' ||
       parsed.badgeRequest === 'BLOCKED' || parsed.badgeRequest === 'UNAVAILABLE' || parsed.badgeRequest === 'STANDARD'
       ? parsed.badgeRequest : undefined,
+    badgeDiagnostics: parseBadgeDiagnostics(parsed.badgeDiagnostics),
   };
 }
 

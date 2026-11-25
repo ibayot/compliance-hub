@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.22 (from 1.1.21)
+
+Apply `20261125-add-application-changelog-v1.1.22-users.sql` to the verified Users database for the in-app notes. Rebuild the frontend and install the signed 1.1.22 APK. The temporary badge details are in the Android notification bell menu. This release requires no schema changes or backend service rebuild when updating from 1.1.21.
+
 ## For release 1.1.21 (from 1.1.20)
 
 Apply `20261125-add-application-changelog-v1.1.21-users.sql` to the verified Users database to publish the in-app notes. Rebuild the frontend to serve the new signed 1.1.21 APK and its notification details. Install the APK over the previous version. Verify the app icon with existing unread notifications on the Vivo V2427. This release requires no schema changes or backend service rebuild when updating from 1.1.20.

@@ -549,6 +549,7 @@ public final class CertificateSetupActivity extends Activity {
                 handoff.put("badgeRequest", badge.status.name());
                 handoff.put("badgeTarget", badge.target);
                 handoff.put("previewAlert", FcmMessageService.previewAlertStatus(this));
+                handoff.put("badgeDiagnostics", FcmMessageService.badgeDiagnostics(this));
             } catch (Exception ignored) {
                 // These optional details must not interrupt Android alert registration.
             }

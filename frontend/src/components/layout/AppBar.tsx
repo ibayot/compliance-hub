@@ -19,6 +19,7 @@ import {
   Avatar,
   Divider,
   Badge,
+  Stack,
   Switch,
   Button,
   useMediaQuery,
@@ -54,7 +55,25 @@ import { getActiveWebPushWorker, isAndroidBrowser, isHomeScreenApp, promptToInst
 import { Capacitor } from '@capacitor/core';
 import { useSnackbar } from 'notistack';
 import { useMobileNavigation } from '@/contexts/MobileNavigationContext';
-import { getNativeFcmHandoff, getNotificationDeviceId, subscribeNativeFcmHandoff } from '@/lib/native-fcm-handoff';
+import { getNativeFcmHandoff, getNotificationDeviceId, subscribeNativeFcmHandoff, type AndroidBadgeRefreshState } from '@/lib/native-fcm-handoff';
+
+const ANDROID_BADGE_RETRY_DELAY = 17_000;
+const ANDROID_BADGE_REFRESH_RESULTS: Record<AndroidBadgeRefreshState, string> = {
+  INVALID: 'The APK received the refresh but could not read its count.',
+  STALE: 'The APK ignored an older refresh after receiving a newer count.',
+  CLEARED: 'The APK received a zero count and cleared the unread summary.',
+  NOTIFICATIONS_BLOCKED: 'Android had notifications turned off when the refresh arrived.',
+  ROUTINE_CHANNEL_BLOCKED: 'The FO2 iCare Notifications channel blocked badge restoration.',
+  SUMMARY_CHANNEL_BLOCKED: 'The channel selected for the unread summary blocked badge restoration.',
+  POST_FAILED: 'Android rejected the attempt to post the unread summary.',
+  POSTED: 'Android confirmed an active counted notification from this refresh.',
+  POST_UNCONFIRMED: 'The APK requested a counted notification. Android had no matching summary when the app opened.',
+};
+const ANDROID_BADGE_CHANNEL_LABELS = {
+  ROUTINE: 'FO2 iCare Notifications',
+  RESTORE: 'Unread badge updates',
+  OTHER: 'Other FO2 iCare channel',
+};
 
 interface AppBarProps {
   onMenuClick: () => void;
@@ -207,7 +226,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const [pushConfigChecking, setPushConfigChecking] = useState(false);
   const [pushCheckAttempt, setPushCheckAttempt] = useState(0);
   const [fcmDeliveryVersion, setFcmDeliveryVersion] = useState<number>();
-  const [badgeRefreshOutcome, setBadgeRefreshOutcome] = useState<FcmBadgeRefreshOutcome>();
+  const [badgeRefresh, setBadgeRefresh] = useState<{ outcome: FcmBadgeRefreshOutcome; retry: boolean }>();
   const [showDownloadApp, setShowDownloadApp] = useState(false);
   const [showIosProfileDownload, setShowIosProfileDownload] = useState(false);
   const [androidApkUrl, setAndroidApkUrl] = useState<string | null>(null);
@@ -218,6 +237,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const nativeFcmClient = !!nativeFcmHandoff;
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
   const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
+  const nativeBadgeDiagnostics = nativeFcmHandoff?.badgeDiagnostics;
+  const routineBadgeAllowed = nativeFcmHandoff?.routineBadgeAllowed;
   const notificationAccountId = user?.id;
 
   useEffect(() => {
@@ -896,24 +917,38 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [user, fetchNotificationSummary]);
 
   useEffect(() => {
-    setBadgeRefreshOutcome(undefined);
+    setBadgeRefresh(undefined);
     if (notificationAccountId == null || !nativeBadgeDeviceId || !pushEnabled || fcmDeliveryVersion !== 2) return;
     let lastRequestAt = 0;
     let active = true;
-    let restoreMissingAlert = nativeBadgeAlert === 'MISSING' || nativeBadgeAlert === 'UNCOUNTED';
+    let inFlight = false;
+    let retryTimer: number | undefined;
+    let priorityAttempts = 0;
+    const canRestore = (nativeBadgeAlert === 'MISSING' || nativeBadgeAlert === 'UNCOUNTED') &&
+      routineBadgeAllowed !== false && nativeBadgeDiagnostics?.restoreAllowed !== false;
     const refresh = () => {
-      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      if (!active || inFlight || document.visibilityState !== 'visible' || !navigator.onLine) return;
       const now = Date.now();
       if (now - lastRequestAt < 15_000) return;
       lastRequestAt = now;
-      // Request a priority restore once for the unread notification missing at launch.
-      void notificationsApi.refreshFcmBadge(nativeBadgeDeviceId, restoreMissingAlert)
+      const restore = canRestore && (priorityAttempts === 0 ||
+        (priorityAttempts === 1 && prevUnreadCountRef.current > 0));
+      const retry = restore && priorityAttempts === 1;
+      if (restore) priorityAttempts++;
+      inFlight = true;
+      void notificationsApi.refreshFcmBadge(nativeBadgeDeviceId, restore)
+        .catch(() => 'failed' as const)
         .then(outcome => {
+          inFlight = false;
           if (!active) return;
-          if (outcome === 'accepted') restoreMissingAlert = false;
-          if (outcome !== 'recent') setBadgeRefreshOutcome(outcome);
-        })
-        .catch(() => { if (active) setBadgeRefreshOutcome('failed'); });
+          if (outcome && outcome !== 'recent') setBadgeRefresh({ outcome, retry });
+          if (restore && !retry && outcome && outcome !== 'not-ready') {
+            // Allow one more priority request. Firebase acceptance alone is not a device receipt.
+            retryTimer = window.setTimeout(() => {
+              if (priorityAttempts === 1 && prevUnreadCountRef.current > 0) refresh();
+            }, Math.max(0, now + ANDROID_BADGE_RETRY_DELAY - Date.now()));
+          }
+        });
     };
     refresh();
     document.addEventListener('visibilitychange', refresh);
@@ -922,12 +957,14 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     window.addEventListener('online', refresh);
     return () => {
       active = false;
+      window.clearTimeout(retryTimer);
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('pageshow', refresh);
       window.removeEventListener('focus', refresh);
       window.removeEventListener('online', refresh);
     };
-  }, [notificationAccountId, nativeBadgeAlert, nativeBadgeDeviceId, pushEnabled, fcmDeliveryVersion]);
+  }, [notificationAccountId, nativeBadgeAlert, nativeBadgeDeviceId, nativeBadgeDiagnostics,
+    routineBadgeAllowed, pushEnabled, fcmDeliveryVersion]);
 
   // A reconnect may have missed SSE events while the browser was offline.
   // Refresh the authoritative summary immediately so the badge and list catch up.
@@ -1525,9 +1562,47 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
                   {nativeFcmHandoff.badgeLauncher && <> Launcher: {nativeFcmHandoff.badgeLauncher}.</>}
                   {nativeFcmHandoff.previewAlert === 'PREVIEW' && ' The active alert contains a preview.'}
                   {nativeFcmHandoff.previewAlert === 'GENERIC' && ' The active alert contains generic text.'}
-                  {badgeRefreshOutcome === 'accepted' && ' Firebase accepted the latest badge refresh.'}
-                  {badgeRefreshOutcome === 'not-ready' && ' The device registration was unavailable during the badge refresh.'}
-                  {badgeRefreshOutcome === 'failed' && ' The latest badge refresh could not be sent.'}
+                </Typography>
+              )}
+              {nativeBadgeDiagnostics && (
+                <Box component="details" sx={{ mt: 0.75, overflowWrap: 'anywhere' }}>
+                  <Typography component="summary" variant="caption" sx={{ cursor: 'pointer', fontWeight: 600 }}>
+                    Android badge diagnostics
+                  </Typography>
+                  <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {nativeBadgeDiagnostics.refresh
+                        ? ANDROID_BADGE_REFRESH_RESULTS[nativeBadgeDiagnostics.refresh]
+                        : 'No badge refresh was recorded on the phone in the 15 minutes before opening.'}
+                      {nativeBadgeDiagnostics.ageSeconds !== undefined &&
+                        ` Observed ${nativeBadgeDiagnostics.ageSeconds}s before opening.`}
+                    </Typography>
+                    {nativeBadgeDiagnostics.channel && (
+                      <Typography variant="caption" color="text.secondary">
+                        Active summary channel is {ANDROID_BADGE_CHANNEL_LABELS[nativeBadgeDiagnostics.channel]}.
+                        {nativeBadgeDiagnostics.channelAllowsBadge
+                          ? ' Android reports that this channel allows badges.'
+                          : ' Android reports that this channel blocks badges.'}
+                      </Typography>
+                    )}
+                    {!nativeBadgeDiagnostics.restoreAllowed && (
+                      <Typography variant="caption" color="text.secondary">
+                        Android settings blocked silent badge restoration when you opened the app.
+                      </Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      The phone’s result is checked when you reopen FO2 iCare from its Home Screen icon.
+                    </Typography>
+                  </Stack>
+                </Box>
+              )}
+              {nativeFcmClient && badgeRefresh && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {badgeRefresh.outcome === 'accepted' && (badgeRefresh.retry
+                    ? 'Firebase accepted the second badge restore request.'
+                    : 'Firebase accepted the badge refresh request.')}
+                  {badgeRefresh.outcome === 'not-ready' && 'The device registration was unavailable during the badge refresh.'}
+                  {badgeRefresh.outcome === 'failed' && 'The latest badge refresh could not be sent.'}
                 </Typography>
               )}
               {!nativeFcmClient && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
