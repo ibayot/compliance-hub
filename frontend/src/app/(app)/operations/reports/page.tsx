@@ -51,7 +51,7 @@ import {
   Legend,
   type TooltipProps,
 } from 'recharts';
-import { ticketsApi, type RatingsReportResult, type TicketReportResult } from '@/app/api/references';
+import { ticketsApi, type TicketReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { formatPersonName } from '@/lib/utils/person-name';
@@ -239,26 +239,41 @@ function ReportRows({ label, titleColumn, captionColumn, detailsColumn, rows, mo
 
 const ratingDateFormatter = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeZone: 'Asia/Manila' });
 
-function RatingTrendTooltip({ active, label, payload }: TooltipProps<number, string>) {
-  const point = payload?.[0]?.payload as { avgRating: number; count: number } | undefined;
+type RatingBucket = {
+  id: string;
+  kind: 'day' | 'week';
+  label: string;
+  avgRating: number;
+  count: number;
+};
+
+const ratingBucketLabel = (bucket: RatingBucket) => bucket.kind === 'day'
+  ? ratingDateFormatter.format(new Date(`${bucket.label}T00:00:00+08:00`))
+  : `Week ${bucket.label}`;
+
+const ratedTicketCount = (count: number) => `${count} rated ${count === 1 ? 'ticket' : 'tickets'}`;
+
+function RatingTrendTooltip({ active, label, points }: TooltipProps<number, string> & { points: RatingBucket[] }) {
+  const point = points.find((bucket) => bucket.label === label);
   if (!active || !point) return null;
   return (
     <Card variant="outlined" sx={{ p: 1.25 }}>
-      <Typography variant="body2" fontWeight={600}>{label}</Typography>
+      <Typography variant="body2" fontWeight={600}>{ratingBucketLabel(point)}</Typography>
       <Typography variant="body2">Average rating {point.avgRating.toFixed(2)} / 5</Typography>
-      <Typography variant="body2">Rated tickets {point.count}</Typography>
+      <Typography variant="body2">{ratedTicketCount(point.count)}</Typography>
     </Card>
   );
 }
 
-function RatingTrendChart({ points, groupBy }: {
-  points: RatingsReportResult['byDay'] | RatingsReportResult['byWeek'];
-  groupBy: 'date' | 'week';
+function RatingTrendChart({ points, selected, onSelect }: {
+  points: RatingBucket[];
+  selected?: RatingBucket;
+  onSelect?: (id: string) => void;
 }) {
   if (!points.length) return null;
-  const daily = groupBy === 'date';
+  const daily = points[0].kind === 'day';
   return (
-    <Grid item xs={12} md={6}>
+    <Grid item xs={12} md={6} data-rating-trend>
       <Card>
         <CardContent>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -266,10 +281,17 @@ function RatingTrendChart({ points, groupBy }: {
           </Typography>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={points} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
-              <XAxis dataKey={groupBy} tick={{ fontSize: 11 }} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} />
-              <Tooltip content={<RatingTrendTooltip />} />
-              <Bar dataKey="avgRating" name="Average rating" fill={daily ? '#9C27B0' : '#FF9800'} radius={[4, 4, 0, 0]} />
+              <Tooltip content={<RatingTrendTooltip points={points} />} />
+              <Bar dataKey="avgRating" name="Average rating" fill={daily ? '#9C27B0' : '#FF9800'} radius={[4, 4, 0, 0]}
+                cursor={onSelect ? 'pointer' : 'default'}
+                onClick={onSelect && ((entry) => {
+                  const point = points.find((bucket) => bucket.id === entry.payload?.id);
+                  if (point) onSelect(point.id);
+                })}>
+                {points.map((point) => <Cell key={point.id} fillOpacity={selected?.kind === point.kind && selected.id !== point.id ? 0.5 : 1} />)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
@@ -368,6 +390,7 @@ export default function TicketReportsPage() {
   const [ticketType, setTicketType] = useState<string>('');
   const [chartTicketType, setChartTicketType] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'detailed'>('overview');
+  const [ratingBucketSelection, setRatingBucketSelection] = useState<{ scope: string; id: string }>();
 
   // Tabs State
   const [reportSearch, setReportSearch] = useSearchParams();
@@ -393,7 +416,7 @@ export default function TicketReportsPage() {
   const clearChartFilterWhenClickingOutside = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!chartTicketType) return;
     const target = event.target;
-    if (target instanceof Element && target.closest('[data-support-type-chart="true"], button, input, a, [role="combobox"], [role="option"]')) return;
+    if (target instanceof Element && target.closest('[data-support-type-chart="true"], [data-rating-trend], button, input, a, [role="combobox"], [role="option"]')) return;
     setChartTicketType(null);
   };
 
@@ -473,6 +496,31 @@ export default function TicketReportsPage() {
   const error = tab !== 4 && primaryQuery.isError;
   const result = reportQuery.isError ? undefined : reportQuery.data;
   const detailedResult = ratingsQuery.isError ? undefined : ratingsQuery.data;
+  const ratingScope = JSON.stringify([user?.id, canManageReports, reportFilters]);
+  const dayRatingBuckets = React.useMemo<RatingBucket[]>(() => (detailedResult?.byDay ?? []).map((row) => ({
+    id: `day:${row.date}`, kind: 'day', label: row.date, avgRating: row.avgRating, count: row.count,
+  })), [detailedResult]);
+  const weekRatingBuckets = React.useMemo<RatingBucket[]>(() => (detailedResult?.byWeek ?? []).map((row) => ({
+    id: `week:${row.week}`, kind: 'week', label: row.week, avgRating: row.avgRating, count: row.count,
+  })), [detailedResult]);
+  const ratingBuckets = [...dayRatingBuckets, ...weekRatingBuckets];
+  const allRatingRows = detailedResult?.byTicket ?? EMPTY_ROWS;
+  const hasRatingBreakdown = allRatingRows.length > 0 && allRatingRows.every((row) => row.submittedDay && row.submittedWeek);
+  const selectedRatingBucket = hasRatingBreakdown && ratingBucketSelection?.scope === ratingScope
+    ? ratingBuckets.find((bucket) => bucket.id === ratingBucketSelection.id)
+    : undefined;
+  const selectedRatingDay = selectedRatingBucket?.kind === 'day' ? selectedRatingBucket.label : undefined;
+  const selectedRatingWeek = selectedRatingBucket?.kind === 'week' ? selectedRatingBucket.label : undefined;
+  const ratingRows = React.useMemo(() => {
+    if (selectedRatingDay) return allRatingRows.filter((row) => row.submittedDay === selectedRatingDay);
+    if (selectedRatingWeek) return allRatingRows.filter((row) => row.submittedWeek === selectedRatingWeek);
+    return allRatingRows;
+  }, [allRatingRows, selectedRatingDay, selectedRatingWeek]);
+  const ratingDetailTitle = selectedRatingBucket ? `Ratings per ticket · ${ratingBucketLabel(selectedRatingBucket)}` : 'Ratings per ticket';
+  const selectRatingBucket = (id: string) => {
+    setRatingBucketSelection(id ? { scope: ratingScope, id } : undefined);
+  };
+  useEffect(() => { setRatingBucketSelection(undefined); }, [ratingScope]);
   const slaInsights = insightsQuery.isError ? EMPTY_ROWS : insightsQuery.data ?? EMPTY_ROWS;
   const issueCountsData = issuesQuery.isError ? EMPTY_ROWS : issuesQuery.data ?? EMPTY_ROWS;
   const technicians = techniciansQuery.data ?? EMPTY_ROWS;
@@ -653,9 +701,15 @@ export default function TicketReportsPage() {
       : tab === 2 ? 'SLA Insights' : 'Performance';
   const chartSpecs = React.useMemo<ReportVisualSpec[]>(() => {
     if (viewMode === 'detailed') return detailedResult ? [
-      { id: 'overview_detailed_day_chart', title: 'Average rating by day', kind: 'chart', values: detailedResult.byDay.map((row) => ({ label: row.date, value: Number(row.avgRating || 0) })), headers: ['Day', 'Average Rating (out of 5)'] },
-      { id: 'overview_detailed_week_chart', title: 'Average rating by week', kind: 'chart', values: detailedResult.byWeek.map((row) => ({ label: row.week, value: Number(row.avgRating || 0) })), headers: ['Week', 'Average Rating (out of 5)'] },
-      { id: 'overview_ratings_table', title: 'Ratings per ticket', kind: 'table', values: detailedResult.byTicket.map((row) => ({ label: row.ticketNumber, value: Number(row.rating || 0) })), headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'], rows: detailedResult.byTicket.map((row) => [row.ticketNumber, row.subject, ratingDateFormatter.format(new Date(row.submittedAt)), String(row.rating), row.comment || '—']) },
+      ...([dayRatingBuckets, weekRatingBuckets].filter((buckets) => buckets.length > 0).map((buckets): ReportVisualSpec => {
+        const kind = buckets[0].kind;
+        return { id: `overview_detailed_${kind}_chart`, title: `Average rating by ${kind}`, kind: 'chart',
+          values: buckets.map((bucket) => ({ label: bucket.label, value: bucket.avgRating })),
+          headers: [kind === 'day' ? 'Day' : 'Week', 'Average Rating (out of 5)', 'Rated Tickets'],
+          rows: buckets.map((bucket) => [bucket.label, bucket.avgRating.toFixed(2), String(bucket.count)]),
+        };
+      })),
+      { id: 'overview_ratings_table', title: ratingDetailTitle, kind: 'table', values: ratingRows.map((row) => ({ label: row.ticketNumber, value: row.rating })), headers: ['Ticket', 'Subject', 'Submitted At', 'Rating', 'Comment'], rows: ratingRows.map((row) => [row.ticketNumber, row.subject, ratingDateFormatter.format(new Date(row.submittedAt)), String(row.rating), row.comment || '—']) },
     ] : [];
     if (!result) return [];
     const supportTypeValues = result.avgRatingByType.map((row) => ({
@@ -693,7 +747,7 @@ export default function TicketReportsPage() {
       );
     }
     return baseOverview;
-  }, [result, tab, issuesSubTab, categoryData, selectedCategoryName, drillDownData, allIssuesAggregated, slaInsights, pieData, escalationPieData, slaPieData, viewMode, detailedResult, isIndividualView]);
+  }, [result, pieData, escalationPieData, slaPieData, viewMode, detailedResult, isIndividualView, dayRatingBuckets, weekRatingBuckets, ratingDetailTitle, ratingRows]);
 
   const printSpecs = React.useMemo<ReportVisualSpec[]>(() => {
     if (tab === 1 && issuesSubTab === 0) return [
@@ -1620,23 +1674,39 @@ export default function TicketReportsPage() {
                   <Typography variant="body2" color="text.secondary">
                     Ratings submitted in {periodLabel} {year} (Manila time).
                     {detailedResult.summary.count > 0 &&
-                      ` ${detailedResult.summary.count} rated ${detailedResult.summary.count === 1 ? 'ticket' : 'tickets'} · ${detailedResult.summary.average.toFixed(2)} / 5 average`}
+                      ` Period total: ${ratedTicketCount(detailedResult.summary.count)} · ${detailedResult.summary.average.toFixed(2)} / 5 average`}
                   </Typography>
                 </Grid>
                 {detailedResult.byTicket.length > 0 && (
                   <>
-                    <RatingTrendChart points={detailedResult.byDay} groupBy="date" />
-                    <RatingTrendChart points={detailedResult.byWeek} groupBy="week" />
+                    <RatingTrendChart points={dayRatingBuckets} selected={selectedRatingBucket} onSelect={hasRatingBreakdown ? selectRatingBucket : undefined} />
+                    <RatingTrendChart points={weekRatingBuckets} selected={selectedRatingBucket} onSelect={hasRatingBreakdown ? selectRatingBucket : undefined} />
                   </>
                 )}
                 <Grid item xs={12}>
                   <Card>
                     <CardContent>
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                        Ratings Per Ticket
+                        {ratingDetailTitle}
                       </Typography>
+                      {hasRatingBreakdown && (
+                        <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} spacing={1.5} sx={{ mb: 2 }}>
+                          <TextField select size="small" label="Rating dates" value={selectedRatingBucket?.id ?? ''}
+                            onChange={(event) => selectRatingBucket(event.target.value)} sx={{ minWidth: { sm: 250 } }}>
+                            <MenuItem value="">Full selected period</MenuItem>
+                            {ratingBuckets.map((bucket) => (
+                              <MenuItem key={bucket.id} value={bucket.id}>
+                                {ratingBucketLabel(bucket)} · {ratedTicketCount(bucket.count)}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                          <Typography variant="body2" role="status" color="text.secondary">
+                            {ratedTicketCount(ratingRows.length)} in {selectedRatingBucket ? ratingBucketLabel(selectedRatingBucket) : 'the full selected period'}
+                          </Typography>
+                        </Stack>
+                      )}
                       <ReportRows label="Ratings per ticket" titleColumn="Subject" captionColumn="Ticket" detailsColumn="Comment"
-                        mobile={mobileReportRows} rows={detailedResult.byTicket.map((ticket) => ({
+                        mobile={mobileReportRows} rows={ratingRows.map((ticket) => ({
                           id: ticket.ticketId,
                           title: ticket.subject,
                           caption: ticket.ticketNumber,
@@ -1646,7 +1716,7 @@ export default function TicketReportsPage() {
                           ],
                           details: ticket.comment ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{ticket.comment}</Typography> : undefined,
                         }))} />
-                      {!detailedResult.byTicket.length && <Typography color="text.secondary">No rated tickets found.</Typography>}
+                      {!ratingRows.length && <Typography color="text.secondary">No rated tickets found.</Typography>}
                     </CardContent>
                   </Card>
                 </Grid>

@@ -5300,17 +5300,29 @@ export class TicketService implements OnModuleInit {
     const tickets = await qb.orderBy('t.satisfactionSubmittedAt', 'DESC').addOrderBy('t.id', 'DESC').getMany();
     await this.enrichTicketsWithUsers(tickets);
 
-    const byTicket = tickets.map((t) => ({
-      ticketId: t.id,
-      ticketNumber: t.ticketNumber,
-      subject: t.subject,
-      rating: t.satisfactionRating,
-      comment: t.satisfactionComment,
-      formData: t.satisfactionFormData,
-      submittedAt: t.satisfactionSubmittedAt,
-      technicianId: t.assignedToId ?? null,
-      technicianName: t.assignedTo ? formatPersonName(t.assignedTo, 'Unknown') : 'Unknown',
-    }));
+    const byTicket = tickets.map((t) => {
+      const submittedAt = t.satisfactionSubmittedAt!;
+      const submittedDay = this.getManilaDateString(submittedAt);
+      // The Thursday of the Manila calendar week determines its ISO week and year.
+      const thursday = new Date(`${submittedDay}T00:00:00Z`);
+      thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+      const weekYear = thursday.getUTCFullYear();
+      const weekNo = 1 + Math.floor((thursday.getTime() - Date.UTC(weekYear, 0, 1)) / (7 * 86_400_000));
+      const submittedWeek = `${weekYear}-W${weekNo.toString().padStart(2, '0')}`;
+      return {
+        ticketId: t.id,
+        ticketNumber: t.ticketNumber,
+        subject: t.subject,
+        rating: t.satisfactionRating!,
+        comment: t.satisfactionComment,
+        formData: t.satisfactionFormData,
+        submittedAt,
+        submittedDay,
+        submittedWeek,
+        technicianId: t.assignedToId ?? null,
+        technicianName: t.assignedTo ? formatPersonName(t.assignedTo, 'Unknown') : 'Unknown',
+      };
+    });
 
     const byTechnician: Record<string, { total: number; count: number }> = {};
     let totalSum = 0;
@@ -5335,21 +5347,13 @@ export class TicketService implements OnModuleInit {
 
     const byDayMap: Record<string, { total: number; count: number }> = {};
     const byWeekMap: Record<string, { total: number; count: number }> = {};
-    for (const t of tickets) {
-      const dateStr = this.getManilaDateString(t.satisfactionSubmittedAt!);
-      if (!byDayMap[dateStr]) byDayMap[dateStr] = { total: 0, count: 0 };
-      byDayMap[dateStr].total += t.satisfactionRating!;
-      byDayMap[dateStr].count += 1;
-
-      // Use the same Manila calendar day as the day chart, then locate its ISO-week Thursday.
-      const thursday = new Date(`${dateStr}T00:00:00Z`);
-      thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
-      const weekYear = thursday.getUTCFullYear();
-      const weekNo = 1 + Math.floor((thursday.getTime() - Date.UTC(weekYear, 0, 1)) / (7 * 86_400_000));
-      const weekStr = `${weekYear}-W${weekNo.toString().padStart(2, '0')}`;
-      if (!byWeekMap[weekStr]) byWeekMap[weekStr] = { total: 0, count: 0 };
-      byWeekMap[weekStr].total += t.satisfactionRating!;
-      byWeekMap[weekStr].count += 1;
+    for (const { submittedDay, submittedWeek, rating } of byTicket) {
+      const day = byDayMap[submittedDay] ??= { total: 0, count: 0 };
+      day.total += rating;
+      day.count += 1;
+      const week = byWeekMap[submittedWeek] ??= { total: 0, count: 0 };
+      week.total += rating;
+      week.count += 1;
     }
     const byDay = Object.keys(byDayMap)
       .sort()

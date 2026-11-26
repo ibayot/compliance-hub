@@ -673,6 +673,8 @@ export interface RatingsReportResult {
     rating: number;
     comment: string | null;
     submittedAt: string;
+    submittedDay?: string;
+    submittedWeek?: string;
     technicianId: number | null;
   }>;
   byTechnician: Record<string, { average: number; count: number }>;

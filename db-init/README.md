@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.27 (from 1.1.26)
+
+Rebuild the frontend and Ticketing service. Ratings use the existing schema. Apply `20261126-add-application-changelog-v1.1.27-users.sql` to the verified Users database to publish the in-app notes.
+
 ## For release 1.1.26 (from 1.1.25)
 
 Rebuild the frontend and Ticketing service. This release uses the existing 1.1.25 database schema and mobile installers. Apply `20261126-add-application-changelog-v1.1.26-users.sql` to the verified Users database to publish the in-app notes.
