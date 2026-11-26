@@ -70,15 +70,17 @@ export class AuthService {
 
   private buildAuthResponse(
     user: User,
-    tokens: { accessToken: string; refreshToken: string },
+    tokens: { accessToken: string; refreshToken: string; demoRole?: 'user' | 'technician' },
     requiresPasswordChange?: boolean,
     requiresMfa?: boolean,
   ): AuthResponse {
     return {
-      ...tokens,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       requiresPasswordChange,
       requiresMfa,
       user: {
+        ...(tokens.demoRole ? { demoRole: tokens.demoRole } : {}),
         id: user.id,
         email: user.email,
         firstName: user.firstName,
@@ -141,13 +143,13 @@ export class AuthService {
       throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
-    await this.outboundEmailPolicy.assertAccountAccess(user.id);
+    const demo = await this.outboundEmailPolicy.assertAccountAccess(user.id);
 
     // Record login timestamp for staff activity tracking
-    await this.usersService.recordLogin(user.id);
-
-    // Emit event for ticketing/attendance services
-    await this.eventBus.publish('user.login', { userId: user.id });
+    if (!demo) {
+      await this.usersService.recordLogin(user.id);
+      await this.eventBus.publish('user.login', { userId: user.id });
+    }
 
     // Check if user is using the default password
     const securityConfig = await this.securityConfigService.getConfig();
@@ -173,10 +175,10 @@ export class AuthService {
   }
 
   private async startMfaChallenge(user: User, securityConfig: { mfaTestMode: boolean }, options: { resend?: boolean; tempToken?: string } = {}): Promise<MfaChallengeResponse> {
-      await this.outboundEmailPolicy.assertAccountAccess(user.id);
+      const demo = await this.outboundEmailPolicy.assertAccountAccess(user.id);
       // Generate temp token
       const tempToken = options.tempToken || this.jwtService.sign(
-        { sub: user.id, isTemp: true },
+        { sub: user.id, isTemp: true, ...(demo ? { demoRunId: demo.id } : {}) },
         { expiresIn: '15m', issuer: this.jwtIssuer, audience: this.jwtAudience },
       );
 
@@ -227,7 +229,7 @@ export class AuthService {
     return this.ticketingHttpClient.isAuthenticationEmailEnabled();
   }
 
-  private mfaUserIdFromToken(tempToken: string): number {
+  private async mfaUserIdFromToken(tempToken: string): Promise<number> {
     let payload: any;
     try {
       payload = this.jwtService.verify(tempToken, { issuer: this.jwtIssuer, audience: this.jwtAudience, algorithms: ['HS256'] });
@@ -237,11 +239,12 @@ export class AuthService {
     if (payload?.isTemp !== true || !Number.isSafeInteger(payload.sub) || payload.sub < 1) {
       throw new UnauthorizedException('Invalid temporary token payload.');
     }
+    await this.outboundEmailPolicy.assertAccountAccess(payload.sub, { runId: payload.demoRunId });
     return payload.sub;
   }
 
   async resendMfaCode(tempToken: string): Promise<{ message: string; resendAfterSeconds: number; testModeCode?: string }> {
-    const userId = this.mfaUserIdFromToken(tempToken);
+    const userId = await this.mfaUserIdFromToken(tempToken);
     const user = await this.usersService.findOne(userId);
     if (!user?.active) throw new UnauthorizedException('Account is unavailable. Please sign in again.');
     const config = await this.securityConfigService.getConfig();
@@ -309,13 +312,13 @@ export class AuthService {
       throw mfaFailure(HttpStatus.TOO_MANY_REQUESTS, 'MFA_ACCOUNT_LOCKED', 'Your account is locked for 15 minutes after repeated MFA failures.');
     }
 
-    await this.outboundEmailPolicy.assertAccountAccess(user.id);
+    const demo = await this.outboundEmailPolicy.assertAccountAccess(user.id);
 
     // Record login timestamp for staff activity tracking
-    await this.usersService.recordLogin(user.id);
-
-    // Emit event for ticketing/attendance services
-    await this.eventBus.publish('user.login', { userId: user.id });
+    if (!demo) {
+      await this.usersService.recordLogin(user.id);
+      await this.eventBus.publish('user.login', { userId: user.id });
+    }
 
     const isUsingDefaultPassword = await bcrypt.compare(
       securityConfig.defaultPassword,
@@ -397,8 +400,7 @@ export class AuthService {
     rememberDevice: boolean,
     incomingDeviceToken?: string,
   ): Promise<any> {
-    const userId = this.mfaUserIdFromToken(tempToken);
-    await this.outboundEmailPolicy.assertAccountAccess(userId);
+    const userId = await this.mfaUserIdFromToken(tempToken);
     await this.usersService.consumeMfaChallenge(userId, code);
     const user = await this.usersService.findOne(userId);
     if (!user?.active) throw new UnauthorizedException('Account is unavailable.');
@@ -428,8 +430,9 @@ export class AuthService {
 
   async generateTokens(
     user: User,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    await this.outboundEmailPolicy.assertAccountAccess(user.id);
+    session?: { runId?: string },
+  ): Promise<{ accessToken: string; refreshToken: string; demoRole?: 'user' | 'technician' }> {
+    const demo = await this.outboundEmailPolicy.assertAccountAccess(user.id, session);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -437,6 +440,7 @@ export class AuthService {
       units: user.units?.map((unit) => unit.id) || [],
       staffId: user.staffId,
       jti: crypto.randomUUID(),
+      ...(demo ? { demoRunId: demo.id } : {}),
     };
 
     const isVaptMode = process.env.VAPT_MODE === 'true';
@@ -458,7 +462,7 @@ export class AuthService {
       }),
     ]);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, demoRole: demo?.role };
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -480,9 +484,7 @@ export class AuthService {
         throw new UnauthorizedException('Account has been deactivated.');
       }
 
-      await this.outboundEmailPolicy.assertAccountAccess(user.id);
-
-      const tokens = await this.generateTokens(user);
+      const tokens = await this.generateTokens(user, { runId: payload.demoRunId });
       await this.tokenBlacklistRepo.save({
         tokenJti: payload.jti,
         expiresAt: new Date(payload.exp * 1000),
@@ -504,15 +506,16 @@ export class AuthService {
     return payload?.exp ? Math.max(0, payload.exp * 1000 - Date.now()) : 0;
   }
 
-  async getProfile(userId: number): Promise<Record<string, any>> {
-    const { profile } = await this.getSessionProfile(userId);
+  async getProfile(userId: number, demoRole?: 'user' | 'technician'): Promise<Record<string, any>> {
+    const { profile } = await this.getSessionProfile(userId, undefined, demoRole);
     return profile!;
   }
 
-  async getSessionProfile(userId: number, knownRevision?: string) {
+  async getSessionProfile(userId: number, knownRevision?: string, demoRole?: 'user' | 'technician') {
     const { user, settings, capabilities } = await this.usersService.findForAuthProfile(userId);
     this.roleCapabilitiesService?.rememberDatabaseRole(user.role, capabilities);
     const profile = {
+      ...(demoRole ? { demoRole } : {}),
       id: user.id,
       email: user.email,
       firstName: user.firstName,

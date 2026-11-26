@@ -1,4 +1,6 @@
 'use client';
+
+import DemoModeSettings from '@/components/demo/DemoModeSettings';
 import { displayCurrentAppBrand } from '@/lib/utils/app-branding';
 import StickyTabs from '@/components/layout/StickyTabs';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout';
@@ -2817,6 +2819,7 @@ export default function SettingsPage() {
 {currentTab.label === 'Security Settings' && (
         <Box>
           <SecuritySettingsCard />
+          <DemoModeSettings />
         </Box>
       )}
 </WorkspaceLayout>

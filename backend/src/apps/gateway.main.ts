@@ -335,6 +335,8 @@ async function bootstrap() {
   const registerServiceRoutes = (prefix: '/api' | '/api/v1') => {
     app.use(`${prefix}/auth`, createServiceProxy(`${usersServiceUrl}/api/auth`, 'users'));
     app.use(`${prefix}/users`, createServiceProxy(`${usersServiceUrl}/api/users`, 'users'));
+    app.use(`${prefix}/demo-mode`, createServiceProxy(`${usersServiceUrl}/api/demo-mode`, 'users'));
+    app.use(`${prefix}/demo-tickets`, createServiceProxy(`${ticketingServiceUrl}/api/demo-tickets`, 'ticketing'));
     app.use(`${prefix}/integrations/staff`, createServiceProxy(`${usersServiceUrl}/api/integrations/staff`, 'users'));
     app.use(`${prefix}/integrations/server-admin`, createServiceProxy(`${ticketingServiceUrl}/api/integrations/server-admin`, 'ticketing'));
     app.use(`${prefix}/units`, createServiceProxy(`${usersServiceUrl}/api/units`, 'users'));

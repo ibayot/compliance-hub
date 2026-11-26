@@ -111,6 +111,8 @@ services:
       # The local Docker database does not contain the staging/production DTR view.
       # This enables the Attendance Admin PRESENT fallback for local testing.
       - DTR_VIEW_ENABLED=false
+      - DEMO_DB_USERNAME=${DEMO_DB_USERNAME:-}
+      - DEMO_DB_PASSWORD=${DEMO_DB_PASSWORD:-}
       - COMMENT_ATTACHMENT_STORAGE_ROOT=/app/uploads/comments
       # Read only from the project-root environment; do not share this integration key with other services.
       - SERVER_ADMIN_TICKETS_API_KEY=${SERVER_ADMIN_TICKETS_API_KEY:-}

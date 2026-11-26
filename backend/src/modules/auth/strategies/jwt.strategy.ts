@@ -30,12 +30,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       issuer: configService.get('JWT_ISSUER') || 'compliance-hub-api',
       audience: configService.get('JWT_AUDIENCE') || 'compliance-hub-client',
       algorithms: ['HS256'],
+      passReqToCallback: true,
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(request: { method: string; path: string }, payload: JwtPayload) {
     if (payload.isTemp) throw new UnauthorizedException('Complete MFA verification before accessing the application.');
-    const user = await this.outboundEmailPolicy.authorizeRequestAccount(payload.sub, payload.jti);
+    const demoSessionRoutes = new Set([
+      'GET /api/auth/me', 'GET /api/auth/session', 'POST /api/auth/change-password',
+      'POST /api/auth/reauthenticate', 'POST /api/auth/generate-random', 'POST /api/auth/generate-passphrase',
+    ]);
+    const demoRunId = demoSessionRoutes.has(`${request.method} ${request.path}`) ? payload.demoRunId : undefined;
+    const user = await this.outboundEmailPolicy.authorizeRequestAccount(payload.sub, payload.jti, demoRunId);
 
     return {
       id: user.id,
@@ -43,6 +49,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       units: payload.units,
       staffId: user.staffId,
+      ...(user.demo ? { demoRole: user.demo.role } : {}),
     };
   }
 }

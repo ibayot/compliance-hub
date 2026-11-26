@@ -1,4 +1,5 @@
 export interface User {
+  demoRole?: 'user' | 'technician';
   id: number;
   email: string;
   firstName: string;

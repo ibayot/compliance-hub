@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersHttpClient } from '../common/http-clients/users.http-client';
-function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
+export function getCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
   return cookieHeader
     ?.split(';')
     .map((value) => value.trim())

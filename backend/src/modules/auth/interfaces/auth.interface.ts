@@ -6,6 +6,7 @@ export interface JwtPayload {
   staffId?: string;
   jti?: string;
   isTemp?: boolean;
+  demoRunId?: string;
 }
 
 export interface AuthResponse {
@@ -14,6 +15,7 @@ export interface AuthResponse {
   requiresPasswordChange?: boolean;
   requiresMfa?: boolean;
   user: {
+    demoRole?: 'user' | 'technician';
     id: number;
     email: string;
     firstName: string;

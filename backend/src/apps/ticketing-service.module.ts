@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import * as Joi from 'joi';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TicketsModule } from '../modules/tickets/tickets.module';
+import { DemoTicketsModule } from '../modules/demo-tickets/demo-tickets.module';
 import { TicketingJwtStrategy } from './ticketing-jwt.strategy';
 import { HttpClientsModule } from '../common/http-clients/http-clients.module';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
@@ -57,6 +58,7 @@ import { AuditVariableSubscriber } from '../shared/audit/audit.subscriber';
     ScheduleModule.forRoot(),
     PassportModule,
     TicketsModule,
+    DemoTicketsModule,
     HttpClientsModule,
   ],
   providers: [

@@ -25,6 +25,8 @@ import { StaffDirectorySyncService } from './staff-directory-sync.service';
 import { StaffUnitDirectoryService } from './staff-unit-directory.service';
 import { StaffUnitDirectoryController } from './staff-unit-directory.controller';
 import { StaffDirectoryManagementController, StaffDirectoryIntegrationController, StaffDirectoryKeyGuard } from './staff-directory.controller';
+import { DemoModeService } from './demo-mode.service';
+import { DemoModeController } from './demo-mode.controller';
 
 @Module({
   imports: [
@@ -42,11 +44,12 @@ import { StaffDirectoryManagementController, StaffDirectoryIntegrationController
     EventBusModule,
   ],
   // Register the one-segment static directory route before UsersController's /users/:id.
-  controllers: [SecurityConfigController, StaffUnitDirectoryController, UsersController, FeedbackController, StaffDirectoryManagementController, StaffDirectoryIntegrationController],
+  controllers: [DemoModeController, SecurityConfigController, StaffUnitDirectoryController, UsersController, FeedbackController, StaffDirectoryManagementController, StaffDirectoryIntegrationController],
   providers: [
     UsersService,
     UnitSyncService,
     OutboundEmailPolicyService,
+    DemoModeService,
     StaffDirectoryStore,
     StaffDirectorySyncService,
     StaffUnitDirectoryService,
@@ -57,6 +60,7 @@ import { StaffDirectoryManagementController, StaffDirectoryIntegrationController
     CapabilityGuard,
   ],
   exports: [
+    DemoModeService,
     UsersService,
     UnitSyncService,
     OutboundEmailPolicyService,

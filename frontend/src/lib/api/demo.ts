@@ -1,0 +1,62 @@
+import { apiClient } from './client';
+
+export const demoSupportTypes = ['IT Support', 'Desktop Support', 'Pantawid ICT Support', 'Specialized Concerns'] as const;
+export const demoStatuses = { assigned: 'Assigned', in_progress: 'In Progress', resolved: 'Resolved', closed: 'Closed' };
+
+export interface DemoTicketSummary {
+  id: string;
+  runId: string;
+  ticketNumber: string;
+  subject: string;
+  supportType: typeof demoSupportTypes[number];
+  status: keyof typeof demoStatuses;
+  createdAt: string;
+}
+
+export interface DemoTicket extends DemoTicketSummary {
+  requesterId: number;
+  technicianId: number;
+  filedBy: number;
+  description: string;
+  resolutionNotes: string | null;
+  comments: Array<{ id: number; authorId: number; body: string; createdAt: string }>;
+  events: Array<{ id: number; actorId: number; action: keyof typeof demoStatuses; createdAt: string }>;
+  attachments: Array<{ id: string; fileName: string; mimeType: string }>;
+  rating: { rating: number; feedback: string | null; createdAt: string } | null;
+}
+
+export interface DemoState {
+  active: { id: string; requesterId: number; technicianId: number } | null;
+  retained: Array<{ id: string; purgeAfter: string }>;
+  candidates: Array<{ id: number; email: string; demoRole: 'user' | 'technician' }>;
+}
+
+const path = '/demo-tickets';
+export const demoApi = {
+  state: () => apiClient.get<DemoState>('/demo-mode').then(res => res.data),
+  ready: () => apiClient.get<{ ready: boolean }>(`${path}/admin/readiness`).then(res => res.data.ready),
+  enable: (requesterId: number, technicianId: number) =>
+    apiClient.post<DemoState>('/demo-mode', { requesterId, technicianId }).then(res => res.data),
+  disable: () => apiClient.delete<DemoState>('/demo-mode').then(res => res.data),
+  list: (page: number) => apiClient.get<{ items: DemoTicketSummary[]; hasMore: boolean }>(path, { params: { page } }).then(res => res.data),
+  detail: (id: string) => apiClient.get<DemoTicket>(`${path}/${id}`).then(res => res.data),
+  create: (subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
+    apiClient.post<DemoTicket>(path, { subject, description, supportType }).then(res => res.data),
+  comment: (id: string, body: string) => apiClient.post<DemoTicket>(`${path}/${id}/comments`, { body }).then(res => res.data),
+  status: (id: string, status: 'in_progress' | 'resolved', notes?: string) =>
+    apiClient.patch<DemoTicket>(`${path}/${id}/status`, { status, notes }).then(res => res.data),
+  rate: (id: string, rating: number, feedback: string) =>
+    apiClient.post<DemoTicket>(`${path}/${id}/rating`, { rating, feedback }).then(res => res.data),
+  upload: (id: string, file: File) => {
+    const data = new FormData();
+    data.append('file', file);
+    return apiClient.post<DemoTicket>(`${path}/${id}/attachments`, data).then(res => res.data);
+  },
+  download: (id: string, attachmentId: string) => apiClient.get<Blob>(`${path}/${id}/attachments/${attachmentId}`, { responseType: 'blob' }).then(res => res.data),
+  remove: (id: string) => apiClient.delete<{ deleted: boolean; filesPending: boolean }>(`${path}/${id}`).then(res => res.data),
+};
+
+export function demoDate(value: string) {
+  const utc = value.endsWith('Z') ? value : value.replace(' ', 'T') + 'Z';
+  return new Date(utc).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' });
+}

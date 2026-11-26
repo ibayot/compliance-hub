@@ -25,6 +25,8 @@ export type AuthorizedAccount = {
   staffId: string | null;
   active: boolean;
   units: Array<{ id: number; active: boolean }>;
+  demoOnly?: boolean;
+  demo?: { id: string; role: 'user' | 'technician'; requesterId: number; technicianId: number };
 };
 
 type AccountAccessSnapshot = {
@@ -81,11 +83,11 @@ export class OutboundEmailPolicyService {
   }
 
   async decideAccountAccess(userId: number): Promise<OutboundEmailDecision> {
-    return (await this.readAccountAccess(userId)).decision;
+    return this.liveDecision(await this.readAccountAccess(userId));
   }
 
   async decideRequestAccountAccess(userId: number, tokenJti: string): Promise<OutboundEmailDecision> {
-    return (await this.readAccountAccess(userId, tokenJti)).decision;
+    return this.liveDecision(await this.readAccountAccess(userId, tokenJti));
   }
 
   async decideAccountAccessBatch(accountIds: number[]) {
@@ -101,8 +103,14 @@ export class OutboundEmailPolicyService {
     }
     return accountIds.map(accountId => ({
       accountId,
-      decision: this.evaluateAccountAccess(rowsByAccount.get(accountId) ?? [], rows[0]).decision,
+      decision: this.liveDecision(this.evaluateAccountAccess(rowsByAccount.get(accountId) ?? [], rows[0])),
     }));
+  }
+
+  private liveDecision(snapshot: AccountAccessSnapshot): OutboundEmailDecision {
+    return snapshot.user?.demoOnly
+      ? { allowed: false, reason: 'recipient_not_eligible' }
+      : snapshot.decision;
   }
 
   /**
@@ -113,6 +121,9 @@ export class OutboundEmailPolicyService {
   private queryAccountAccess(accountIds: number[]) {
     return this.configRepository.createQueryBuilder('policy')
       .leftJoin(User, 'user', 'user.id IN (:...accountIds)', { accountIds })
+      .leftJoin('demo_accounts', 'demoAccount', 'demoAccount.user_id = user.id')
+      .leftJoin('demo_mode', 'demoMode', 'demoMode.id = 1')
+      .leftJoin('demo_runs', 'demoRun', 'demoRun.id = demoMode.active_run_id AND demoRun.closed_at IS NULL AND (demoRun.requester_id = user.id OR demoRun.technician_id = user.id)')
       .leftJoin(
         'user.units',
         'unit',
@@ -133,6 +144,12 @@ export class OutboundEmailPolicyService {
       .addSelect('user.role', 'userRole')
       .addSelect('user.staffId', 'userStaffId')
       .addSelect('user.active', 'userActive')
+      .addSelect('user.firstName', 'firstName')
+      .addSelect('user.lastName', 'lastName')
+      .addSelect('demoAccount.user_id', 'demoAccountId')
+      .addSelect('demoRun.id', 'demoRunId')
+      .addSelect('demoRun.requester_id', 'demoRequesterId')
+      .addSelect('demoRun.technician_id', 'demoTechnicianId')
       .addSelect('unit.id', 'unitId')
       .addSelect('unit.active', 'unitActive')
       .addSelect('capability.isSecuritySettingsAccess', 'securitySettingsAccess')
@@ -188,6 +205,16 @@ export class OutboundEmailPolicyService {
         decision: { allowed: false, reason: 'recipient_not_eligible' },
       };
     }
+    const dedicatedName = String(first.firstName ?? '').trim().toLowerCase() === 'demo' &&
+      ['user', 'technician'].includes(String(first.lastName ?? '').trim().toLowerCase());
+    if (dedicatedName || first.demoAccountId != null) user.demoOnly = true;
+    if (first.demoRunId && first.demoAccountId != null) {
+      const requesterId = Number(first.demoRequesterId);
+      user.demo = {
+        id: String(first.demoRunId), requesterId,
+        technicianId: Number(first.demoTechnicianId), role: id === requesterId ? 'user' : 'technician',
+      };
+    }
 
     const unitMap = new Map<number, boolean>();
     for (const row of rows) {
@@ -240,7 +267,7 @@ export class OutboundEmailPolicyService {
   }
 
   /** Revalidate and return only the current identity projection used by JWT guards. */
-  async authorizeRequestAccount(userId: number, tokenJti?: string): Promise<AuthorizedAccount> {
+  async authorizeRequestAccount(userId: number, tokenJti?: string, demoRunId?: string): Promise<AuthorizedAccount> {
     let snapshot: AccountAccessSnapshot;
     try {
       snapshot = await this.readAccountAccess(userId, tokenJti);
@@ -256,14 +283,24 @@ export class OutboundEmailPolicyService {
       throw new UnauthorizedException('Account not found or has been deactivated');
     }
     this.assertDecisionAllowed(snapshot.decision);
+    if (snapshot.user.demoOnly || demoRunId !== undefined) {
+      if (!tokenJti || !demoRunId || snapshot.user.demo?.id !== demoRunId) {
+        throw new UnauthorizedException('This demo session is no longer available. Please sign in again.');
+      }
+    }
     return snapshot.user;
   }
 
-  async assertAccountAccess(userId: number): Promise<void> {
-    let decision: OutboundEmailDecision;
-    try { decision = await this.decideAccountAccess(userId); }
+  async assertAccountAccess(userId: number, session?: { runId?: string }) {
+    let snapshot: AccountAccessSnapshot;
+    try { snapshot = await this.readAccountAccess(userId); }
     catch { throw new ServiceUnavailableException('Application access could not be verified. Please try again.'); }
-    this.assertDecisionAllowed(decision);
+    this.assertDecisionAllowed(snapshot.decision);
+    const demo = snapshot.user?.demo;
+    if ((snapshot.user?.demoOnly && !demo) || (session && demo?.id !== session.runId)) {
+      throw new UnauthorizedException('This demo session is no longer available. Please sign in again.');
+    }
+    return demo;
   }
 
   private assertDecisionAllowed(decision: OutboundEmailDecision): void {

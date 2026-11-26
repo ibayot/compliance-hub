@@ -40,6 +40,7 @@ const AuditLogsPage = lazy(() => import('@/app/(app)/admin/audit-logs/page'));
 const DutiesPage = lazy(() => import('@/app/(app)/operations/duties/page'));
 const ChangelogManagementPage = lazy(() => import('@/app/(app)/admin/changelog/page'));
 const PublicRatingPage = lazy(() => import('@/app/rate/page'));
+const DemoWorkspace = lazy(() => import('@/components/demo/DemoWorkspace'));
 
 function ProtectedDashboard({
   children,
@@ -49,7 +50,7 @@ function ProtectedDashboard({
   requiredCapability?: keyof RoleCapabilityRecord | Array<keyof RoleCapabilityRecord>;
 
 }) {
-  const { isAuthenticated, loading, myCap, reconnecting, retrySession, logout } = useAuth();
+  const { isAuthenticated, loading, myCap, reconnecting, retrySession, logout, user } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -69,6 +70,8 @@ function ProtectedDashboard({
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search + location.hash }} />;
   }
+
+  if (user?.demoRole) return <Navigate to="/operations/demo" replace />;
 
   // Deep linking allowed
 
@@ -186,7 +189,8 @@ function AppearancePreferenceLoader() {
     if (loading) return;
 
     let active = true;
-    if (!user) {
+    if (!user || user.demoRole) {
+      if (user?.demoRole) setAppearance(DEFAULT_APP_APPEARANCE);
       setAppearanceReady(true);
       return () => {
         active = false;
@@ -211,13 +215,14 @@ function AppearancePreferenceLoader() {
     return () => {
       active = false;
     };
-  }, [loading, setAppearance, setAppearanceReady, user?.id]);
+  }, [loading, setAppearance, setAppearanceReady, user?.id, user?.demoRole]);
 
   return null;
 }
 
 export default function App() {
   const { pathname } = useLocation();
+  const { user, isAuthenticated, loading } = useAuth();
   return (
     <>
     <AppearancePreferenceLoader />
@@ -227,6 +232,10 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/mfa-verify" element={<MfaVerifyPage />} />
+      <Route path="/operations/demo/:ticketId?" element={
+        loading ? <PageLoadingFallback /> : !isAuthenticated ? <Navigate to="/login" replace /> :
+          user?.demoRole ? <DemoWorkspace /> : <Navigate to="/dashboard" replace />
+      } />
       <Route path="/rate" element={<PublicRatingPage />} />
       <Route path="/rate/:token" element={<PublicRatingPage />} />
 

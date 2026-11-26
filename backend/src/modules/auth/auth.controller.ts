@@ -110,15 +110,15 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getProfile(@CurrentUser() user: User) {
-    return this.authService.getProfile(user.id);
+  async getProfile(@CurrentUser() user: User & { demoRole?: 'user' | 'technician' }) {
+    return this.authService.getProfile(user.id, user.demoRole);
   }
 
   @Get('session')
   @Header('Cache-Control', 'private, no-store')
   @UseGuards(JwtAuthGuard)
-  getSessionProfile(@CurrentUser() user: User, @Headers('x-session-profile-revision') revision?: string) {
-    return this.authService.getSessionProfile(user.id, revision);
+  getSessionProfile(@CurrentUser() user: User & { demoRole?: 'user' | 'technician' }, @Headers('x-session-profile-revision') revision?: string) {
+    return this.authService.getSessionProfile(user.id, revision, user.demoRole);
   }
 
   @Post('mfa/send')

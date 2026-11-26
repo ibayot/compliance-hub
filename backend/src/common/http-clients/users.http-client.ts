@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { OutboundEmailDecision } from '../../modules/users/outbound-email-policy.service';
 import { USER_STUB_BATCH_SIZE } from './user-stub-batch';
 
@@ -289,6 +289,34 @@ export class UsersHttpClient {
   }
 
   /** Current approval is an authorization dependency, never optional cached enrichment. */
+  private async requestDemo<T>(path: string, body?: object): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/internal/demo/${path}`, {
+        headers: this.buildHeaders(), signal: AbortSignal.timeout(5000),
+        ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
+      });
+    } catch {
+      throw new ServiceUnavailableException('Demo access could not be verified. Please try again.');
+    }
+    if (response.status === 401) throw new UnauthorizedException('This demo session is unavailable. Please sign in again.');
+    if (response.status === 403) throw new ForbiddenException('Security Settings access is required.');
+    if (!response.ok) throw new ServiceUnavailableException('Demo access could not be verified. Please try again.');
+    return response.json() as Promise<T>;
+  }
+
+  authorizeDemo(userId: number, tokenJti: string, runId: string) {
+    return this.requestDemo<{ id: string; role: 'user' | 'technician'; requesterId: number; technicianId: number }>('authorize', { userId, tokenJti, runId });
+  }
+
+  authorizeDemoAdministrator(userId: number, tokenJti: string) {
+    return this.requestDemo<{ allowed: true }>('authorize-administrator', { userId, tokenJti });
+  }
+
+  listExpiredDemoRuns() { return this.requestDemo<Array<{ id: string }>>('expired'); }
+
+  acknowledgeDemoPurge(id: string) { return this.requestDemo<{ acknowledged: true }>(`expired/${id}/purged`, {}); }
+
   async requireAccountAccess(userId: number, tokenJti?: string): Promise<void> {
     if (!Number.isSafeInteger(userId) || userId < 1) throw new UnauthorizedException('Invalid account.');
     const controller = new AbortController();

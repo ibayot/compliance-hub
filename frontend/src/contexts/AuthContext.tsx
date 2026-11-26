@@ -36,6 +36,7 @@ import { Preferences } from '@capacitor/preferences';
 import { usersApi, RoleCapabilityRecord } from '@/lib/api/users';
 import { ReadOptions } from '@/lib/api/bounded-read';
 import ForcePasswordChangeModal from '@/components/ForcePasswordChangeModal';
+import DemoPasswordChangeModal from '@/components/demo/DemoPasswordChangeModal';
 import { cancelSessionRenewal, tokenStore } from '@/lib/api/client';
 import { DEFAULT_IDLE_LOCK_MINUTES, isValidIdleLockMinutes } from '@/lib/utils/session-policy';
 import { canRecoverSession, completeInteractiveSignIn, hasSignedOut, isApplicationPath, isRejectedSession, isSignOutStorageEvent, markSessionSignedOut, observeSessionSignOut, readSessionActivity, recoveryGeneration, rememberSessionActivity } from '@/lib/auth/session-recovery';
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
+  const PasswordChangeModal = user?.demoRole ? DemoPasswordChangeModal : ForcePasswordChangeModal;
   const [myCap, setMyCap] = useState<RoleCapabilityRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
@@ -714,7 +716,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       </Dialog>
 
       {user && (
-        <ForcePasswordChangeModal
+        <PasswordChangeModal
           open={requiresPasswordChange}
           onClose={() => {
             // Re-fetch profile to confirm password was actually changed server-side
@@ -726,7 +728,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (!profile.requiresPasswordChange) {
                 setRequiresPasswordChange(false);
               }
-            }).catch(() => setRequiresPasswordChange(false));
+            }).catch(() => {
+              if (!user.demoRole) setRequiresPasswordChange(false);
+            });
           }}
           user={user}
         />

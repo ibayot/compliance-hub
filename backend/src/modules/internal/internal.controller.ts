@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, NotFoundException, UseGuards, ParseIntPipe, Post, Body, Optional, ServiceUnavailableException, Query, ForbiddenException, ParseUUIDPipe } from '@nestjs/common';
 import { OutboundEmailPolicyService, OutboundEmailRecipientDto } from '../users/outbound-email-policy.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service';
@@ -8,6 +8,7 @@ import { InternalServiceGuard } from '../../common/guards/internal-service.guard
 import { ACCOUNT_ACCESS_BATCH_SIZE } from '../../common/auth/account-access-batch';
 import { AuthorizeAccountAccessDto } from './dto/authorize-account-access.dto';
 import { USER_STUB_BATCH_SIZE } from '../../common/http-clients/user-stub-batch';
+import { DemoModeService } from '../users/demo-mode.service';
 
 /**
  * InternalController — inter-service API endpoints for users-service.
@@ -35,7 +36,36 @@ export class InternalController {
     private readonly unitsService: UnitsService,
     private readonly roleCapabilitiesService: RoleCapabilitiesService,
     @Optional() private readonly outboundEmailPolicy?: OutboundEmailPolicyService,
+    @Optional() private readonly demoMode?: DemoModeService,
   ) {}
+
+  @Post('demo/authorize')
+  async authorizeDemo(@Body('userId', ParseIntPipe) userId: number, @Body('tokenJti', ParseUUIDPipe) jti: string,
+    @Body('runId', ParseUUIDPipe) runId: string) {
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Demo access could not be verified.');
+    const account = await this.outboundEmailPolicy.authorizeRequestAccount(userId, jti, runId);
+    return account.demo;
+  }
+
+  @Post('demo/authorize-administrator')
+  async authorizeDemoAdministrator(@Body() dto: AuthorizeAccountAccessDto) {
+    if (!this.outboundEmailPolicy) throw new ServiceUnavailableException('Demo access could not be verified.');
+    const account = await this.outboundEmailPolicy.authorizeRequestAccount(dto.userId, dto.tokenJti);
+    if (!this.roleCapabilitiesService.isSecuritySettingsAccess(account.role)) throw new ForbiddenException();
+    return { allowed: true };
+  }
+
+  @Get('demo/expired')
+  async expiredDemoRuns() {
+    if (!this.demoMode) throw new ServiceUnavailableException('Demo cleanup is unavailable.');
+    return this.demoMode.expired();
+  }
+
+  @Post('demo/expired/:id/purged')
+  async markDemoRunPurged(@Param('id', ParseUUIDPipe) id: string) {
+    if (!this.demoMode) throw new ServiceUnavailableException('Demo cleanup is unavailable.');
+    return this.demoMode.markPurged(id);
+  }
 
   @Post('outbound-email/decision')
   decideOutboundEmail(@Body() dto: OutboundEmailRecipientDto) {

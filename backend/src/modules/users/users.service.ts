@@ -775,7 +775,9 @@ const previousValue = value;
           'unit.hasReportorialRequirements', 'unit.createdAt',
         ]);
       }
-      if (ids) query.where('user.id IN (:...ids)', { ids });
+      query.where('NOT EXISTS (SELECT 1 FROM demo_accounts demo WHERE demo.user_id = user.id)')
+        .andWhere("NOT (LOWER(TRIM(COALESCE(user.firstName, ''))) = 'demo' AND LOWER(TRIM(COALESCE(user.lastName, ''))) IN ('user', 'technician'))");
+      if (ids) query.andWhere('user.id IN (:...ids)', { ids });
       query.orderBy('user.id', 'ASC');
       if (includeUnits) query.addOrderBy('unit.id', 'ASC');
       return query;
