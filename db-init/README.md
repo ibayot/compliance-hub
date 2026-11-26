@@ -256,30 +256,11 @@ intended environment database.
    session validation use the new tables.
 2. Select the environment's Ticketing database and run
    `20261126-demo-tickets-ticketing.sql`. Both migrations can be applied again.
-3. Create a dedicated MySQL account for the Ticketing service's demo connection.
-   Limit the account to the Ticketing service network and grant access on these
-   individual tables in the environment's Ticketing schema.
-
-   | Table | Privileges |
-   | --- | --- |
-   | `demo_ticket_sequences` | SELECT, INSERT, UPDATE |
-   | `demo_tickets` | SELECT, INSERT, UPDATE, DELETE |
-   | `demo_ticket_events` | SELECT, INSERT |
-   | `demo_ticket_comments` | SELECT, INSERT |
-   | `demo_ticket_ratings` | SELECT, INSERT |
-   | `demo_ticket_attachments` | SELECT, INSERT, UPDATE |
-   | `demo_file_cleanup` | SELECT, INSERT, UPDATE, DELETE |
-
-   Use individual ``GRANT … ON `<ticketing-schema>`.`<table>` TO …`` statements
-   for this new account. Do not share the regular Ticketing account or grant on
-   the whole schema. Foreign keys handle deletion of associated demo rows.
-4. Set `DEMO_DB_USERNAME` under `ticketing-service.environment`. Set
-   `DEMO_DB_PASSWORD_FILE` to the container path of a read-only mounted password
-   file, or provide `DEMO_DB_PASSWORD` through the environment's secret store.
-   `TICKETING_DB_DATABASE` must name the schema used in step 2. Keep the existing
-   persistent Ticketing upload mount and allow the service to write under its
-   `demo` subdirectory. Keep traffic to Users on the existing internal service network.
-5. Rebuild `users-service`, `ticketing-service`, `gateway`, and `frontend`.
+3. Demo Mode uses the existing Ticketing connection and credentials in staging
+   and production. Use the configured Ticketing schema in step 2. Keep the
+   existing persistent Ticketing upload mount so Demo Mode can write under its
+   `demo` subdirectory.
+4. Rebuild `users-service`, `ticketing-service`, `gateway`, and `frontend`.
    The feature starts disabled on a new database. Create two dedicated accounts
    named Demo User and Demo Technician through User Management, assign an
    approved unit if unit restrictions are on, then select both accounts in

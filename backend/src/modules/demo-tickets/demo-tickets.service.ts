@@ -14,10 +14,12 @@ type Ticket = {
 };
 type Attachment = { id: string; fileName: string; mimeType: string };
 const PAGE_SIZE = 25;
+const manilaYear = new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', year: 'numeric' });
+const createdAtColumn = 'CAST(created_at AS CHAR) AS createdAt';
 const ticketColumns = `id, run_id AS runId, ticket_number AS ticketNumber, requester_id AS requesterId,
   technician_id AS technicianId, filed_by AS filedBy, subject, description, support_type AS supportType,
-  status, resolution_notes AS resolutionNotes, created_at AS createdAt`;
-const summaryColumns = 'id, run_id AS runId, ticket_number AS ticketNumber, subject, support_type AS supportType, status, created_at AS createdAt';
+  status, resolution_notes AS resolutionNotes, ${createdAtColumn}`;
+const summaryColumns = `id, run_id AS runId, ticket_number AS ticketNumber, subject, support_type AS supportType, status, ${createdAtColumn}`;
 
 @Injectable()
 export class DemoTicketsService {
@@ -49,9 +51,9 @@ export class DemoTicketsService {
     const db = this.store.db;
     const ticket = await this.ticket(db, id, actor);
     const [comments, events, ratings, attachments] = await Promise.all([
-      this.store.rows(db, 'SELECT id, author_id AS authorId, body, created_at AS createdAt FROM demo_ticket_comments WHERE ticket_id = ? ORDER BY id', [id]),
-      this.store.rows(db, 'SELECT id, actor_id AS actorId, action, created_at AS createdAt FROM demo_ticket_events WHERE ticket_id = ? ORDER BY id', [id]),
-      this.store.rows(db, 'SELECT rating, feedback, created_at AS createdAt FROM demo_ticket_ratings WHERE ticket_id = ?', [id]),
+      this.store.rows(db, `SELECT id, author_id AS authorId, body, ${createdAtColumn} FROM demo_ticket_comments WHERE ticket_id = ? ORDER BY id`, [id]),
+      this.store.rows(db, `SELECT id, actor_id AS actorId, action, ${createdAtColumn} FROM demo_ticket_events WHERE ticket_id = ? ORDER BY id`, [id]),
+      this.store.rows(db, `SELECT rating, feedback, ${createdAtColumn} FROM demo_ticket_ratings WHERE ticket_id = ?`, [id]),
       this.store.rows(db, 'SELECT id, file_name AS fileName, mime_type AS mimeType FROM demo_ticket_attachments WHERE ticket_id = ? AND ready = TRUE ORDER BY created_at, id', [id]),
     ]);
     return { ...ticket, comments, events, rating: ratings[0] ?? null, attachments };
@@ -60,7 +62,7 @@ export class DemoTicketsService {
   async create(actor: DemoActor, data: { subject: string; description: string; supportType: typeof demoSupportTypes[number] }) {
     const id = randomUUID();
     await this.store.transaction(async db => {
-      const [{ year }] = await this.store.rows<{ year: number }>(db, 'SELECT YEAR(UTC_TIMESTAMP() + INTERVAL 8 HOUR) AS year');
+      const year = Number(manilaYear.format(new Date()));
       await this.store.write(db, `
         INSERT INTO demo_ticket_sequences (ticket_year, last_number) VALUES (?, 1)
         ON DUPLICATE KEY UPDATE last_number = last_number + 1
@@ -164,7 +166,7 @@ export class DemoTicketsService {
         INSERT INTO demo_file_cleanup (attachment_id, ticket_id, run_id, queued_at)
         SELECT id, ticket_id, ?, UTC_TIMESTAMP(3) FROM demo_ticket_attachments WHERE ticket_id = ?
       `, [ticket.runId, id]);
-      await this.store.write(db, 'DELETE FROM demo_tickets WHERE id = ? AND run_id = ?', [id, ticket.runId]);
+      await this.store.deleteTicket(db, id, ticket.runId);
       return ticket.runId;
     });
     return runId;
@@ -187,7 +189,7 @@ export class DemoTicketsService {
     for (const key of keys) {
       try {
         await this.files.remove(key);
-        await this.store.write(db, 'DELETE FROM demo_file_cleanup WHERE attachment_id = ?', [key.attachmentId]);
+        await this.store.deleteFileCleanup(db, key.attachmentId);
       } catch {
         this.logger.warn('A demo attachment could not be removed and will be retried.');
         await this.store.write(db, 'UPDATE demo_file_cleanup SET queued_at = UTC_TIMESTAMP(3) WHERE attachment_id = ?', [key.attachmentId]);
@@ -197,7 +199,7 @@ export class DemoTicketsService {
 
   @Interval(60000)
   async pruneExpired() {
-    if (this.cleaning || !this.store.configured) return;
+    if (this.cleaning) return;
     this.cleaning = true;
     try {
       const runs = await this.users.listExpiredDemoRuns();
