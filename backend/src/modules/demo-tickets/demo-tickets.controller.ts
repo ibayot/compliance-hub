@@ -1,12 +1,13 @@
 import {
   Body, Controller, DefaultValuePipe, Delete, ForbiddenException, Get, Header, HttpCode,
   Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile,
-  UploadedFile, UseGuards, UseInterceptors, BadRequestException, ServiceUnavailableException,
+  UploadedFile, UseGuards, UseInterceptors, BadRequestException, ConflictException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Response } from 'express';
+import { UsersHttpClient } from '../../common/http-clients/users.http-client';
 import { DemoTicketsService } from './demo-tickets.service';
 import { DemoTicketStore } from './demo-ticket-store';
 import { DemoActor, demoSupportTypes } from './demo.types';
@@ -15,6 +16,9 @@ class NewDemoTicket {
   @IsString() @MaxLength(255) subject: string;
   @IsString() @MaxLength(12000) description: string;
   @IsIn(demoSupportTypes) supportType: typeof demoSupportTypes[number];
+}
+class NewDemoProxyTicket extends NewDemoTicket {
+  @IsUUID() runId: string;
 }
 class DemoComment { @IsString() @MaxLength(5000) body: string; }
 class DemoStatus {
@@ -31,7 +35,7 @@ type Request = { user: (DemoActor & { kind: 'participant' }) | { kind: 'administ
 @Controller('demo-tickets')
 @UseGuards(AuthGuard('demo-jwt'))
 export class DemoTicketsController {
-  constructor(private readonly tickets: DemoTicketsService, private readonly store: DemoTicketStore) {}
+  constructor(private readonly tickets: DemoTicketsService, private readonly store: DemoTicketStore, private readonly users: UsersHttpClient) {}
 
   private actor(request: Request): DemoActor {
     if (request.user.kind !== 'participant') throw new ForbiddenException('Sign in to a demo account for this action.');
@@ -65,10 +69,20 @@ export class DemoTicketsController {
     return this.tickets.create(this.actor(request), body);
   }
 
+  @Post('admin/proxy')
+  async createProxy(@Req() request: Request, @Body() body: NewDemoProxyTicket) {
+    this.admin(request);
+    const { active } = await this.users.getActiveDemoRun();
+    if (!active || active.id !== body.runId) {
+      throw new ConflictException('The active demo changed. Refresh Demo Mode and try again.');
+    }
+    return this.tickets.create({ ...active, userId: request.user.userId }, body);
+  }
+
   @Get(':id')
   @Header('Cache-Control', 'private, no-store')
   detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string) {
-    return this.tickets.detail(id, this.actor(request));
+    return this.tickets.detail(id, request.user.kind === 'participant' ? request.user : undefined);
   }
 
   @Post(':id/comments')
@@ -97,7 +111,7 @@ export class DemoTicketsController {
   @Header('X-Content-Type-Options', 'nosniff')
   async download(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string,
     @Param('attachmentId', ParseUUIDPipe) attachmentId: string, @Res({ passthrough: true }) response: Response) {
-    const file = await this.tickets.download(this.actor(request), id, attachmentId);
+    const file = await this.tickets.download(id, attachmentId, request.user.kind === 'participant' ? request.user : undefined);
     response.attachment(file.fileName);
     return new StreamableFile(file.content, { type: file.mimeType });
   }

@@ -61,6 +61,12 @@ export class InternalController {
     return this.demoMode.expired();
   }
 
+  @Get('demo/active')
+  async activeDemoRun() {
+    if (!this.demoMode) throw new ServiceUnavailableException('Demo Mode is unavailable.');
+    return { active: await this.demoMode.activeRun() };
+  }
+
   @Post('demo/expired/:id/purged')
   async markDemoRunPurged(@Param('id', ParseUUIDPipe) id: string) {
     if (!this.demoMode) throw new ServiceUnavailableException('Demo cleanup is unavailable.');

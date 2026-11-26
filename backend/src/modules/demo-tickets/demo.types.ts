@@ -1,9 +1,10 @@
-export type DemoSession = {
+export type DemoRun = {
   id: string;
-  role: 'user' | 'technician';
   requesterId: number;
   technicianId: number;
 };
+
+export type DemoSession = DemoRun & { role: 'user' | 'technician' };
 
 export type DemoActor = DemoSession & { userId: number };
 

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { UsersHttpClient } from '../../common/http-clients/users.http-client';
 import { DemoFileKey, DemoTicketFiles } from './demo-ticket-files';
 import { DemoQueryTarget, DemoTicketStore } from './demo-ticket-store';
-import { DemoActor, demoSupportTypes } from './demo.types';
+import { DemoActor, DemoRun, demoSupportTypes } from './demo.types';
 
 type Ticket = {
   id: string; runId: string; ticketNumber: string; requesterId: number; technicianId: number;
@@ -47,7 +47,7 @@ export class DemoTicketsService {
     return ticket;
   }
 
-  async detail(id: string, actor: DemoActor) {
+  async detail(id: string, actor?: DemoActor) {
     const db = this.store.db;
     const ticket = await this.ticket(db, id, actor);
     const [comments, events, ratings, attachments] = await Promise.all([
@@ -59,7 +59,7 @@ export class DemoTicketsService {
     return { ...ticket, comments, events, rating: ratings[0] ?? null, attachments };
   }
 
-  async create(actor: DemoActor, data: { subject: string; description: string; supportType: typeof demoSupportTypes[number] }) {
+  async create(actor: DemoRun & { userId: number }, data: { subject: string; description: string; supportType: typeof demoSupportTypes[number] }) {
     const id = randomUUID();
     await this.store.transaction(async db => {
       const year = Number(manilaYear.format(new Date()));
@@ -75,7 +75,7 @@ export class DemoTicketsService {
       `, [id, actor.id, number, actor.requesterId, actor.technicianId, actor.userId, this.required(data.subject), this.required(data.description), data.supportType]);
       await this.event(db, id, actor.userId, 'assigned');
     });
-    return this.detail(id, actor);
+    return this.detail(id);
   }
 
   private required(value?: string) {
@@ -145,7 +145,7 @@ export class DemoTicketsService {
     return this.detail(id, actor);
   }
 
-  async download(actor: DemoActor, id: string, attachmentId: string) {
+  async download(id: string, attachmentId: string, actor?: DemoActor) {
     const ticket = await this.ticket(this.store.db, id, actor);
     const [attachment] = await this.store.rows<Attachment>(this.store.db, `
       SELECT file_name AS fileName, mime_type AS mimeType FROM demo_ticket_attachments WHERE id = ? AND ticket_id = ? AND ready = TRUE

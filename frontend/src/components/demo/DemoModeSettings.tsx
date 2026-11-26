@@ -4,6 +4,8 @@ import {
   DialogTitle, List, ListItem, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { demoApi, demoDate, demoStatuses, DemoState, DemoTicketSummary } from '@/lib/api/demo';
+import DemoTicketForm from './DemoTicketForm';
+import { DemoTicketDetail } from './DemoWorkspace';
 
 export default function DemoModeSettings() {
   const [state, setState] = useState<DemoState | null>(null);
@@ -15,6 +17,8 @@ export default function DemoModeSettings() {
   const [requester, setRequester] = useState('');
   const [technician, setTechnician] = useState('');
   const [busy, setBusy] = useState(false);
+  const [filingRun, setFilingRun] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<'disable' | DemoTicketSummary | null>(null);
   const [result, setResult] = useState<{ message: string; severity: 'info' | 'error' | 'success' }>();
 
@@ -46,6 +50,11 @@ export default function DemoModeSettings() {
     void load(page).finally(() => setChecking(false));
   }, [load, page]);
 
+  const blocked = state?.active
+    ? [!state.active.requesterApproved && 'Demo User', !state.active.technicianApproved && 'Demo Technician'].filter(Boolean)
+    : [];
+  const hasBlockedCandidate = state?.candidates.some(account => !account.approved);
+
   async function change(action: () => Promise<void>) {
     if (busy) return;
     setBusy(true); setResult(undefined);
@@ -73,27 +82,39 @@ export default function DemoModeSettings() {
               <Typography variant="body2">
                 Demo User #{state.active.requesterId} · Demo Technician #{state.active.technicianId}
               </Typography>
-              <Box><Button variant="outlined" color="warning" onClick={() => setConfirmation('disable')} disabled={busy}>Turn Off Demo Mode</Button></Box>
+              {blocked.length > 0 && <Alert severity="warning">
+                {blocked.join(' and ')} cannot sign in. Assign each blocked account an active approved unit in User Management, then refresh.
+              </Alert>}
+              <Stack direction="row" gap={1} flexWrap="wrap">
+                <Button variant="contained" disabled={!ready || busy} onClick={() => setFilingRun(state.active!.id)}>New Demo Ticket</Button>
+                <Button variant="outlined" color="warning" onClick={() => setConfirmation('disable')} disabled={busy}>Turn Off Demo Mode</Button>
+                <Button disabled={busy} onClick={() => void change(() => load(page))}>Refresh</Button>
+              </Stack>
             </> : <>
               {(!state.candidates.some(account => account.demoRole === 'user') || !state.candidates.some(account => account.demoRole === 'technician')) && (
                 <Alert severity="info">In User Management, create active accounts named Demo User and Demo Technician. Refresh here to select them.</Alert>
               )}
+              {hasBlockedCandidate && <Alert severity="warning">
+                Accounts marked “Unit approval required” need an active approved unit in User Management. Refresh after assigning it.
+              </Alert>}
               <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5}>
                 <TextField select label="Demo User" value={requester} onChange={event => setRequester(event.target.value)} fullWidth>
                   <MenuItem value="">Select an account</MenuItem>
                   {state.candidates.filter(account => account.demoRole === 'user').map(account => (
-                    <MenuItem key={account.id} value={String(account.id)}>{account.email} · #{account.id}</MenuItem>
+                    <MenuItem key={account.id} value={String(account.id)} disabled={!account.approved}>{account.email} · #{account.id}{!account.approved && ' · Unit approval required'}</MenuItem>
                   ))}
                 </TextField>
                 <TextField select label="Demo Technician" value={technician} onChange={event => setTechnician(event.target.value)} fullWidth>
                   <MenuItem value="">Select an account</MenuItem>
                   {state.candidates.filter(account => account.demoRole === 'technician').map(account => (
-                    <MenuItem key={account.id} value={String(account.id)}>{account.email} · #{account.id}</MenuItem>
+                    <MenuItem key={account.id} value={String(account.id)} disabled={!account.approved}>{account.email} · #{account.id}{!account.approved && ' · Unit approval required'}</MenuItem>
                   ))}
                 </TextField>
               </Stack>
               <Stack direction="row" gap={1} flexWrap="wrap">
-                <Button variant="contained" disabled={!ready || !requester || !technician || busy} onClick={() => void change(async () => {
+                <Button variant="contained" disabled={!ready || busy ||
+                  !state.candidates.some(account => String(account.id) === requester && account.approved) ||
+                  !state.candidates.some(account => String(account.id) === technician && account.approved)} onClick={() => void change(async () => {
                   setState(await demoApi.enable(Number(requester), Number(technician)));
                   setResult({ message: 'Demo Mode is on. The two selected accounts can now sign in.', severity: 'success' });
                 })}>Turn On Demo Mode</Button>
@@ -113,7 +134,10 @@ export default function DemoModeSettings() {
                         <Typography variant="body2">{ticket.subject} · {demoStatuses[ticket.status]}</Typography>
                         {retention && <Typography variant="caption" color="text.secondary">Scheduled for deletion {demoDate(retention.purgeAfter)}</Typography>}
                       </Box>
-                      <Button color="error" onClick={() => setConfirmation(ticket)} disabled={busy}>Delete</Button>
+                      <Stack direction="row" gap={0.5}>
+                        <Button onClick={() => setSelectedTicket(ticket.id)}>View</Button>
+                        <Button color="error" onClick={() => setConfirmation(ticket)} disabled={busy}>Delete</Button>
+                      </Stack>
                     </ListItem>
                   );
                 })}
@@ -128,6 +152,24 @@ export default function DemoModeSettings() {
           </>}
         </Stack>
       </CardContent>
+      <Dialog open={filingRun !== null} onClose={() => setFilingRun(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>New Demo Ticket</DialogTitle>
+        <DialogContent dividers>
+          {filingRun && <DemoTicketForm proxy submit={(subject, description, type) => demoApi.createProxy(filingRun, subject, description, type)}
+            onCancel={() => setFilingRun(null)} onSuccess={ticket => {
+              setFilingRun(null);
+              setSelectedTicket(ticket.id);
+              void load(page);
+            }} />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={selectedTicket !== null} onClose={() => setSelectedTicket(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Demo Ticket Details</DialogTitle>
+        <DialogContent dividers>
+          {selectedTicket && <DemoTicketDetail id={selectedTicket} viewer="administrator" />}
+        </DialogContent>
+        <DialogActions><Button onClick={() => setSelectedTicket(null)}>Close</Button></DialogActions>
+      </Dialog>
       <Dialog open={confirmation !== null} onClose={() => setConfirmation(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{confirmation === 'disable' ? 'Turn off Demo Mode?' : 'Delete demo ticket?'}</DialogTitle>
         <DialogContent>

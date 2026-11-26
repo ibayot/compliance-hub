@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container, MenuItem,
+  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
   Rating, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { demoApi, demoDate, demoStatuses, demoSupportTypes, DemoTicket, DemoTicketSummary } from '@/lib/api/demo';
+import { demoApi, demoDate, demoStatuses, DemoTicket, DemoTicketSummary } from '@/lib/api/demo';
+import DemoTicketForm from './DemoTicketForm';
 
 const home = '/operations/demo';
 
@@ -29,7 +30,7 @@ export default function DemoWorkspace() {
         </Stack>
         <Alert severity="info">Use sample information only. Demo tickets stay out of live reports and notifications.</Alert>
         {!isSessionLocked && !requiresPasswordChange && (ticketId
-          ? <TicketDetail key={ticketId} id={ticketId} technician={user?.demoRole === 'technician'} />
+          ? <DemoTicketDetail key={ticketId} id={ticketId} viewer={user?.demoRole ?? 'user'} />
           : <TicketList technician={user?.demoRole === 'technician'} />)}
       </Stack>
     </Container>
@@ -42,11 +43,7 @@ function TicketList({ technician }: { technician: boolean }) {
   const [items, setItems] = useState<DemoTicketSummary[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [subject, setSubject] = useState('');
-  const [description, setDescription] = useState('');
-  const [supportType, setSupportType] = useState<DemoTicketSummary['supportType']>('IT Support');
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -72,27 +69,10 @@ function TicketList({ technician }: { technician: boolean }) {
       {creating && (
         <Card variant="outlined">
           <CardContent>
-            <Stack component="form" spacing={2} onSubmit={async event => {
-              event.preventDefault();
-              if (saving) return;
-              setSaving(true); setError('');
-              try {
-                const ticket = await demoApi.create(subject, description, supportType);
-                navigate(`${home}/${ticket.id}`);
-              } catch { setError('Could not file the demo ticket. Check the fields and try again.'); }
-              finally { setSaving(false); }
-            }}>
+            <Stack spacing={2}>
               <Typography component="h3" variant="h6">New Demo Ticket</Typography>
-              {technician && <Typography variant="body2">Requested for Demo User</Typography>}
-              <TextField label="Subject" value={subject} onChange={event => setSubject(event.target.value)} required inputProps={{ maxLength: 255 }} />
-              <TextField select label="Support Type" value={supportType} onChange={event => setSupportType(event.target.value as typeof supportType)}>
-                {demoSupportTypes.map(type => <MenuItem key={type} value={type}>{type}</MenuItem>)}
-              </TextField>
-              <TextField label="Description" value={description} onChange={event => setDescription(event.target.value)} required multiline minRows={3} inputProps={{ maxLength: 12000 }} />
-              <Stack direction="row" justifyContent="flex-end" gap={1}>
-                <Button disabled={saving} onClick={() => setCreating(false)}>Cancel</Button>
-                <Button disabled={saving || !subject.trim() || !description.trim()} type="submit" variant="contained">Submit Ticket</Button>
-              </Stack>
+              <DemoTicketForm proxy={technician} submit={demoApi.create} onCancel={() => setCreating(false)}
+                onSuccess={ticket => navigate(`${home}/${ticket.id}`)} />
             </Stack>
           </CardContent>
         </Card>
@@ -124,7 +104,9 @@ function TicketList({ technician }: { technician: boolean }) {
   );
 }
 
-function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
+export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 'technician' | 'administrator' }) {
+  const technician = viewer === 'technician';
+  const canParticipate = viewer !== 'administrator';
   const [ticket, setTicket] = useState<DemoTicket | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -137,8 +119,8 @@ function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
   const refresh = useCallback(async () => {
     setError('');
     try { setTicket(await demoApi.detail(id)); }
-    catch { setError('Could not open this demo ticket. Check that Demo Mode is still on.'); }
-  }, [id]);
+    catch { setError(canParticipate ? 'Could not open this demo ticket. Check that Demo Mode is still on.' : 'This demo ticket could not be opened. It may have been deleted.'); }
+  }, [canParticipate, id]);
   useEffect(() => { void refresh(); }, [refresh]);
 
   async function update(action: () => Promise<DemoTicket>, done?: () => void) {
@@ -156,12 +138,16 @@ function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
       window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch { setError('Could not download this attachment.'); }
   }
-  const actorName = (id: number) => id === ticket?.technicianId ? 'Demo Technician' : 'Demo User';
+  const actorName = (id: number) => {
+    if (id === ticket?.technicianId) return 'Demo Technician';
+    if (id === ticket?.requesterId) return 'Demo User';
+    return 'Demo Administrator';
+  };
 
   return (
     <Stack spacing={1.5}>
       <Stack direction="row" justifyContent="space-between">
-        <Button component={Link} to={home} startIcon={<ArrowBackIcon />}>Demo Tickets</Button>
+        {canParticipate && <Button component={Link} to={home} startIcon={<ArrowBackIcon />}>Demo Tickets</Button>}
         <Button startIcon={<RefreshIcon />} disabled={busy} onClick={() => void refresh()}>Refresh</Button>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
@@ -191,7 +177,7 @@ function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
                   <TextField label="Resolution Notes" value={notes} onChange={event => setNotes(event.target.value)} multiline minRows={2} required inputProps={{ maxLength: 5000 }} />
                   <Button variant="contained" disabled={busy || !notes.trim()} onClick={() => void update(() => demoApi.status(id, 'resolved', notes), () => setResolving(false))}>Save Resolution</Button>
                 </>)}
-              {!technician && ticket.status === 'resolved' && <>
+              {viewer === 'user' && ticket.status === 'resolved' && <>
                 <Box><Typography component="h3" variant="subtitle2">Rate Resolution</Typography>
                   <Rating name="demo-resolution" value={rating} onChange={(_, value) => setRating(value)} size="large" />
                 </Box>
@@ -208,7 +194,7 @@ function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
               <Typography component="h3" variant="subtitle1">Attachments</Typography>
               {ticket.attachments.map(item => <Button key={item.id} sx={{ justifyContent: 'flex-start', overflowWrap: 'anywhere' }} onClick={() => void download(item)}>{item.fileName}</Button>)}
               {ticket.attachments.length === 0 && <Typography variant="body2" color="text.secondary">No attachments</Typography>}
-              {ticket.status !== 'closed' && (
+              {canParticipate && ticket.status !== 'closed' && (
                 <Button component="label" variant="outlined" disabled={busy}>
                   Attach File
                   <input type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => {
@@ -234,7 +220,7 @@ function TicketDetail({ id, technician }: { id: string; technician: boolean }) {
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{item.body}</Typography>
                 </Box>)}
                 {ticket.comments.length === 0 && <Typography variant="body2" color="text.secondary">No comments</Typography>}
-                {ticket.status !== 'closed' && <>
+                {canParticipate && ticket.status !== 'closed' && <>
                   <TextField label="Add Comment" value={comment} onChange={event => setComment(event.target.value)} multiline inputProps={{ maxLength: 5000 }} />
                   <Button variant="outlined" disabled={busy || !comment.trim()} onClick={() => void update(() => demoApi.comment(id, comment), () => setComment(''))}>Post Comment</Button>
                 </>}

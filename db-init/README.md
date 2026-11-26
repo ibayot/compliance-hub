@@ -262,9 +262,16 @@ intended environment database.
    `demo` subdirectory.
 4. Rebuild `users-service`, `ticketing-service`, `gateway`, and `frontend`.
    The feature starts disabled on a new database. Create two dedicated accounts
-   named Demo User and Demo Technician through User Management, assign an
-   approved unit if unit restrictions are on, then select both accounts in
-   Settings → Security Settings → Demo Mode.
+   named Demo User and Demo Technician through User Management. If unit
+   restrictions are on, give each account an active approved unit before
+   selecting it in Settings → Security Settings → Demo Mode. Use **New Demo
+   Ticket** in that section to file a proxy ticket from a live administrator
+   account.
+
+If a regular ticket fails to open and the Ticketing log reports
+`KnowledgeArticle.is_enabled` is missing, run
+`20261125-prepare-knowledge-base-draft-schema-ticketing.sql` against that
+environment's Ticketing database. Reopen the ticket once the schema is ready.
 
 On rollback, deactivate both demo accounts before running an older Users service.
 Keep the demo tables and attachment storage so the Demo Mode cleanup worker can

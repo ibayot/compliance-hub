@@ -1,27 +1,46 @@
 import { BadRequestException, ConflictException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { OutboundEmailPolicyService } from './outbound-email-policy.service';
+
+type DemoRun = { id: string; requesterId: number; technicianId: number };
+type DemoCandidate = { id: number; email: string; demoRole: 'user' | 'technician' };
 
 @Injectable()
 export class DemoModeService {
-  constructor(private readonly db: DataSource) {}
+  constructor(private readonly db: DataSource, private readonly approval: OutboundEmailPolicyService) {}
+
+  async activeRun(): Promise<DemoRun | null> {
+    const [active] = await this.db.query<DemoRun[]>(`
+      SELECT run.id, run.requester_id AS requesterId, run.technician_id AS technicianId
+      FROM demo_mode mode JOIN demo_runs run ON run.id = mode.active_run_id WHERE mode.id = 1 AND run.closed_at IS NULL
+    `);
+    return active ?? null;
+  }
 
   async getState() {
-    const [active] = await this.db.query(`
-      SELECT run.id, run.requester_id AS requesterId, run.technician_id AS technicianId
-      FROM demo_mode mode JOIN demo_runs run ON run.id = mode.active_run_id WHERE mode.id = 1
-    `);
+    const active = await this.activeRun();
     const retained = await this.db.query(`
       SELECT id, DATE_FORMAT(purge_after, '%Y-%m-%dT%H:%i:%s.000Z') AS purgeAfter
       FROM demo_runs WHERE closed_at IS NOT NULL AND purged_at IS NULL ORDER BY opened_at DESC
     `);
-    const candidates = await this.db.query(`
+    const candidates = await this.db.query<DemoCandidate[]>(`
       SELECT id, email, LOWER(TRIM(last_name)) AS demoRole
       FROM users WHERE active = 1 AND LOWER(TRIM(first_name)) = 'demo' AND
         LOWER(TRIM(last_name)) IN ('user', 'technician')
       ORDER BY id
     `);
-    return { active: active ?? null, retained, candidates };
+    const ids = candidates.map(candidate => candidate.id);
+    if (active) ids.push(active.requesterId, active.technicianId);
+    const approvals = await this.approval.demoSignInApprovals([...new Set(ids)]);
+    return {
+      active: active && {
+        ...active, requesterApproved: approvals.get(active.requesterId) === true,
+        technicianApproved: approvals.get(active.technicianId) === true,
+      },
+      retained,
+      candidates: candidates.map(candidate => ({ ...candidate, approved: approvals.get(candidate.id) === true })),
+    };
   }
 
   async enable(requesterId: number, technicianId: number, administratorId: number) {
@@ -42,6 +61,11 @@ export class DemoModeService {
         account.last_name?.trim().toLowerCase() === last);
       if (!matches(requesterId, 'user') || !matches(technicianId, 'technician')) {
         throw new BadRequestException('Choose active accounts named Demo User and Demo Technician.');
+      }
+      const approvals = await this.approval.demoSignInApprovals([requesterId, technicianId], manager);
+      const blocked = [!approvals.get(requesterId) && 'Demo User', !approvals.get(technicianId) && 'Demo Technician'].filter(Boolean);
+      if (blocked.length) {
+        throw new BadRequestException(`${blocked.join(' and ')} cannot sign in. Assign an active approved unit in User Management, then try again.`);
       }
       const runId = randomUUID();
       await manager.query('INSERT IGNORE INTO demo_accounts (user_id) VALUES (?), (?)', [requesterId, technicianId]);

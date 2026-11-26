@@ -46,6 +46,8 @@ Controller validates/authenticates -> capability and record policy -> ticket ser
 
 The application owner approved reusing the existing Ticketing database identity in staging and production because separate grants are unavailable. That identity also serves regular Ticketing operations. The demo store's table checks, fixed deletes, demo-only foreign keys and private upload namespace enforce Demo Mode's scope at the application and schema level.
 
+The normal requester picker and proxy creation must use the live Users directory and exclude demo accounts. A stale selection or an unavailable directory must not fall back to an unrestricted lookup for another requester. Security Settings administrators can file for the active Demo User via the separate Demo Mode form. The demo API assigns the active Demo Technician using the current run and rejects a stale run ID. Validate account unit approval at activation and show denied accounts in Security Settings even when both identities have already been selected (CH-ADMIN-014).
+
 ### Knowledge Base access matrix
 
 | Viewer | Published, enabled articles | Draft review actions | Generation status on Ticket Details |

@@ -26,9 +26,9 @@ export interface DemoTicket extends DemoTicketSummary {
 }
 
 export interface DemoState {
-  active: { id: string; requesterId: number; technicianId: number } | null;
+  active: { id: string; requesterId: number; technicianId: number; requesterApproved: boolean; technicianApproved: boolean } | null;
   retained: Array<{ id: string; purgeAfter: string }>;
-  candidates: Array<{ id: number; email: string; demoRole: 'user' | 'technician' }>;
+  candidates: Array<{ id: number; email: string; demoRole: 'user' | 'technician'; approved: boolean }>;
 }
 
 const path = '/demo-tickets';
@@ -42,6 +42,8 @@ export const demoApi = {
   detail: (id: string) => apiClient.get<DemoTicket>(`${path}/${id}`).then(res => res.data),
   create: (subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
     apiClient.post<DemoTicket>(path, { subject, description, supportType }).then(res => res.data),
+  createProxy: (runId: string, subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
+    apiClient.post<DemoTicket>(`${path}/admin/proxy`, { runId, subject, description, supportType }).then(res => res.data),
   comment: (id: string, body: string) => apiClient.post<DemoTicket>(`${path}/${id}/comments`, { body }).then(res => res.data),
   status: (id: string, status: 'in_progress' | 'resolved', notes?: string) =>
     apiClient.patch<DemoTicket>(`${path}/${id}/status`, { status, notes }).then(res => res.data),

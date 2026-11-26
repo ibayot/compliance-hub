@@ -7,7 +7,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, EntityManager, FindOptionsSelect } from 'typeorm';
+import { Repository, In, EntityManager, FindOptionsSelect, SelectQueryBuilder } from 'typeorm';
 import { staffNameKey } from '../../shared/staff-directory/staff-directory.store';
 import * as bcrypt from 'bcrypt';
 import {
@@ -689,7 +689,7 @@ const previousValue = value;
       const unitId = currentUser?.units?.[0]?.id;
       if (!unitId) return [];
 
-      users = await this.usersRepository
+      const query = this.usersRepository
         .createQueryBuilder('user')
         .innerJoin('user.units', 'unit', 'unit.id = :unitId', { unitId })
         .leftJoinAndSelect('user.units', 'requesterUnit', 'requesterUnit.active = :unitActive', { unitActive: true })
@@ -697,18 +697,18 @@ const previousValue = value;
         .andWhere('user.id != :currentUserId', { currentUserId })
         .orderBy('user.lastName', 'ASC')
         .addOrderBy('user.firstName', 'ASC')
-        .addOrderBy('user.email', 'ASC')
-        .getMany();
+        .addOrderBy('user.email', 'ASC');
+      users = await this.excludeDemoAccounts(query).getMany();
     } else {
-      users = await this.usersRepository
+      const query = this.usersRepository
         .createQueryBuilder('user')
         .leftJoinAndSelect('user.units', 'requesterUnit', 'requesterUnit.active = :unitActive', { unitActive: true })
         .where('user.active = :active', { active: true })
         .andWhere('user.id != :currentUserId', { currentUserId })
         .orderBy('user.lastName', 'ASC')
         .addOrderBy('user.firstName', 'ASC')
-        .addOrderBy('user.email', 'ASC')
-        .getMany();
+        .addOrderBy('user.email', 'ASC');
+      users = await this.excludeDemoAccounts(query).getMany();
     }
 
     return users
@@ -757,6 +757,11 @@ const previousValue = value;
     return user;
   }
 
+  private excludeDemoAccounts(query: SelectQueryBuilder<User>) {
+    return query.andWhere('NOT EXISTS (SELECT 1 FROM demo_accounts demo WHERE demo.user_id = user.id)')
+      .andWhere("NOT (LOWER(TRIM(COALESCE(user.firstName, ''))) = 'demo' AND LOWER(TRIM(COALESCE(user.lastName, ''))) IN ('user', 'technician'))");
+  }
+
   /** Query only the profile fields used by trusted service-to-service enrichment. */
   private async queryInternalStubs(ids?: number[], includePhoneNumber = false): Promise<User[]> {
     if (ids && ids.length === 0) return [];
@@ -775,8 +780,7 @@ const previousValue = value;
           'unit.hasReportorialRequirements', 'unit.createdAt',
         ]);
       }
-      query.where('NOT EXISTS (SELECT 1 FROM demo_accounts demo WHERE demo.user_id = user.id)')
-        .andWhere("NOT (LOWER(TRIM(COALESCE(user.firstName, ''))) = 'demo' AND LOWER(TRIM(COALESCE(user.lastName, ''))) IN ('user', 'technician'))");
+      this.excludeDemoAccounts(query);
       if (ids) query.andWhere('user.id IN (:...ids)', { ids });
       query.orderBy('user.id', 'ASC');
       if (includeUnits) query.addOrderBy('unit.id', 'ASC');

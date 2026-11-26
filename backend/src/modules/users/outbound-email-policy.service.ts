@@ -1,6 +1,6 @@
 import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { IsEmail, IsIn, IsOptional, MaxLength } from 'class-validator';
 import { SecurityConfig } from './entities/security-config.entity';
 import { User } from './entities/user.entity';
@@ -91,8 +91,20 @@ export class OutboundEmailPolicyService {
   }
 
   async decideAccountAccessBatch(accountIds: number[]) {
+    return (await this.accountAccessSnapshots(accountIds)).map(({ accountId, snapshot }) => ({
+      accountId, decision: this.liveDecision(snapshot),
+    }));
+  }
+
+  async demoSignInApprovals(accountIds: number[], manager?: EntityManager) {
+    return new Map((await this.accountAccessSnapshots(accountIds, manager)).map(({ accountId, snapshot }) => [
+      accountId, snapshot.user?.demoOnly === true && snapshot.decision.allowed,
+    ]));
+  }
+
+  private async accountAccessSnapshots(accountIds: number[], manager?: EntityManager) {
     if (accountIds.length === 0) return [];
-    const rows = await this.queryAccountAccess(accountIds).getRawMany<Record<string, unknown>>();
+    const rows = await this.queryAccountAccess(accountIds, manager).getRawMany<Record<string, unknown>>();
     const rowsByAccount = new Map<number, Record<string, unknown>[]>();
     for (const row of rows) {
       if (row.userId == null) continue;
@@ -103,7 +115,7 @@ export class OutboundEmailPolicyService {
     }
     return accountIds.map(accountId => ({
       accountId,
-      decision: this.liveDecision(this.evaluateAccountAccess(rowsByAccount.get(accountId) ?? [], rows[0])),
+      snapshot: this.evaluateAccountAccess(rowsByAccount.get(accountId) ?? [], rows[0]),
     }));
   }
 
@@ -118,8 +130,9 @@ export class OutboundEmailPolicyService {
    * This is used by the Users JWT guard and the other services' access check.
    * It deliberately selects no password, MFA, Google subject, or profile data.
    */
-  private queryAccountAccess(accountIds: number[]) {
-    return this.configRepository.createQueryBuilder('policy')
+  private queryAccountAccess(accountIds: number[], manager?: EntityManager) {
+    const repository = manager?.getRepository(SecurityConfig) ?? this.configRepository;
+    return repository.createQueryBuilder('policy')
       .leftJoin(User, 'user', 'user.id IN (:...accountIds)', { accountIds })
       .leftJoin('demo_accounts', 'demoAccount', 'demoAccount.user_id = user.id')
       .leftJoin('demo_mode', 'demoMode', 'demoMode.id = 1')

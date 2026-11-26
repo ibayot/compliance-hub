@@ -1456,13 +1456,18 @@ export class TicketService implements OnModuleInit {
     if (dto.pendingStaffId && !this.staffDirectory) throw new BadRequestException('Staff requester completion is unavailable.');
     let requesterId = dto.requesterId ? dto.requesterId : callerId;
 
+    const isProxyRequest = !dto.pendingStaffId && Number(requesterId) !== Number(callerId);
     let requester = dto.pendingStaffId
       ? await this.staffDirectory!.preview(dto.pendingStaffId, dto.requesterEmail!, callerId)
-      : await this.usersHttpClient.getUserById(requesterId);
+      : isProxyRequest
+        ? await this.usersHttpClient.getLiveProxyRequester(requesterId)
+        : await this.usersHttpClient.getUserById(requesterId);
     if (dto.pendingStaffId) requesterId = requester.id;
-    // A short users-service outage or an open circuit must not turn a valid
-    // requester into a false 400. The ticketing DB exposes a read-only users
-    // view; use it only as a bounded identity fallback.
+    if (isProxyRequest && !requester) {
+      throw new BadRequestException('This requester is unavailable for regular tickets. File for demo accounts in Demo Mode.');
+    }
+    // The authenticated caller already passed the live account check. The legacy read-only
+    // fallback is usable for that caller only because it cannot verify proxy eligibility.
     if (!requester) {
       const rows = await this.dataSource.query(
         'SELECT id, email, first_name, last_name, middle_name, suffix, role, active FROM users WHERE id = ? AND active = 1 LIMIT 1',
@@ -1876,6 +1881,7 @@ export class TicketService implements OnModuleInit {
       ? await this.dataSource.transaction(async (manager) => {
           requester = await this.staffDirectory!.complete(manager, dto.pendingStaffId!, dto.requesterEmail!, callerId);
           requesterId = Number(requester.id);
+          await this.assertProxyRequesterAllowed(callerId, callerRole, requester);
           if (pantawidProxyFiler && requesterId === Number(callerId)) {
             throw new ForbiddenException('A Pantawid proxy ticket must have a different requester.');
           }
@@ -2923,8 +2929,12 @@ export class TicketService implements OnModuleInit {
   private async assertProxyRequesterAllowed(
     actorId: number,
     actorRole: UserRole | undefined,
-    requester: { id: number; units?: any[] },
+    requester: { id: number; units?: any[]; first_name?: string; last_name?: string },
   ): Promise<void> {
+    if (requester.first_name?.trim().toLowerCase() === 'demo' &&
+        ['user', 'technician'].includes(requester.last_name?.trim().toLowerCase() ?? '')) {
+      throw new BadRequestException('File for demo accounts in Demo Mode.');
+    }
     if (Number(requester.id) === Number(actorId) || actorRole !== UserRole.USER) return;
 
     const actor = await this.usersHttpClient.getUserById(actorId);

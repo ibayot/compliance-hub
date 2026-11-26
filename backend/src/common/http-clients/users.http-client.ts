@@ -238,6 +238,21 @@ export class UsersHttpClient {
     return this.fetchWithRetry<UserStub>(`${this.baseUrl}/api/internal/users/${id}`);
   }
 
+  /** Proxy filing must respect the Users directory's live-account identity boundary. */
+  async getLiveProxyRequester(id: number): Promise<UserStub | null> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/api/internal/users/${id}`, {
+        headers: this.buildHeaders(), signal: AbortSignal.timeout(5000),
+      });
+      if (response.status === 404) return null;
+      if (response.ok) return await response.json() as UserStub;
+    } catch {
+      throw new ServiceUnavailableException('The requester could not be verified. Please retry.');
+    }
+    throw new ServiceUnavailableException('The requester could not be verified. Please retry.');
+  }
+
   /** Fetch a bounded set of user stubs without issuing one HTTP/SQL read per ID. */
   async getUsersByIds(ids: number[], options: { includePhoneNumber?: boolean } = {}): Promise<Map<number, UserStub | null>> {
     const uniqueIds = [...new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0))];
@@ -311,6 +326,10 @@ export class UsersHttpClient {
 
   authorizeDemoAdministrator(userId: number, tokenJti: string) {
     return this.requestDemo<{ allowed: true }>('authorize-administrator', { userId, tokenJti });
+  }
+
+  getActiveDemoRun() {
+    return this.requestDemo<{ active: { id: string; requesterId: number; technicianId: number } | null }>('active');
   }
 
   listExpiredDemoRuns() { return this.requestDemo<Array<{ id: string }>>('expired'); }
