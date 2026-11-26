@@ -50,6 +50,8 @@ The normal requester picker and proxy creation must use the live Users directory
 
 The Demo User workspace uses the regular navigation, dashboard, Knowledge Base and help presentation. Load ticket lists and dashboard totals only from the active demo run. Use sample Knowledge Base and profile data without calling live write APIs. Share the Client Satisfaction Measurement Form with regular ticket details. Submit only consent and service quality answers to the demo endpoint, calculate the average using the regular rating helper, exclude N/A responses, and persist only the decimal score and submission metadata in `demo_ticket_ratings`.
 
+Use the same My Tickets, New Ticket, Ticket Details, Settings and global navigation components for regular and demo requesters. The demo requester supplies an isolated data source for the queue, categories, ticket creation, comments, attachments and feedback. Check presentation parity with the same viewport, layout preset and comparable ticket data. Demo identity, identifiers and content mark the presentation data. Keep live delivery and credential changes out of the demonstration.
+
 ### Knowledge Base access matrix
 
 | Viewer | Published, enabled articles | Draft review actions | Generation status on Ticket Details |

@@ -541,6 +541,7 @@ export interface TicketDashboardStats {
   closed: number;
   satisfactionFillRate: number;
   pendingSatisfactionTickets: Ticket[];
+  pendingSatisfactionCount?: number;
   myTicketsCount?: number;
   escalatedToMeCount?: number;
 }

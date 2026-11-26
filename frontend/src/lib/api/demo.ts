@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { boundedGet } from './bounded-read';
 
 export const demoSupportTypes = ['IT Support', 'Desktop Support', 'Pantawid ICT Support', 'Specialized Concerns'] as const;
 export const demoStatuses = { assigned: 'Assigned', in_progress: 'In Progress', resolved: 'Resolved', closed: 'Closed' };
@@ -25,10 +26,13 @@ export interface DemoTicket extends DemoTicketSummary {
   technicianId: number;
   filedBy: number;
   description: string;
+  categoryKey: string | null;
+  categoryName: string | null;
   resolutionNotes: string | null;
   comments: Array<{ id: number; authorId: number; body: string; createdAt: string }>;
   events: Array<{ id: number; actorId: number; action: keyof typeof demoStatuses; createdAt: string }>;
-  attachments: Array<{ id: string; fileName: string; mimeType: string }>;
+  attachments: Array<{ id: string; fileName: string; mimeType: string; commentId?: number | null;
+    replacesId?: string | null; uploadedBy?: number | null; createdAt?: string }>;
   rating: { rating: number; createdAt: string } | null;
 }
 
@@ -57,12 +61,21 @@ export const demoApi = {
   list: (page: number, filters?: { status?: string; search?: string }) =>
     apiClient.get<{ items: DemoTicketSummary[]; hasMore: boolean }>(path, { params: { page, ...filters } }).then(res => res.data),
   dashboard: () => apiClient.get<DemoDashboard>(`${path}/dashboard`).then(res => res.data),
+  requesterQueue: (params: URLSearchParams, signal?: AbortSignal) => boundedGet<{
+    items?: Array<Omit<DemoTicket, 'comments' | 'attachments' | 'events' | 'rating'> & { satisfactionSubmittedAt: string | null }>;
+    total?: number; statusCounts?: Record<string, number>; page?: number; limit?: number; totalPages?: number;
+    neighbors?: { olderId: string | null; newerId: string | null };
+  }>(`${path}/requester-queue?${params}`, { signal, timeoutMs: 30_000 }),
+  categories: () => boundedGet<Array<{ id: string; name: string; supportType: DemoTicketSummary['supportType'] }>>(`${path}/requester-categories`),
   detail: (id: string) => apiClient.get<DemoTicket>(`${path}/${id}`).then(res => res.data),
   create: (subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
     apiClient.post<DemoTicket>(path, { subject, description, supportType }).then(res => res.data),
+  createRequest: (data: FormData) => apiClient.post<DemoTicket>(path, data).then(res => res.data),
   createProxy: (runId: string, subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
     apiClient.post<DemoTicket>(`${path}/admin/proxy`, { runId, subject, description, supportType }).then(res => res.data),
   comment: (id: string, body: string) => apiClient.post<DemoTicket>(`${path}/${id}/comments`, { body }).then(res => res.data),
+  commentWithImages: (id: string, data: FormData) => apiClient.post<DemoTicket & { addedCommentId: number }>(`${path}/${id}/comments`, data).then(res => res.data),
+  close: (id: string) => apiClient.post<DemoTicket>(`${path}/${id}/requester-close`).then(res => res.data),
   status: (id: string, status: 'in_progress' | 'resolved', notes?: string) =>
     apiClient.patch<DemoTicket>(`${path}/${id}/status`, { status, notes }).then(res => res.data),
   rate: (id: string, likert: Array<number | 'NA'>) =>
@@ -73,6 +86,11 @@ export const demoApi = {
     return apiClient.post<DemoTicket>(`${path}/${id}/attachments`, data).then(res => res.data);
   },
   download: (id: string, attachmentId: string) => apiClient.get<Blob>(`${path}/${id}/attachments/${attachmentId}`, { responseType: 'blob' }).then(res => res.data),
+  replaceImage: (id: string, attachmentId: string, file: File) => {
+    const data = new FormData();
+    data.append('file', file);
+    return apiClient.post<DemoTicket>(`${path}/${id}/attachments/${attachmentId}/replacement`, data).then(res => res.data);
+  },
   remove: (id: string) => apiClient.delete<{ deleted: boolean; filesPending: boolean }>(`${path}/${id}`).then(res => res.data),
 };
 

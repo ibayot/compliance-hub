@@ -34,7 +34,7 @@ import { AppRelease, changelogApi } from '@/lib/api/changelog';
 import { useSse } from '@/lib/utils/useSse';
 import { AttendanceAssignmentAlert, ticketsApi } from '@/app/api/references';
 import { MobileNavigationProvider, useMobileNavigation } from '@/contexts/MobileNavigationContext';
-import DemoUserAppBar from '@/components/demo/DemoUserAppBar';
+import { demoReleases } from '@/components/demo/demoReleases';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -112,6 +112,12 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       .catch(() => {});
   }, [user, demo, isSessionLocked, requiresPasswordChange]);
   const openChangelogHistory = () => {
+    if (demo) {
+      setChangelogReleases(demoReleases);
+      setChangelogManual(true);
+      setChangelogOpen(true);
+      return;
+    }
     changelogApi
       .history()
       .then((r) => {
@@ -122,6 +128,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
       .catch(() => enqueueSnackbar('Unable to load release notes.', { variant: 'error' }));
   };
   const acknowledgeChangelog = async () => {
+    if (demo) { setChangelogOpen(false); return; }
     try {
       await changelogApi.acknowledge(changelogReleases.map((release) => release.id));
       setChangelogOpen(false);
@@ -354,8 +361,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         </DialogActions>
       </Dialog>
       {/* App Bar */}
-      {demo ? <DemoUserAppBar onMenuClick={handleDrawerToggle} />
-        : <AppBar onMenuClick={handleDrawerToggle} onOpenChangelog={openChangelogHistory} />}
+      <AppBar onMenuClick={handleDrawerToggle} onOpenChangelog={openChangelogHistory} />
       <ChangelogDialog
         open={changelogOpen}
         releases={changelogReleases}

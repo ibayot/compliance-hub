@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Alert, Button, CircularProgress, Stack } from '@mui/material';
+import { Alert, Button, CircularProgress } from '@mui/material';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import RequesterDashboard from '@/components/RequesterDashboard';
 import KnowledgeBasePage from '@/app/(app)/operations/knowledge-base/page';
 import UserManualPage from '@/app/(app)/admin/user-manual/page';
+import TicketsPage from '@/app/(app)/operations/tickets/page';
+import TicketDetailPage from '@/app/(app)/operations/tickets/[id]/page';
+import SettingsPage from '@/app/(app)/admin/settings/page';
 import { demoUserPaths } from '@/lib/api/demo';
-import DemoUserSettings from './DemoUserSettings';
-import { DemoTicketDetail, DemoTicketList } from './DemoWorkspace';
 import { useDemoDashboard } from './useDemoDashboard';
 
 function DemoDashboardPage() {
@@ -32,16 +33,16 @@ export default function DemoUserWorkspace() {
   }
   const pages = {
     [demoUserPaths.dashboard]: <DemoDashboardPage />,
-    [demoUserPaths.tickets]: <DemoTicketList technician={false} requesterWorkspace />,
+    [demoUserPaths.tickets]: <TicketsPage personalRequestedOnly />,
     [demoUserPaths.knowledge]: <KnowledgeBasePage demo />,
-    [demoUserPaths.settings]: <DemoUserSettings />,
+    [demoUserPaths.settings]: <SettingsPage />,
     [demoUserPaths.manual]: <UserManualPage />,
   } as Record<string, React.ReactNode>;
   const page = pathname.startsWith('/operations/tickets/') && id
-    ? <DemoTicketDetail key={id} id={id} viewer="user" requesterWorkspace />
+    ? <TicketDetailPage key={id} />
     : pages[pathname];
   if (!page) return <Navigate replace to={demoUserPaths.dashboard} />;
   return <DashboardLayout>
-    {!isSessionLocked && !requiresPasswordChange && <Stack spacing={2}>{page}</Stack>}
+    {!isSessionLocked && !requiresPasswordChange && page}
   </DashboardLayout>;
 }

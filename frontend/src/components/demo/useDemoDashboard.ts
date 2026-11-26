@@ -11,5 +11,6 @@ export function useDemoDashboard() {
     queryFn: demoApi.dashboard,
     enabled: user?.demoRole === 'user' && !isSessionLocked && !requiresPasswordChange,
     staleTime: 5_000,
+    refetchInterval: 15_000,
   });
 }

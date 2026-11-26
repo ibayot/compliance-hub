@@ -72,6 +72,8 @@ import { useSnackbar } from 'notistack';
 import { useRouter } from 'next/navigation';
 import { Link as RouterLink, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { demoRequesterProfile, demoRequesterTickets } from '@/components/demo/demoRequesterTickets';
+import { useDemoTicketRefresh } from '@/components/demo/useDemoTicketRefresh';
 import { SafeMarkdown } from '@/components/SafeRichText';
 import {
   ticketsApi,
@@ -165,7 +167,15 @@ export default function TicketsPage({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
-  const { user, myCap, loading: authLoading } = useAuth();
+  const { user: account, myCap: capabilities, loading: authLoading } = useAuth();
+  const demo = account?.demoRole === 'user';
+  const user = demo ? demoRequesterProfile(account) : account;
+  const myCap = demo ? null : capabilities;
+  const requesterApi = demo ? demoRequesterTickets : ticketsApi;
+  const catalogApi = demo ? demoRequesterTickets : ticketSettingsApi;
+  const searchKnowledge = demo ? demoRequesterTickets.searchKnowledge : knowledgeBaseApi.search;
+  const rateArticle = demo ? demoRequesterTickets.rateArticle : knowledgeBaseApi.rateArticle;
+  const getProfileUnits = demo ? demoRequesterTickets.getProfileUnits : usersApi.getProfileUnits;
   // Old bookmarks to Tickets must use the same requester view as My Tickets.
   const personalRequestedOnly = requestedOnly || user?.role === 'user';
   const { enqueueSnackbar } = useSnackbar();
@@ -839,7 +849,7 @@ export default function TicketsPage({
 
   const fetchMyRequestedStatusCounts = useCallback(
     (options?: TicketReadOptions) =>
-      ticketsApi.getMyRequested({
+      requesterApi.getMyRequested({
         ticketType: (filterType as TicketType) || undefined,
         priority: filterPriority || undefined,
         date: filterPeriodMode === 'day' ? filterDate : undefined,
@@ -862,6 +872,7 @@ export default function TicketsPage({
       filterQuarter,
       filterSemester,
       searchQuery,
+      requesterApi,
     ],
   );
 
@@ -872,16 +883,16 @@ export default function TicketsPage({
     const controller = new AbortController();
     ticketSummaryAbortRef.current = controller;
     try {
-      const stats = await ticketsApi.getDashboardStats({ signal: controller.signal });
+      const stats = await requesterApi.getDashboardStats({ signal: controller.signal });
       if (requestId !== ticketSummaryRequestRef.current || controller.signal.aborted) return;
-      setPendingSatCount(stats.pendingSatisfactionTickets?.length ?? 0);
+      setPendingSatCount(stats.pendingSatisfactionCount ?? stats.pendingSatisfactionTickets?.length ?? 0);
       setMyTicketsCount(stats.myTicketsCount ?? 0);
       setEscalatedToMeCount(stats.escalatedToMeCount ?? 0);
       setTicketSummaryError(false);
     } catch {
       if (requestId === ticketSummaryRequestRef.current && !controller.signal.aborted) setTicketSummaryError(true);
     }
-  }, [filtersHydrated, user?.id, user?.role, canManageAll, canViewEscalatedQueue]);
+  }, [filtersHydrated, user?.id, user?.role, canManageAll, canViewEscalatedQueue, requesterApi]);
 
   const refreshEscalationHistory = useCallback(async () => {
     if (!filtersHydrated || !canViewEscalatedQueue || !showEscalations) return;
@@ -942,7 +953,7 @@ export default function TicketsPage({
       });
     } else setRequestedCountsError(false);
     try {
-      const data = await ticketsApi.getQueue(ticketListViewScope, {
+      const data = await requesterApi.getQueue(ticketListViewScope, {
         ...queueFilters, page, limit: TICKETS_PAGE_SIZE,
       }, { signal: controller.signal });
       if (requestId !== ticketRequestRef.current || controller.signal.aborted) return;
@@ -972,7 +983,7 @@ export default function TicketsPage({
       }
     }
   }, [filtersHydrated, ticketListViewScope, queueFilters, personalRequestedOnly, selectedTab, page,
-    user?.id, user?.role, fetchMyRequestedStatusCounts]);
+    user?.id, user?.role, fetchMyRequestedStatusCounts, requesterApi]);
 
   useEffect(() => {
     void fetchTickets();
@@ -1003,6 +1014,7 @@ export default function TicketsPage({
     void refreshTicketSummary();
     void refreshEscalationHistory();
   };
+  useDemoTicketRefresh(demo && filtersHydrated, () => ticketLiveRefreshRef.current());
   useSse(['TICKET_UPDATED', 'SYSTEM_STATUS_CHANGED'], () => {
     if (ticketSseTimerRef.current) clearTimeout(ticketSseTimerRef.current);
     ticketSseTimerRef.current = setTimeout(() => {
@@ -1080,28 +1092,28 @@ export default function TicketsPage({
   // Pass activeOnly=true so only active categories appear in the creation dropdown
   useEffect(() => {
     if (newDialogOpen) {
-      ticketSettingsApi
+      catalogApi
         .getCategories(form.ticketType, true)
         .then(setCategories)
         .catch(() => setCategories([]));
     }
-  }, [newDialogOpen, form.ticketType]);
+  }, [newDialogOpen, form.ticketType, catalogApi]);
 
   useEffect(() => {
     if (newDialogOpen && form.categoryId) {
-      ticketSettingsApi
+      catalogApi
         .getIssueTypes(form.categoryId)
         .then((data) => setIssues(data.filter((iss) => iss.isActive && !iss.isDeleted)))
         .catch(() => setIssues([]));
     } else {
       setIssues([]);
     }
-  }, [newDialogOpen, form.categoryId]);
+  }, [newDialogOpen, form.categoryId, catalogApi]);
 
   // Listen for admin changes (activate/deactivate) while dialog is open
   useSse(['GLOBAL_SETTINGS_UPDATED'], () => {
     if (newDialogOpen) {
-      ticketSettingsApi
+      catalogApi
         .getCategories(form.ticketType, true)
         .then(setCategories)
         .catch(() => {}); // silent — don't show errors on background polls
@@ -1116,7 +1128,7 @@ export default function TicketsPage({
     const delayDebounceFn = setTimeout(async () => {
       try {
         setLoadingKb(true);
-        const results = await knowledgeBaseApi.search(form.subject);
+        const results = await searchKnowledge(form.subject);
         setKbSuggestions(results);
       } catch (err) {
         setKbSuggestions([]);
@@ -1126,11 +1138,11 @@ export default function TicketsPage({
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [form.subject]);
+  }, [form.subject, searchKnowledge]);
 
   const handleRateKb = async (id: number, isHelpful: boolean) => {
     try {
-      await knowledgeBaseApi.rateArticle(id, isHelpful);
+      await rateArticle(id, isHelpful);
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
       if (isHelpful) {
         // Abandon ticket
@@ -1221,7 +1233,7 @@ export default function TicketsPage({
         };
       }
 
-      await ticketsApi.create(payload);
+      await requesterApi.create(payload);
       enqueueSnackbar('Ticket submitted successfully!', { variant: 'success' });
       setNewDialogOpen(false);
       setForm({
@@ -1253,10 +1265,10 @@ export default function TicketsPage({
 
   const handleOpenNewTicket = () => {
     if (!canManageAll) {
-      ticketsApi
+      requesterApi
         .getDashboardStats()
         .then((stats) => {
-          const pendingCount = stats.pendingSatisfactionTickets?.length ?? 0;
+          const pendingCount = stats.pendingSatisfactionCount ?? stats.pendingSatisfactionTickets?.length ?? 0;
           setPendingSatCount(pendingCount);
 
           if (pendingCount > 0) {
@@ -1417,8 +1429,7 @@ export default function TicketsPage({
     //   .getUnitSuggestions()
     //   .then(setUnitSuggestions)
     //   .catch(() => { });
-    usersApi
-      .getProfileUnits()
+    getProfileUnits()
       .then((units) => setUnitSuggestions(units.map((u) => u.name)))
       .catch(() => {});
     setSatDialogOpen(true);
@@ -1458,7 +1469,8 @@ export default function TicketsPage({
     }
     try {
       setCsatSubmitting(true);
-      await ticketsApi.submitSatisfaction(satTicket.id, { formData: csatForm });
+      if (demo) await demoRequesterTickets.submitSatisfaction(satTicket.id, csatForm);
+      else await ticketsApi.submitSatisfaction(satTicket.id, { formData: csatForm });
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
       setSatDialogOpen(false);
       refreshAfterTicketChange();
@@ -1620,7 +1632,7 @@ export default function TicketsPage({
         </Box>
         <TicketPageActions
           createButtonRef={createTicketButtonRef}
-          canCreate={!!myCap?.isTicketModuleAccess && !restrictedAssignedOnly && !showEscalations && (!personalRequestedOnly || user?.role === 'user')}
+          canCreate={(demo || !!myCap?.isTicketModuleAccess) && !restrictedAssignedOnly && !showEscalations && (!personalRequestedOnly || user?.role === 'user')}
           canInvite={canSendRatingInvitations && ratingInvitationsAvailable && !showEscalations}
           canViewEscalations={canViewEscalatedQueue}
           showingEscalations={showEscalations}

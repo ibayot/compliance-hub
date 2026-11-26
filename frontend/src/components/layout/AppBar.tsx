@@ -40,6 +40,7 @@ import {
 import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { demoRequesterProfile, demoRequesterTickets } from '@/components/demo/demoRequesterTickets';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useThemeMode } from '@/contexts/ThemeModeContext';
@@ -169,10 +170,14 @@ const pushFailureMessages: Record<BrowserPushFailure, string> = {
 export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, myCap, logout } = useAuth();
+  const { user: account, myCap: capabilities, logout } = useAuth();
+  const demo = account?.demoRole === 'user';
+  const user = React.useMemo(() => demo ? demoRequesterProfile(account) : account, [account, demo]);
+  const myCap = demo ? null : capabilities;
+  const demoRead = React.useRef(new Set<string>());
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const { mode, setAppearance, layoutMode, mobileView, setMobileView } = useThemeMode();
+  const { mode, colorTheme, layoutPreset, setAppearance, layoutMode, mobileView, setMobileView } = useThemeMode();
   const { canGoBack, goBack } = useMobileNavigation();
   const theme = useTheme();
   const compactHeader = useMediaQuery(theme.breakpoints.down('sm'));
@@ -215,8 +220,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const nativeFcmClient = !!nativeFcmHandoff;
   const mobilePlatform = getMobileDevicePlatform();
   const appleMobileAlerts = !nativeFcmClient && mobilePlatform === 'ios';
-  const showPushControls = nativeFcmClient || mobilePlatform !== null;
-  const canChooseMobileView = !showPushControls && !Capacitor.isNativePlatform();
+  const showPushControls = !demo && (nativeFcmClient || mobilePlatform !== null);
+  const canChooseMobileView = !nativeFcmClient && mobilePlatform === null && !Capacitor.isNativePlatform();
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
   const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
   const nativeBadgeRestoreAllowed = nativeFcmHandoff?.badgeRestoreAllowed;
@@ -245,7 +250,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   }, [nativeFcmClient]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || demo) {
       setPushEnabled(false);
       setShowNotificationPreviews(true);
       setPushConfig(null);
@@ -392,10 +397,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     };
     void initializePush();
     return () => { current = false; };
-  }, [user, nativeFcmHandoff, pushCheckAttempt, showPushControls]);
+  }, [user, demo, nativeFcmHandoff, pushCheckAttempt, showPushControls]);
 
   useEffect(() => {
-    if (!user || nativeFcmHandoff?.version !== 4 || !nativeFcmHandoff.notificationsGranted ||
+    if (!user || demo || nativeFcmHandoff?.version !== 4 || !nativeFcmHandoff.notificationsGranted ||
         !nativeFcmHandoff.fid || pushEnabled || pushConfigChecking) return;
     const retry = () => { if (navigator.onLine) setPushCheckAttempt(attempt => attempt + 1); };
     const delay = Math.min(120_000, 15_000 * 2 ** Math.min(pushCheckAttempt, 3));
@@ -405,7 +410,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       window.clearTimeout(timer);
       window.removeEventListener('online', retry);
     };
-  }, [user, nativeFcmHandoff, pushEnabled, pushConfigChecking, pushCheckAttempt]);
+  }, [user, demo, nativeFcmHandoff, pushEnabled, pushConfigChecking, pushCheckAttempt]);
 
   const retryPushConfigCheck = async () => {
     if (pushConfigChecking || pushBusy) return;
@@ -841,6 +846,18 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       if (!user) return null;
       const requestId = ++notificationRequestRef.current;
       try {
+        if (demo) {
+          const { data } = await demoRequesterTickets.getQueue('requested', { pendingSatisfaction: true, page: 1, limit: 10 });
+          if (requestId !== notificationRequestRef.current) return null;
+          const items = data.map((ticket, index) => ({ id: index + 1, ticketId: ticket.id,
+            targetPath: `/operations/tickets/${ticket.id}?source=my-tickets`,
+            message: `Ticket ${ticket.ticketNumber} is ready for your rating.`,
+            isRead: demoRead.current.has(ticket.id), createdAt: ticket.createdAt }));
+          setNotifications(items);
+          setUnreadCount(items.filter(item => !item.isRead).length);
+          setNotifError(null);
+          return null;
+        }
         const summary = await notificationsApi.getSummary();
         if (requestId !== notificationRequestRef.current) return null;
         if (playSound && !pushEnabled && summary.unreadCount > prevUnreadCountRef.current) {
@@ -861,7 +878,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
         return null;
       }
     },
-    [playNotificationSound, pushEnabled, user],
+    [demo, playNotificationSound, pushEnabled, user],
   );
 
   // Notifications Polling with Page Visibility API
@@ -963,7 +980,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   });
 
   useEffect(() => {
-    if (!user || !('serviceWorker' in navigator)) return;
+    if (!user || demo || !('serviceWorker' in navigator)) return;
     const onMessage = (event: MessageEvent) => {
       const kind = event.data?.kind;
       if (event.data?.type !== 'FO2_SLA_SOUND' || !event.ports[0]) return;
@@ -976,7 +993,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [user, playNotificationSound]);
+  }, [user, demo, playNotificationSound]);
 
   useEffect(() => {
     if (!pushEnabled || !('setAppBadge' in navigator)) return;
@@ -995,7 +1012,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     setMarkingAllRead(true);
     ++notificationRequestRef.current;
     try {
-      await notificationsApi.markAllRead();
+      if (demo) notifications.forEach(item => { if (item.ticketId) demoRead.current.add(item.ticketId); });
+      else await notificationsApi.markAllRead();
       // Refetch rather than assuming zero: a new notification may arrive during the write.
       await fetchNotificationSummary();
     } catch {
@@ -1032,7 +1050,8 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
       );
       setUnreadCount((current) => Math.max(0, current - 1));
       prevUnreadCountRef.current = Math.max(0, prevUnreadCountRef.current - 1);
-      void notificationsApi
+      if (demo && notification.ticketId) demoRead.current.add(notification.ticketId);
+      else void notificationsApi
         .markRead(notification.id)
         .then((result) => {
           if (!result.success) void fetchNotificationSummary();
@@ -1144,9 +1163,9 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     if (savingAppearance || !user) return;
     setSavingAppearance(true);
     try {
-      const preferences = await usersApi.updateUiPreferences({
-        mode: mode === 'dark' ? 'light' : 'dark',
-      });
+      const nextMode = mode === 'dark' ? 'light' : 'dark';
+      const preferences = demo ? { colorTheme, layoutPreset, mode: nextMode }
+        : await usersApi.updateUiPreferences({ mode: nextMode });
       setAppearance(normalizeAppAppearance(preferences));
       handleProfileMenuClose();
     } catch {
@@ -1555,7 +1574,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             <Avatar
               sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
               src={
-                import.meta.env.VITE_PROFILE_IMAGE_URL
+                user?.staffId && import.meta.env.VITE_PROFILE_IMAGE_URL
                   ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg`
                   : undefined
               }
@@ -1642,7 +1661,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               Logout
             </MenuItem>
           </Menu>
-          <FeedbackModal manualOpen={feedbackOpen} onManualClose={() => setFeedbackOpen(false)} />
+          <FeedbackModal demo={demo} manualOpen={feedbackOpen} onManualClose={() => setFeedbackOpen(false)} />
         </Box>
       </Toolbar>
     </MuiAppBar>

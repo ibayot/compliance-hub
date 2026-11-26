@@ -262,7 +262,7 @@ export function useSse(eventTypes: SseEventType[], callback: SseListener['callba
   const typesString = [...new Set(eventTypes)].sort().join(',');
 
   useEffect(() => {
-    if (!user || isSessionLocked || requiresPasswordChange || !typesString) {
+    if (!user || user.demoRole || isSessionLocked || requiresPasswordChange || !typesString) {
       return;
     }
 
@@ -292,5 +292,5 @@ export function useSse(eventTypes: SseEventType[], callback: SseListener['callba
         disconnectSse();
       }
     };
-  }, [isSessionLocked, requiresPasswordChange, user?.id, typesString]);
+  }, [isSessionLocked, requiresPasswordChange, user?.id, user?.demoRole, typesString]);
 }

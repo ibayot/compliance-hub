@@ -76,7 +76,7 @@ function LayoutPreview({ preset }: { preset: AppAppearancePreferences['layoutPre
   );
 }
 
-export default function AppearanceSettingsCard() {
+export default function AppearanceSettingsCard({ demo = false }: { demo?: boolean }) {
   const { mode, colorTheme, layoutPreset, setAppearance, appearanceReady } = useThemeMode();
   const { enqueueSnackbar } = useSnackbar();
   const [saving, setSaving] = useState(false);
@@ -93,7 +93,7 @@ export default function AppearanceSettingsCard() {
     if (saving || !appearanceReady || !isDirty) return;
     setSaving(true);
     try {
-      const preferences = await usersApi.updateUiPreferences(draft);
+      const preferences = demo ? draft : await usersApi.updateUiPreferences(draft);
       setAppearance(normalizeAppAppearance(preferences));
       enqueueSnackbar('Appearance preferences saved.', { variant: 'success' });
     } catch (error: any) {

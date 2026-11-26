@@ -1,21 +1,23 @@
 import {
   Body, Controller, DefaultValuePipe, Delete, ForbiddenException, Get, Header, HttpCode,
   Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, Req, Res, StreamableFile,
-  UploadedFile, UseGuards, UseInterceptors, BadRequestException, ConflictException, ServiceUnavailableException,
+  UploadedFile, UploadedFiles, UseGuards, UseInterceptors, BadRequestException, ConflictException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { Response } from 'express';
 import { UsersHttpClient } from '../../common/http-clients/users.http-client';
 import { DemoTicketsService } from './demo-tickets.service';
 import { DemoTicketStore } from './demo-ticket-store';
 import { DemoActor, demoSupportTypes } from './demo.types';
+import { demoRequesterCategories } from './demo-requester-catalog';
 
 class NewDemoTicket {
   @IsString() @MaxLength(255) subject: string;
   @IsString() @MaxLength(12000) description: string;
   @IsIn(demoSupportTypes) supportType: typeof demoSupportTypes[number];
+  @IsOptional() @IsString() @MaxLength(40) categoryKey?: string;
 }
 class NewDemoProxyTicket extends NewDemoTicket {
   @IsUUID() runId: string;
@@ -77,9 +79,22 @@ export class DemoTicketsController {
     return this.tickets.requesterDashboard(this.actor(request));
   }
 
+  @Get('requester-queue')
+  @Header('Cache-Control', 'private, no-store')
+  requesterQueue(@Req() request: Request, @Query() query: Record<string, unknown>) {
+    return this.tickets.requesterQueue(this.actor(request), query);
+  }
+
+  @Get('requester-categories')
+  requesterCategories(@Req() request: Request) {
+    if (this.actor(request).role !== 'user') throw new ForbiddenException();
+    return demoRequesterCategories;
+  }
+
   @Post()
-  create(@Req() request: Request, @Body() body: NewDemoTicket) {
-    return this.tickets.create(this.actor(request), body);
+  @UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  create(@Req() request: Request, @Body() body: NewDemoTicket, @UploadedFiles() files?: Express.Multer.File[]) {
+    return this.tickets.create(this.actor(request), body, files);
   }
 
   @Post('admin/proxy')
@@ -99,8 +114,14 @@ export class DemoTicketsController {
   }
 
   @Post(':id/comments')
-  comment(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: DemoComment) {
-    return this.tickets.comment(this.actor(request), id, body.body);
+  @UseInterceptors(FilesInterceptor('attachments', 5, { limits: { fileSize: 10 * 1024 * 1024 } }))
+  comment(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: DemoComment, @UploadedFiles() files?: Express.Multer.File[]) {
+    return this.tickets.comment(this.actor(request), id, body.body, files);
+  }
+
+  @Post(':id/requester-close')
+  requesterClose(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string) {
+    return this.tickets.requesterClose(this.actor(request), id);
   }
 
   @Patch(':id/status')
@@ -117,6 +138,13 @@ export class DemoTicketsController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0 } }))
   upload(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
     return this.tickets.upload(this.actor(request), id, file);
+  }
+
+  @Post(':id/attachments/:attachmentId/replacement')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0 } }))
+  replaceImage(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string,
+    @Param('attachmentId', ParseUUIDPipe) attachmentId: string, @UploadedFile() file?: Express.Multer.File) {
+    return this.tickets.replaceImage(this.actor(request), id, attachmentId, file);
   }
 
   @Get(':id/attachments/:attachmentId')

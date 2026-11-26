@@ -68,6 +68,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
+import { demoRequesterProfile, demoUnits, saveDemoRequesterProfile } from '@/components/demo/demoRequesterTickets';
 import AppearanceSettingsCard from '@/components/AppearanceSettingsCard';
 import { authApi } from '@/lib/api/auth';
 import { ticketSettingsApi } from '@/app/api/references';
@@ -93,7 +94,7 @@ import { DEFAULT_IDLE_LOCK_MINUTES, MIN_IDLE_LOCK_MINUTES, MAX_IDLE_LOCK_MINUTES
 
 // --- Change Password Card ---------------------------------------------------
 
-function ChangePasswordCard() {
+function ChangePasswordCard({ demo = false }: { demo?: boolean }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -122,7 +123,8 @@ function ChangePasswordCard() {
     }
     try {
       setBusy(true);
-      const res = await authApi.changePassword({ currentPassword: current, newPassword: next });
+      const res = demo ? { message: 'Demo password preview complete.' }
+        : await authApi.changePassword({ currentPassword: current, newPassword: next });
       enqueueSnackbar(res.message || 'Password updated successfully.', { variant: 'success' });
       setCurrent('');
       setNext('');
@@ -144,7 +146,7 @@ function ChangePasswordCard() {
   const handleGenerateRandom = async () => {
     try {
       setGenerating(true);
-      const res = await authApi.generateRandomPassword();
+      const res = demo ? { password: 'Sample-only-38!' } : await authApi.generateRandomPassword();
       setNext(res.password);
       setConfirm(res.password);
       enqueueSnackbar('Random password generated.', { variant: 'info' });
@@ -158,7 +160,7 @@ function ChangePasswordCard() {
   const handleGeneratePassphrase = async () => {
     try {
       setGenerating(true);
-      const res = await authApi.generatePassphrase();
+      const res = demo ? { password: 'Sample-office-helps-38!' } : await authApi.generatePassphrase();
       setNext(res.password);
       setConfirm(res.password);
       enqueueSnackbar('Random passphrase generated.', { variant: 'info' });
@@ -2491,7 +2493,9 @@ function MobileSettingsCard() {
 
 
 function ProfilePreferencesCard() {
-  const { user, refreshSession } = useAuth();
+  const { user: account, refreshSession } = useAuth();
+  const demo = account?.demoRole === 'user';
+  const user = demo ? demoRequesterProfile(account) : account;
   const { enqueueSnackbar } = useSnackbar();
   const [units, setUnits] = useState<{ id: number; name: string; hasReportorialRequirements?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -2519,6 +2523,10 @@ function ProfilePreferencesCard() {
       positionFull: user.positionFull || '',
       designation: user.designation || '',
     });
+    if (demo) {
+      setUnits(demoUnits);
+      return;
+    }
     Promise.all([usersApi.getProfileUnits(), usersApi.getUnitAssignmentSource()])
       .then(([availableUnits, source]) => {
         setUnits(availableUnits);
@@ -2527,7 +2535,7 @@ function ProfilePreferencesCard() {
       .catch(() => {
         enqueueSnackbar('Unable to load unit information.', { variant: 'error' });
       });
-  }, [user?.id, enqueueSnackbar]);
+  }, [user?.id, demo, enqueueSnackbar]);
 
   const handleSave = async (confirmed = false) => {
     if (!user || saving) return;
@@ -2550,6 +2558,16 @@ function ProfilePreferencesCard() {
       return;
     }
     setClearConfirmation([]);
+    if (demo) {
+      try {
+        saveDemoRequesterProfile(user.id, { phoneNumber, sex: form.sex, position: form.position.trim(),
+          positionFull: form.positionFull.trim(), designation: form.designation.trim() });
+        enqueueSnackbar('Profile preview updated.', { variant: 'success' });
+      } catch {
+        enqueueSnackbar('Could not save the demo profile for this session.', { variant: 'error' });
+      }
+      return;
+    }
 
     try {
       setSaving(true);
@@ -2666,7 +2684,10 @@ function ProfilePreferencesCard() {
   );
 }
 export default function SettingsPage() {
-  const { user, myCap } = useAuth();
+  const { user: account, myCap: capabilities } = useAuth();
+  const demo = account?.demoRole === 'user';
+  const user = demo ? demoRequesterProfile(account) : account;
+  const myCap = demo ? null : capabilities;
   const [tabIndex, setTabIndex] = useState(0);
 
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
@@ -2728,7 +2749,7 @@ export default function SettingsPage() {
         <WorkspaceLayout kind="settings" context={<Card elevation={2} sx={{ mb: 3 }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', py: 4 }}>
               <Avatar 
-                src={import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user?.staffId}.jpg` : undefined} 
+                src={user.staffId && import.meta.env.VITE_PROFILE_IMAGE_URL ? `${import.meta.env.VITE_PROFILE_IMAGE_URL}/${user.staffId}.jpg` : undefined}
                 imgProps={{ style: { objectPosition: 'center 20%' } }}
                 sx={{ 
                   width: 120, 
@@ -2785,13 +2806,13 @@ export default function SettingsPage() {
               <ProfilePreferencesCard />
             </Grid>
             <Grid item xs={12}>
-              <AppearanceSettingsCard />
+              <AppearanceSettingsCard demo={demo} />
             </Grid>
             <Grid item xs={12}>
-              <MobileSettingsCard />
+              {!demo && <MobileSettingsCard />}
             </Grid>
             <Grid item xs={12}>
-              <ChangePasswordCard />
+              <ChangePasswordCard demo={demo} />
             </Grid>
           </Grid>
 </WorkspaceLayout>

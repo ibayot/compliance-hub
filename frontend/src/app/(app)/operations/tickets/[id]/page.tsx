@@ -49,6 +49,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '@/contexts/AuthContext';
+import { demoRequesterProfile, demoRequesterTickets } from '@/components/demo/demoRequesterTickets';
+import { useDemoTicketRefresh } from '@/components/demo/useDemoTicketRefresh';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
@@ -217,7 +219,16 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const router = useRouter();
-  const { user, myCap } = useAuth();
+  const { user: account, myCap: capabilities } = useAuth();
+  const demo = account?.demoRole === 'user';
+  const user = demo ? demoRequesterProfile(account) : account;
+  const myCap = demo ? null : capabilities;
+  const requesterApi = demo ? demoRequesterTickets : ticketsApi;
+  const getProfileUnits = demo ? demoRequesterTickets.getProfileUnits : usersApi.getProfileUnits;
+  const commentImageUrl = (id: string, path: string) => {
+    const fileName = path.split('/').pop() || path;
+    return demo ? demoRequesterTickets.imageUrl(id, fileName) : `/tickets/comment-attachment/${id}/${encodeURIComponent(fileName)}`;
+  };
   const { enqueueSnackbar } = useSnackbar();
   const openedFromMyTickets =
     typeof window !== 'undefined' &&
@@ -244,7 +255,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   const [parentTicketNumber, setParentTicketNumber] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ticket?.status === 'duplicate' && ticket?.duplicateOfId) {
+    if (!demo && ticket?.status === 'duplicate' && ticket?.duplicateOfId) {
       ticketsApi
         .getById(ticket.duplicateOfId)
         .then((t) => setParentTicketNumber(t.ticketNumber))
@@ -531,11 +542,11 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     ? 'requested' : myCap?.isTicketModuleAccess ? 'all' : isRequester ? 'requested' : 'assigned');
   const neighborFilters = listState?.filters ?? (personalProxy ? { proxyCreatedByMe: true } : {});
   const neighbors = useQuery({
-    queryKey: ['ticket-neighbors', user?.id, user?.role, neighborScope, neighborFilters, ticketId],
+    queryKey: ['ticket-neighbors', demo, user?.id, user?.role, neighborScope, neighborFilters, ticketId],
     enabled: !!user && ticket?.id === ticketId && (isRegularUser || myCap != null),
     retry: false,
     queryFn: async ({ signal }) => {
-      const result = await ticketsApi.getQueue(neighborScope, {
+      const result = await requesterApi.getQueue(neighborScope, {
         ...neighborFilters, aroundTicketId: ticketId,
       }, { signal });
       if (!result.neighbors) throw new Error('Ticket navigation is unavailable.');
@@ -630,7 +641,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     if (!imageReplacement || replacementFiles.length !== 1 || replacingImage) return;
     setReplacingImage(true);
     try {
-      await ticketsApi.replaceCommentImage(ticketId, imageReplacement.commentId, imageReplacement.path, replacementFiles[0]);
+      await requesterApi.replaceCommentImage(ticketId, imageReplacement.commentId, imageReplacement.path, replacementFiles[0]);
       setImageReplacement(null); setReplacementFiles([]);
       await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Image replaced. The number of attached images is unchanged.', {variant: 'success'});
@@ -640,6 +651,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   };
 
   const fetchEvents = async () => {
+    if (demo) return;
     const requestedTicketId = ticketId;
     if (!requestedTicketId || String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
     const requestSequence = ++eventsLoadSequenceRef.current;
@@ -662,7 +674,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   };
 
   const fetchEscalations = async () => {
-    if (!ticketId) return;
+    if (demo || !ticketId) return;
     const requestedTicketId = ticketId;
     if (String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
     const requestSequence = ++escalationsLoadSequenceRef.current;
@@ -691,7 +703,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     fetchEscalations();
   }, [ticketId]);
   useEffect(() => {
-    if (ticket?.ticketType) {
+    if (!demo && ticket?.ticketType) {
       ticketSettingsApi
         .getCategories(ticket.ticketType, true)
         .then(setCategories)
@@ -700,7 +712,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   }, [ticket?.ticketType]);
 
   useEffect(() => {
-    if (ticket?.categoryId) {
+    if (!demo && ticket?.categoryId) {
       ticketSettingsApi
         .getIssueTypes(ticket.categoryId)
         .then((data) => setIssues(data.filter((iss) => iss.isActive && !iss.isDeleted)))
@@ -712,6 +724,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
 
   // Live updates – listen for SSE changes (QA #7: ensures user-side sees status changes)
   useSse(['TICKET_UPDATED'], async (payload) => {
+    if (demo) return;
     // Only refresh if the update is for this specific ticket (or global)
     const requestedTicketId = ticketId;
     if (!payload?.ticketId || String(payload.ticketId) === String(requestedTicketId)) {
@@ -734,22 +747,27 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     }
   });
 
+  useDemoTicketRefresh(demo && !loading && !!ticket && !csatSubmitting && !submittingCommentFor && !replacingImage,
+    () => void fetchTicket(true));
   useEffect(() => {
     if (canStaff && ticket?.ticketType) fetchTechnicians(ticket.ticketType);
   }, [canStaff, ticket?.ticketType]);
 
-  const fetchTicket = async () => {
+  const fetchTicket = async (background = false) => {
     const requestedTicketId = ticketId;
     if (!requestedTicketId || String(activeTicketIdRef.current) !== String(requestedTicketId)) return;
     const requestSequence = ++ticketLoadSequenceRef.current;
     try {
-      setLoading(true);
-      const data = await ticketsApi.getById(requestedTicketId);
+      if (!background) setLoading(true);
+      const result = demo ? await demoRequesterTickets.getDetail(requestedTicketId) : null;
+      const data = result?.ticket ?? await ticketsApi.getById(requestedTicketId);
       if (
         requestSequence !== ticketLoadSequenceRef.current ||
         String(activeTicketIdRef.current) !== String(requestedTicketId)
       ) return;
       setTicket(data);
+      if (result) setEvents(result.events);
+      if (background) return;
       setNewStatus(data.status);
       setNewPriority(data.priority || '');
       setResolutionNotes(data.resolutionNotes || '');
@@ -796,6 +814,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           .catch(() => {});
       }
     } catch (err: any) {
+      if (background) return;
       if (
         requestSequence === ticketLoadSequenceRef.current &&
         String(activeTicketIdRef.current) === String(requestedTicketId)
@@ -910,7 +929,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     const submittedTicketNumber = ticket?.ticketNumber;
     try {
       setSubmittingCommentFor(submittedTicketId);
-      const createdComment = await ticketsApi.addComment(
+      const createdComment = await requesterApi.addComment(
         submittedTicketId,
         comment,
         isInternal && canViewInternalNotes,
@@ -1287,7 +1306,8 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
 
   const handleSelfClose = async () => {
     try {
-      await ticketsApi.update(ticketId, { status: 'closed' as any });
+      if (demo) await demoRequesterTickets.close(ticketId);
+      else await ticketsApi.update(ticketId, { status: 'closed' });
       fetchTicket();
       enqueueSnackbar('Ticket closed successfully.', { variant: 'success' });
     } catch (err: any) {
@@ -1305,7 +1325,8 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     }
     try {
       setCsatSubmitting(true);
-      await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
+      if (demo) await demoRequesterTickets.submitSatisfaction(ticketId, csatForm);
+      else await ticketsApi.submitSatisfaction(ticketId, { formData: csatForm });
       setSatDialogOpen(false);
       await Promise.all([fetchTicket(), fetchEvents()]);
       enqueueSnackbar('Thank you for your feedback!', { variant: 'success' });
@@ -1371,7 +1392,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
         dateOfTransaction: effectiveResolvedAt(ticket) ? new Date(effectiveResolvedAt(ticket) as string).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
       });
-      usersApi.getProfileUnits().then(units => setUnitSuggestions(units.map(u => u.name))).catch(() => {});
+      getProfileUnits().then(units => setUnitSuggestions(units.map(u => u.name))).catch(() => {});
       setSatDialogOpen(true);
     } },
     resolutionTime: { label: 'Correct Resolution Time', icon: <ResolutionTimeIcon fontSize="small" />, onClick: openResolutionOverrideDialog },
@@ -2177,7 +2198,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                     <AuthenticatedImageGallery
                       onReplace={canReplaceImage(initialAttachmentComment) ? (_, index) => openImageReplacement(initialAttachmentComment, index) : undefined}
                       images={ticketCommentImages(initialAttachmentComment).map((attachmentPath, index) => ({
-                        url: `/tickets/comment-attachment/${ticket.id}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
+                        url: commentImageUrl(ticket.id, attachmentPath),
                         alt: `Initial attachment ${index + 1}`,
                       }))}
                       thumbnailStyle={{ width: 160, height: 120 }}
@@ -2517,7 +2538,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                             <AuthenticatedImageGallery
                               onReplace={canReplaceImage(c) ? (_, index) => openImageReplacement(c, index) : undefined}
                               images={ticketCommentImages(c).map((attachmentPath, attachmentIndex) => ({
-                                url: `/tickets/comment-attachment/${c.ticketId}/${encodeURIComponent(attachmentPath.split('/').pop() || attachmentPath)}`,
+                                url: commentImageUrl(c.ticketId, attachmentPath),
                                 alt: `Comment attachment ${attachmentIndex + 1}`,
                               }))}
                               thumbnailStyle={{ width: 160, height: 120 }}
@@ -2869,8 +2890,8 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
         <DialogContent>
           <Typography variant="body2" mb={2}>Previous image, followed by its replacement. These are history records, not additional attachments.</Typography>
           {imageHistory && <AuthenticatedImageGallery images={[
-            {url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageHistory.oldPath.split('/').pop() || '')}`,alt:'Previous image'},
-            {url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageHistory.newPath.split('/').pop() || '')}`,alt:'Replacement image'},
+            {url:commentImageUrl(ticketId, imageHistory.oldPath),alt:'Previous image'},
+            {url:commentImageUrl(ticketId, imageHistory.newPath),alt:'Replacement image'},
           ]} thumbnailStyle={{width:160,height:120}} />}
         </DialogContent>
         <DialogActions><Button onClick={() => setImageHistory(null)}>Close</Button></DialogActions>
@@ -2881,7 +2902,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
         <DialogTitle>Replace Image</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{mb:2}}>Replace this image with one new image. No attached images will be added or deleted; the previous image is retained in the ticket history.</Alert>
-          {imageReplacement && <AuthenticatedImageGallery images={[{url:`/tickets/comment-attachment/${ticketId}/${encodeURIComponent(imageReplacement.path.split('/').pop() || '')}`,alt:'Current image'}]} />}
+          {imageReplacement && <AuthenticatedImageGallery images={[{url:commentImageUrl(ticketId, imageReplacement.path),alt:'Current image'}]} />}
           <Box mt={2} sx={{pointerEvents: replacingImage ? 'none' : 'auto'}}>
             <TicketImageDropzone files={replacementFiles} onFilesChange={setReplacementFiles}
               multiple={false} maxFiles={1} buttonLabel="Select Replacement"
