@@ -5231,6 +5231,15 @@ export class TicketService implements OnModuleInit {
     };
   }
 
+  private getSubmittedRating(ticket: Ticket): number | null {
+    const rating = ticket.satisfactionRating;
+    return ticket.satisfactionSubmittedAt &&
+      (ticket.status === TicketStatus.RESOLVED || ticket.status === TicketStatus.CLOSED) &&
+      rating != null && rating >= 1 && rating <= 5
+      ? rating
+      : null;
+  }
+
   async getRatingsReport(filters: {
     year?: number;
     month?: number;
@@ -5254,20 +5263,24 @@ export class TicketService implements OnModuleInit {
       .andWhere('t.satisfactionSubmittedAt IS NOT NULL')
       .andWhere('t.status IN (:...ratedStatuses)', { ratedStatuses: [TicketStatus.RESOLVED, TicketStatus.CLOSED] });
 
-    if (filters.year) {
-      qb.andWhere('YEAR(t.satisfactionSubmittedAt) = :year', { year: filters.year });
-    }
-    if (filters.month) {
-      qb.andWhere('MONTH(t.satisfactionSubmittedAt) = :month', { month: filters.month });
-    }
-    if (filters.quarter) {
-      qb.andWhere('QUARTER(t.satisfactionSubmittedAt) = :quarter', { quarter: filters.quarter });
-    }
-    if (filters.semester) {
-      if (filters.semester === 1) {
-        qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN 1 AND 6');
-      } else {
-        qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN 7 AND 12');
+    if (filters.year !== undefined) {
+      let period: PerformancePeriod;
+      try {
+        period = reportPerformancePeriod(filters);
+      } catch {
+        throw new BadRequestException('Invalid ratings report period.');
+      }
+      qb.andWhere('t.satisfactionSubmittedAt BETWEEN :ratingStart AND :ratingEnd', {
+        ratingStart: period.start,
+        ratingEnd: period.end,
+      });
+    } else {
+      // Preserve calendar filters for callers requesting the same period across all years.
+      if (filters.month) qb.andWhere('MONTH(t.satisfactionSubmittedAt) = :month', { month: filters.month });
+      if (filters.quarter) qb.andWhere('QUARTER(t.satisfactionSubmittedAt) = :quarter', { quarter: filters.quarter });
+      if (filters.semester) {
+        const firstMonth = filters.semester === 1 ? 1 : 7;
+        qb.andWhere('MONTH(t.satisfactionSubmittedAt) BETWEEN :firstMonth AND :lastMonth', { firstMonth, lastMonth: firstMonth + 5 });
       }
     }
     const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
@@ -6377,11 +6390,8 @@ export class TicketService implements OnModuleInit {
     }>;
     performancePeriod: { startAt: string; endAt: string; excludedTickets: number };
   }> {
-    const now = new Date();
-    const year = filters.year ?? now.getFullYear();
-
     let rankingPeriod: PerformancePeriod;
-    try { rankingPeriod = reportPerformancePeriod(filters, now); }
+    try { rankingPeriod = reportPerformancePeriod(filters); }
     catch { throw new BadRequestException('Invalid performance report period.'); }
 
     const canManageReports = this.roleCapSvc.isTicketReportsManage(filters.viewerRole || '');
@@ -6391,25 +6401,7 @@ export class TicketService implements OnModuleInit {
       filters.technicianId,
     );
 
-    // Build date range from filters
-    let startDate: Date;
-    let endDate: Date;
-
-    if (filters.month) {
-      startDate = new Date(year, filters.month - 1, 1);
-      endDate = new Date(year, filters.month, 0, 23, 59, 59, 999);
-    } else if (filters.quarter) {
-      const qStart = (filters.quarter - 1) * 3;
-      startDate = new Date(year, qStart, 1);
-      endDate = new Date(year, qStart + 3, 0, 23, 59, 59, 999);
-    } else if (filters.semester) {
-      const sStart = (filters.semester - 1) * 6;
-      startDate = new Date(year, sStart, 1);
-      endDate = new Date(year, sStart + 6, 0, 23, 59, 59, 999);
-    } else {
-      startDate = new Date(year, 0, 1);
-      endDate = new Date(year, 11, 31, 23, 59, 59, 999);
-    }
+    const { start: startDate, end: endDate } = rankingPeriod;
 
     let qb = this.ticketRepo
       .createQueryBuilder('t')
@@ -6466,11 +6458,13 @@ export class TicketService implements OnModuleInit {
       };
     }
 
-    const ratedTickets = tickets.filter((t) => t.satisfactionRating !== null);
-    const totalWithRating = ratedTickets.length;
-
-    // Overall average
-    const overallSum = ratedTickets.reduce((s, t) => s + (t.satisfactionRating ?? 0), 0);
+    const ratings = new Map<string, number>();
+    for (const ticket of allTickets) {
+      const rating = this.getSubmittedRating(ticket);
+      if (rating !== null) ratings.set(ticket.id, rating);
+    }
+    const totalWithRating = ratings.size;
+    const overallSum = Array.from(ratings.values()).reduce((sum, rating) => sum + rating, 0);
     const avgOverallRating = totalWithRating > 0 ? roundRating(overallSum / totalWithRating) : null;
 
     // Per type (count total ALL TICKETS, but avg based on rated)
@@ -6486,11 +6480,11 @@ export class TicketService implements OnModuleInit {
         resolvedCount: 0,
         totalCount: 0,
       };
-      const hasRating = t.status !== TicketStatus.DUPLICATE && t.satisfactionRating !== null;
+      const rating = ratings.get(t.id);
       const isResolved = [TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(t.status);
       byTypeMap.set(key, {
-        sum: cur.sum + (hasRating ? t.satisfactionRating! : 0),
-        ratedCount: cur.ratedCount + (hasRating ? 1 : 0),
+        sum: cur.sum + (rating ?? 0),
+        ratedCount: cur.ratedCount + (rating === undefined ? 0 : 1),
         resolvedCount: cur.resolvedCount + (isResolved ? 1 : 0),
         totalCount: cur.totalCount + 1,
       });
@@ -6521,16 +6515,13 @@ export class TicketService implements OnModuleInit {
         ratedCount: 0,
         totalCount: 0,
       };
-      if (t.satisfactionRating !== null) {
-        byTechMap.set(t.assignedToId, {
-          name: techName,
-          sum: cur.sum + t.satisfactionRating,
-          ratedCount: cur.ratedCount + 1,
-          totalCount: cur.totalCount + 1,
-        });
-      } else {
-        byTechMap.set(t.assignedToId, { ...cur, totalCount: cur.totalCount + 1 });
-      }
+      const rating = ratings.get(t.id);
+      byTechMap.set(t.assignedToId, {
+        ...cur,
+        sum: cur.sum + (rating ?? 0),
+        ratedCount: cur.ratedCount + (rating === undefined ? 0 : 1),
+        totalCount: cur.totalCount + 1,
+      });
     }
     const avgRatingByTechnician = Array.from(byTechMap.entries())
       .map(([techId, { name, sum, ratedCount, totalCount }]) => ({

@@ -3,10 +3,12 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ThemeProvider, styled } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { Capacitor } from '@capacitor/core';
 import { SnackbarProvider, MaterialDesignContent, closeSnackbar, useSnackbar } from 'notistack';
 import CloseIcon from '@mui/icons-material/Close';
 import IconButton from '@mui/material/IconButton';
 import { getAppTheme } from '@/lib/theme';
+import { getMobileDevicePlatform } from '@/lib/mobile-device';
 import type { AppLayoutMode } from '@/lib/theme';
 import type {
   AppAppearancePreferences,
@@ -39,6 +41,8 @@ type ThemeModeContextValue = {
   appearanceReady: boolean;
   setAppearanceReady: (ready: boolean) => void;
   layoutMode: AppLayoutMode;
+  mobileView: boolean;
+  setMobileView: (enabled: boolean) => void;
 };
 
 const ThemeModeContext = createContext<ThemeModeContextValue | undefined>(undefined);
@@ -92,16 +96,26 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
     return stored === 'dark' ? 'dark' : 'light';
   });
 
-  const [layoutMode, setLayoutMode] = useState<AppLayoutMode>(() =>
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches ? 'mobile' : 'web',
+  const [mobileViewport, setMobileViewport] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches,
   );
+  const [mobileViewPreference, setMobileViewPreference] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('app-mobile-view') === 'true',
+  );
+  const mobileView = mobileViewPreference && typeof navigator !== 'undefined' &&
+    !Capacitor.isNativePlatform() && !getMobileDevicePlatform();
+  const layoutMode: AppLayoutMode = mobileViewport || mobileView ? 'mobile' : 'web';
+  const setMobileView = React.useCallback((enabled: boolean) => {
+    setMobileViewPreference(enabled);
+    localStorage.setItem('app-mobile-view', String(enabled));
+  }, []);
 
   useEffect(() => {
-    const mobileViewport = window.matchMedia('(max-width: 899px)');
-    const updateLayoutMode = () => setLayoutMode(mobileViewport.matches ? 'mobile' : 'web');
-    updateLayoutMode();
-    mobileViewport.addEventListener('change', updateLayoutMode);
-    return () => mobileViewport.removeEventListener('change', updateLayoutMode);
+    const mediaQuery = window.matchMedia('(max-width: 899px)');
+    const updateViewport = () => setMobileViewport(mediaQuery.matches);
+    updateViewport();
+    mediaQuery.addEventListener('change', updateViewport);
+    return () => mediaQuery.removeEventListener('change', updateViewport);
   }, []);
 
   const [colorTheme, setColorThemeState] = useState<AppColorTheme>(() => {
@@ -136,6 +150,8 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       appearanceReady,
       setAppearanceReady,
       layoutMode,
+      mobileView,
+      setMobileView,
     }),
     [
       mode,
@@ -145,6 +161,8 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       appearanceReady,
       setAppearanceReady,
       layoutMode,
+      mobileView,
+      setMobileView,
     ],
   );
 

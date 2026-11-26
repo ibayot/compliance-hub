@@ -1,5 +1,9 @@
 # Database initialization order
 
+## For release 1.1.26 (from 1.1.25)
+
+Rebuild the frontend and Ticketing service. This release uses the existing 1.1.25 database schema and mobile installers. Apply `20261126-add-application-changelog-v1.1.26-users.sql` to the verified Users database to publish the in-app notes.
+
 ## For release 1.1.25 (from 1.1.24)
 
 Build the frontend and Ticketing service images first. Stop the previous Ticketing worker before applying `20261125-add-knowledge-base-draft-workflow-ticketing.sql` to the verified Ticketing database. This migration includes the article status column and preserves existing articles and eligible pending requests. Apply `20261125-add-application-changelog-v1.1.25-users.sql` to the verified Users database for the in-app notes. Start frontend and Ticketing from the built images. The installed Android APK and iOS profile use the updated web application at their existing URLs.

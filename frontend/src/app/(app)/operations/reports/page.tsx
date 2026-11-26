@@ -51,8 +51,9 @@ import {
   Legend,
   type TooltipProps,
 } from 'recharts';
-import { ticketsApi, type TicketReportResult } from '@/app/api/references';
+import { ticketsApi, type RatingsReportResult, type TicketReportResult } from '@/app/api/references';
 import { useAuth } from '@/contexts/AuthContext';
+import { useThemeMode } from '@/contexts/ThemeModeContext';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { useSse } from '@/lib/utils/useSse';
 import ResponsiveTable from '@/components/layout/ResponsiveTable';
@@ -250,6 +251,33 @@ function RatingTrendTooltip({ active, label, payload }: TooltipProps<number, str
   );
 }
 
+function RatingTrendChart({ points, groupBy }: {
+  points: RatingsReportResult['byDay'] | RatingsReportResult['byWeek'];
+  groupBy: 'date' | 'week';
+}) {
+  if (!points.length) return null;
+  const daily = groupBy === 'date';
+  return (
+    <Grid item xs={12} md={6}>
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            {daily ? 'Average Rating By Day' : 'Average Rating By Week'}
+          </Typography>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={points} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
+              <XAxis dataKey={groupBy} tick={{ fontSize: 11 }} />
+              <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fontSize: 11 }} />
+              <Tooltip content={<RatingTrendTooltip />} />
+              <Bar dataKey="avgRating" name="Average rating" fill={daily ? '#9C27B0' : '#FF9800'} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </Grid>
+  );
+}
+
 const EMPTY_ROWS: never[] = [];
 type ReportAssignee = Awaited<ReturnType<typeof ticketsApi.getReportTechnicians>>[number];
 
@@ -326,7 +354,8 @@ export default function TicketReportsPage() {
   const queryClient = useQueryClient();
   const canManageReports = !!myCap?.isTicketReportsManage;
   const isCompactViewport = useMediaQuery('(max-width:599.95px)');
-  const mobileReportRows = getMobileDevicePlatform() !== null;
+  const { mobileView } = useThemeMode();
+  const mobileReportRows = mobileView || getMobileDevicePlatform() !== null;
   const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
 
   const [year, setYear] = useState<number>(CURRENT_YEAR);
@@ -1116,6 +1145,9 @@ export default function TicketReportsPage() {
           <Box sx={{ '@media print': { display: 'none' } }}>
             {!loading && viewMode === 'overview' && result && (
               <>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Tickets created in {periodLabel} {year} (Manila time).
+                </Typography>
                 {/* ── Summary Cards ── */}
                 <Grid container spacing={2} mb={3} className="sectioned-card-grid">
                   <Grid item xs={12} sm={4}>
@@ -1584,68 +1616,19 @@ export default function TicketReportsPage() {
 
             {!loading && viewMode === 'detailed' && detailedResult && (
               <Grid container spacing={3} className="sectioned-card-grid sectioned-card-grid-wide">
-                <Grid item xs={12} md={6}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                        Average Rating By Day
-                      </Typography>
-                      {detailedResult.byDay.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          No data.
-                        </Typography>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={250}>
-                          <BarChart
-                            data={detailedResult.byDay}
-                            margin={{ top: 4, right: 8, left: -20, bottom: 4 }}
-                          >
-                            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                            <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
-                            <Tooltip content={<RatingTrendTooltip />} />
-                            <Bar
-                              dataKey="avgRating"
-                              name="Avg Rating"
-                              fill="#9C27B0"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </CardContent>
-                  </Card>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">
+                    Ratings submitted in {periodLabel} {year} (Manila time).
+                    {detailedResult.summary.count > 0 &&
+                      ` ${detailedResult.summary.count} rated ${detailedResult.summary.count === 1 ? 'ticket' : 'tickets'} · ${detailedResult.summary.average.toFixed(2)} / 5 average`}
+                  </Typography>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Card>
-                    <CardContent>
-                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                        Average Rating By Week
-                      </Typography>
-                      {detailedResult.byWeek.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          No data.
-                        </Typography>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={250}>
-                          <BarChart
-                            data={detailedResult.byWeek}
-                            margin={{ top: 4, right: 8, left: -20, bottom: 4 }}
-                          >
-                            <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                            <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
-                            <Tooltip content={<RatingTrendTooltip />} />
-                            <Bar
-                              dataKey="avgRating"
-                              name="Avg Rating"
-                              fill="#FF9800"
-                              radius={[4, 4, 0, 0]}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grid>
+                {detailedResult.byTicket.length > 0 && (
+                  <>
+                    <RatingTrendChart points={detailedResult.byDay} groupBy="date" />
+                    <RatingTrendChart points={detailedResult.byWeek} groupBy="week" />
+                  </>
+                )}
                 <Grid item xs={12}>
                   <Card>
                     <CardContent>

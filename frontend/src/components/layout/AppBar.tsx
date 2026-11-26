@@ -35,6 +35,7 @@ import {
   Notifications as NotificationsIcon,
   NewReleases as NewReleasesIcon,
   Smartphone as SmartphoneIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import PaletteIcon from '@mui/icons-material/Palette';
 import { useRouter } from 'next/navigation';
@@ -171,7 +172,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const { user, myCap, logout } = useAuth();
   const { isCollapsed, toggleSidebar, drawerWidth } = useSidebar();
   const { pageTitle } = usePageTitle();
-  const { mode, setAppearance, layoutMode } = useThemeMode();
+  const { mode, setAppearance, layoutMode, mobileView, setMobileView } = useThemeMode();
   const { canGoBack, goBack } = useMobileNavigation();
   const theme = useTheme();
   const compactHeader = useMediaQuery(theme.breakpoints.down('sm'));
@@ -212,7 +213,10 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
   const notificationRequestRef = React.useRef(0);
   const nativeFcmHandoff = React.useSyncExternalStore(subscribeNativeFcmHandoff, getNativeFcmHandoff);
   const nativeFcmClient = !!nativeFcmHandoff;
-  const appleMobileAlerts = !nativeFcmClient && getMobileDevicePlatform() === 'ios';
+  const mobilePlatform = getMobileDevicePlatform();
+  const appleMobileAlerts = !nativeFcmClient && mobilePlatform === 'ios';
+  const showPushControls = nativeFcmClient || mobilePlatform !== null;
+  const canChooseMobileView = !showPushControls && !Capacitor.isNativePlatform();
   const nativeBadgeDeviceId = nativeFcmHandoff?.notificationsGranted ? nativeFcmHandoff.deviceId : undefined;
   const nativeBadgeAlert = nativeFcmHandoff?.badgeAlert;
   const nativeBadgeRestoreAllowed = nativeFcmHandoff?.badgeRestoreAllowed;
@@ -327,13 +331,17 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             return;
           }
 
+          const registration = supported ? await navigator.serviceWorker.getRegistration('/') : undefined;
+          const subscription = await registration?.pushManager.getSubscription();
+          if (!current) return;
+          if (!showPushControls && (!subscription || Notification.permission !== 'granted')) {
+            setPushEnabled(false);
+            return;
+          }
           const config = await notificationsApi.getPushConfig();
           if (!current) return;
           setPushConfig(config);
           if (supported) {
-          const registration = await navigator.serviceWorker.getRegistration('/');
-          const subscription = await registration?.pushManager.getSubscription();
-          if (!current) return;
           const enabled = !!subscription && Notification.permission === 'granted' && config.enabled;
           const deviceId = getNotificationDeviceId();
           let previewPreference = readNotificationPreviewPreference(user.id, deviceId);
@@ -358,6 +366,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
             if (savedPreference.registered && typeof savedPreference.showPreviews === 'boolean') {
               previewPreference = savedPreference.showPreviews;
             }
+            if (!showPushControls) previewPreference = false;
             setShowNotificationPreviews(previewPreference);
             saveNotificationPreviewPreference(user.id, deviceId, previewPreference);
             // Keep endpoint ownership aligned with the account authenticated on this device.
@@ -383,7 +392,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
     };
     void initializePush();
     return () => { current = false; };
-  }, [user, nativeFcmHandoff, pushCheckAttempt]);
+  }, [user, nativeFcmHandoff, pushCheckAttempt, showPushControls]);
 
   useEffect(() => {
     if (!user || nativeFcmHandoff?.version !== 4 || !nativeFcmHandoff.notificationsGranted ||
@@ -1432,7 +1441,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               </Button>
             </Box>
             <Divider />
-            <Box sx={{ px: 2, py: 1.25 }}>
+            {showPushControls && <Box sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                 <Typography variant="body2" fontWeight={600}>
                   {nativeFcmClient ? 'Android app alerts' : appleMobileAlerts ? 'Home Screen alerts' : 'Browser alerts'}
@@ -1493,8 +1502,7 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {!nativeFcmClient && !appleMobileAlerts && pushEnabled && <Button size="small" onClick={() => void handleTestAlert()} disabled={sendingTestAlert || pushBusy || !user}>
                 {sendingTestAlert ? 'Sending test…' : 'Send test alert'}
               </Button>}
-            </Box>
-            <Divider />
+            </Box>}
             {isNotifLoading ? (
               <MenuItem disabled>
                 <Typography variant="body2">Loading...</Typography>
@@ -1586,6 +1594,16 @@ export default function AppBar({ onMenuClick, onOpenChangelog }: AppBarProps) {
               {mode === 'dark' ? <LightModeIcon sx={{ mr: 1 }} /> : <DarkModeIcon sx={{ mr: 1 }} />}
               {mode === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </MenuItem>
+            {canChooseMobileView && (
+              <MenuItem role="menuitemcheckbox" aria-checked={mobileView} onClick={() => {
+                setMobileView(!mobileView);
+                handleProfileMenuClose();
+              }}>
+                <SmartphoneIcon sx={{ mr: 1 }} aria-hidden="true" />
+                <Box sx={{ flexGrow: 1 }}>Mobile View</Box>
+                {mobileView && <CheckIcon fontSize="small" sx={{ ml: 1 }} aria-hidden="true" />}
+              </MenuItem>
+            )}
             <MenuItem onClick={handleSettings}>
               <PaletteIcon sx={{ mr: 1 }} />
               Appearance & Settings
