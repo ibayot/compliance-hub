@@ -20,9 +20,10 @@ import { feedbackApi } from '@/lib/api/feedback';
 interface FeedbackModalProps {
   manualOpen?: boolean;
   onManualClose?: () => void;
+  demo?: boolean;
 }
 
-export default function FeedbackModal({ manualOpen = false, onManualClose }: FeedbackModalProps) {
+export default function FeedbackModal({ manualOpen = false, onManualClose, demo = false }: FeedbackModalProps) {
   const [suggestion, setSuggestion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [images, setImages] = useState<File[]>([]);
@@ -61,6 +62,11 @@ export default function FeedbackModal({ manualOpen = false, onManualClose }: Fee
 
   const handleSubmit = async () => {
     if (!suggestion.trim()) return;
+    if (demo) {
+      enqueueSnackbar('Demo suggestion complete.', { variant: 'success' });
+      handleClose();
+      return;
+    }
     try {
       setSubmitting(true);
       const created = await feedbackApi.create({ suggestion: suggestion.trim() });
@@ -102,8 +108,8 @@ export default function FeedbackModal({ manualOpen = false, onManualClose }: Fee
         }}
       >
         <Typography variant="body2" color="text.secondary" mb={2}>
-          We are always looking for ways to improve our service. Do you have any suggestions or
-          feedback?
+          {demo ? 'Use a sample suggestion for this presentation.' :
+            'We are always looking for ways to improve our service. Do you have any suggestions or feedback?'}
         </Typography>
         <TextField
           label="Your Suggestion"

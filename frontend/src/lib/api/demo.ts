@@ -2,6 +2,13 @@ import { apiClient } from './client';
 
 export const demoSupportTypes = ['IT Support', 'Desktop Support', 'Pantawid ICT Support', 'Specialized Concerns'] as const;
 export const demoStatuses = { assigned: 'Assigned', in_progress: 'In Progress', resolved: 'Resolved', closed: 'Closed' };
+export const demoUserPaths = {
+  dashboard: '/dashboard',
+  tickets: '/operations/my-tickets',
+  knowledge: '/operations/knowledge-base',
+  settings: '/admin/settings',
+  manual: '/admin/user-manual',
+} as const;
 
 export interface DemoTicketSummary {
   id: string;
@@ -22,7 +29,16 @@ export interface DemoTicket extends DemoTicketSummary {
   comments: Array<{ id: number; authorId: number; body: string; createdAt: string }>;
   events: Array<{ id: number; actorId: number; action: keyof typeof demoStatuses; createdAt: string }>;
   attachments: Array<{ id: string; fileName: string; mimeType: string }>;
-  rating: { rating: number; feedback: string | null; createdAt: string } | null;
+  rating: { rating: number; createdAt: string } | null;
+}
+
+export interface DemoDashboard {
+  open: number;
+  inProgress: number;
+  resolved: number;
+  closed: number;
+  pendingCount: number;
+  satisfactionFillRate: number;
 }
 
 export interface DemoState {
@@ -38,7 +54,9 @@ export const demoApi = {
   enable: (requesterId: number, technicianId: number) =>
     apiClient.post<DemoState>('/demo-mode', { requesterId, technicianId }).then(res => res.data),
   disable: () => apiClient.delete<DemoState>('/demo-mode').then(res => res.data),
-  list: (page: number) => apiClient.get<{ items: DemoTicketSummary[]; hasMore: boolean }>(path, { params: { page } }).then(res => res.data),
+  list: (page: number, filters?: { status?: string; search?: string }) =>
+    apiClient.get<{ items: DemoTicketSummary[]; hasMore: boolean }>(path, { params: { page, ...filters } }).then(res => res.data),
+  dashboard: () => apiClient.get<DemoDashboard>(`${path}/dashboard`).then(res => res.data),
   detail: (id: string) => apiClient.get<DemoTicket>(`${path}/${id}`).then(res => res.data),
   create: (subject: string, description: string, supportType: DemoTicketSummary['supportType']) =>
     apiClient.post<DemoTicket>(path, { subject, description, supportType }).then(res => res.data),
@@ -47,8 +65,8 @@ export const demoApi = {
   comment: (id: string, body: string) => apiClient.post<DemoTicket>(`${path}/${id}/comments`, { body }).then(res => res.data),
   status: (id: string, status: 'in_progress' | 'resolved', notes?: string) =>
     apiClient.patch<DemoTicket>(`${path}/${id}/status`, { status, notes }).then(res => res.data),
-  rate: (id: string, rating: number, feedback: string) =>
-    apiClient.post<DemoTicket>(`${path}/${id}/rating`, { rating, feedback }).then(res => res.data),
+  rate: (id: string, likert: Array<number | 'NA'>) =>
+    apiClient.post<DemoTicket>(`${path}/${id}/rating`, { consentGiven: true, likert }).then(res => res.data),
   upload: (id: string, file: File) => {
     const data = new FormData();
     data.append('file', file);

@@ -389,6 +389,7 @@ export default function UserManualPage() {
   const hasCapabilityAccess = (capKey: string): boolean => {
     if (!user) return false;
     if (capKey === 'global') return true;
+    if (user.demoRole === 'user') return capKey === 'isTicketModuleAccess';
 
     if (capKey === 'isSupportStaff') {
       if (!myCap) return false;

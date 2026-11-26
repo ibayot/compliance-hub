@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, Equals, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { Response } from 'express';
 import { UsersHttpClient } from '../../common/http-clients/users.http-client';
 import { DemoTicketsService } from './demo-tickets.service';
@@ -26,8 +26,8 @@ class DemoStatus {
   @IsOptional() @IsString() @MaxLength(5000) notes?: string;
 }
 class DemoRating {
-  @IsInt() @Min(1) @Max(5) rating: number;
-  @IsOptional() @IsString() @MaxLength(4000) feedback?: string;
+  @Equals(true, { message: 'Informed consent is required to submit the satisfaction form.' }) consentGiven: true;
+  @IsArray() @ArrayMinSize(9) @ArrayMaxSize(9) likert: Array<number | 'NA'>;
 }
 
 type Request = { user: (DemoActor & { kind: 'participant' }) | { kind: 'administrator'; userId: number } };
@@ -59,9 +59,22 @@ export class DemoTicketsController {
 
   @Get()
   @Header('Cache-Control', 'private, no-store')
-  list(@Req() request: Request, @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number) {
+  list(@Req() request: Request, @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('status') status?: string, @Query('search') search?: string) {
     if (page < 1 || page > 100000) throw new BadRequestException('Invalid demo ticket page.');
-    return this.tickets.list(page, request.user.kind === 'participant' ? request.user : undefined);
+    if (status && !['assigned', 'in_progress', 'resolved', 'closed'].includes(status)) {
+      throw new BadRequestException('Invalid demo ticket status.');
+    }
+    if (search !== undefined && (typeof search !== 'string' || search.length > 255)) {
+      throw new BadRequestException('Invalid demo ticket search.');
+    }
+    return this.tickets.list(page, request.user.kind === 'participant' ? request.user : undefined, { status, search: search?.trim() });
+  }
+
+  @Get('dashboard')
+  @Header('Cache-Control', 'private, no-store')
+  dashboard(@Req() request: Request) {
+    return this.tickets.requesterDashboard(this.actor(request));
   }
 
   @Post()
@@ -97,7 +110,7 @@ export class DemoTicketsController {
 
   @Post(':id/rating')
   rate(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: DemoRating) {
-    return this.tickets.rate(this.actor(request), id, body.rating, body.feedback);
+    return this.tickets.rate(this.actor(request), id, body.likert);
   }
 
   @Post(':id/attachments')

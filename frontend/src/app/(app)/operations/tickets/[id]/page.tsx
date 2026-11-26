@@ -37,11 +37,8 @@ import {
   DialogActions,
   Alert,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Checkbox,
   Autocomplete,
-  InputAdornment,
   Paper,
   ListItemButton,
   IconButton,
@@ -55,7 +52,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSse } from '@/lib/utils/useSse';
 import { formatPersonName } from '@/lib/utils/person-name';
 import { getTicketSlaStatus as getSlaStatus } from '@/lib/utils/ticket-sla-status';
-import { populatedFieldSx } from '@/lib/utils/populated-field-sx';
+import ClientSatisfactionDialog, { satisfactionFormError } from '@/components/ClientSatisfactionDialog';
 import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
 import {
   ticketsApi,
@@ -83,11 +80,6 @@ import {
   Star as StarIcon,
   ThumbUp as ThumbUpIcon,
   CloudUpload as UploadIcon,
-  SentimentVerySatisfied,
-  SentimentSatisfied,
-  SentimentNeutral,
-  SentimentDissatisfied,
-  SentimentVeryDissatisfied,
   EditCalendar as ResolutionTimeIcon,
   ContentCopy as DuplicateIcon,
   ExpandMore as ExpandMoreIcon,
@@ -1306,34 +1298,9 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   };
 
   const handleSubmitSatisfaction = async () => {
-    if (!csatForm.consentGiven) {
-      enqueueSnackbar('Please provide consent before submitting.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.unitSection.trim()) {
-      enqueueSnackbar('Unit/Section is required.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.clientFirstName.trim() || !csatForm.clientLastName.trim()) {
-      enqueueSnackbar('Client name is required.', { variant: 'warning' });
-      return;
-    }
-    if (!csatForm.sex) {
-      enqueueSnackbar('Sex is required.', { variant: 'warning' });
-      return;
-    }
-    const contactNumber = csatForm.contactNumber?.trim() ?? '';
-    if (!contactNumber) {
-      enqueueSnackbar('Contact number is required.', { variant: 'warning' });
-      return;
-    }
-    if (!/^\d{10}$/.test(contactNumber)) {
-      enqueueSnackbar('Contact number must contain exactly 10 digits.', { variant: 'warning' });
-      return;
-    }
-    const ratedItems = csatForm.likert.filter((_, i) => ![3, 5, 8].includes(i));
-    if (ratedItems.some((v) => v === 0)) {
-      enqueueSnackbar('Please rate all applicable items.', { variant: 'warning' });
+    const validationError = satisfactionFormError(csatForm);
+    if (validationError) {
+      enqueueSnackbar(validationError, { variant: 'warning' });
       return;
     }
     try {
@@ -3240,296 +3207,18 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           </Button>
         </DialogActions>
       </Dialog>
-<Dialog open={satDialogOpen} onClose={() => setSatDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, textAlign: 'center', pb: 0 }}>
-          CLIENT SATISFACTION MEASUREMENT FORM
-          <Typography variant="body2" color="text.secondary" fontWeight={400} mt={0.5}>
-            Ticket: <strong>{ticket.ticketNumber}</strong>
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          {ticket.satisfactionSubmittedAt ? (
-            <Alert severity="success" sx={{ mt: 2 }}>
-              You have already submitted a satisfaction rating for this ticket. Thank you!
-            </Alert>
-          ) : (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={csatForm.consentGiven}
-                    onChange={(e) => setCsatForm((f) => ({ ...f, consentGiven: e.target.checked }))}
-                  />
-                }
-                label={
-                  <Typography variant="body2">
-                    I voluntarily give my consent for the use of my personal information. I confirm
-                    that I have read the provided information, or it has been read to me. I have had
-                    the opportunity to ask questions about it, and any inquiries I made were
-                    answered to my satisfaction. I understand that any information collected will be
-                    utilized solely to enhance the basic social services provided by the DSWD. *
-                  </Typography>
-                }
-              />
-              <Stack direction="row" spacing={2}>
-                <Autocomplete
-                  options={unitSuggestions}
-                  fullWidth
-                  value={csatForm.unitSection || null}
-                  onChange={(_, value) =>
-                    setCsatForm((form) => ({ ...form, unitSection: value || '' }))
-                  }
-                  renderInput={(params) => <TextField {...params} label="Unit/Section *" />}
-                />
-                <TextField
-                  label="Date of Transaction *"
-                  type="date"
-                  value={csatForm.dateOfTransaction}
-                  InputProps={{ readOnly: true }}
-                  disabled
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  sx={populatedFieldSx(true)}
-                />
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="First Name *"
-                  disabled={!!user?.firstName}
-                  value={csatForm.clientFirstName}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, clientFirstName: e.target.value }))}
-                  fullWidth
-                  sx={populatedFieldSx(!!user?.firstName)}
-                />
-                <TextField
-                  label="M.I."
-                  disabled={!!user?.middleName}
-                  value={csatForm.clientMiddleInitial}
-                  onChange={(e) =>
-                    setCsatForm((f) => ({
-                      ...f,
-                      clientMiddleInitial: e.target.value.substring(0, 1),
-                    }))
-                  }
-                  sx={{ width: 140, ...populatedFieldSx(!!user?.middleName) }}
-                />
-                <TextField
-                  label="Last Name *"
-                  disabled={!!user?.lastName}
-                  value={csatForm.clientLastName}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, clientLastName: e.target.value }))}
-                  fullWidth
-                  sx={populatedFieldSx(!!user?.lastName)}
-                />
-                <TextField
-                  label="Suffix"
-                  disabled={!!user?.suffix}
-                  value={csatForm.suffix}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, suffix: e.target.value }))}
-                  sx={{ width: 180, ...populatedFieldSx(!!user?.suffix) }}
-                />
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Age"
-                  type="number"
-                  inputProps={{ min: 20, max: 89 }}
-                  value={csatForm.age ?? ''}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, age: Number(e.target.value) }))}
-                  sx={{ maxWidth: 200 }}
-                />
-                <TextField
-                  label="Religion"
-                  value={csatForm.religion ?? ''}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, religion: e.target.value }))}
-                  sx={{ flex: 1 }}
-                />
-                <TextField
-                  inputProps={{ maxLength: 255 }}
-                  select
-                  label="Sex *"
-                  disabled={!!user?.sex}
-                  value={csatForm.sex}
-                  onChange={(e) => setCsatForm((f) => ({ ...f, sex: e.target.value }))}
-                  sx={{ minWidth: 120, ...populatedFieldSx(!!user?.sex) }}
-                >
-                  <MenuItem value="Male">Male</MenuItem>
-                  <MenuItem value="Female">Female</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
-                  <MenuItem value="Prefer Not to Say">Prefer Not to Say</MenuItem>
-                </TextField>
-                <TextField
-                  label="Contact Number *"
-                  disabled={!!user?.phoneNumber}
-                  value={csatForm.contactNumber ?? ''}
-                  onChange={(e) => {
-                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setCsatForm((f) => ({ ...f, contactNumber: digits }));
-                  }}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">+63</InputAdornment>,
-                  }}
-                  inputProps={{ inputMode: 'numeric' }}
-                  sx={{ flex: 1, ...populatedFieldSx(!!user?.phoneNumber) }}
-                />
-              </Stack>
-              <TextField
-                label="Technician Name *"
-                value={csatForm.technicianName}
-                InputProps={{ readOnly: true }}
-                disabled
-                // fullWidth
-              />
-
-              <Typography variant="subtitle2" fontWeight={700} mt={1}>
-                SERVICE QUALITY RATINGS *
-              </Typography>
-              <Typography variant="body2">
-                For Service Quality Dimension 0-8, please select the number that best corresponds to
-                your answer.
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {' '}
-                5-Strongly Agree, 4-Agree, 3-Neither Agree nor Disagree, 2-Disagree, 1-Strongly
-                Disagree, N/A-Not Applicable
-              </Typography>
-
-              {(
-                [
-                  'I am satisfied with the service that I availed.',
-                  'I spent a reasonable amount of time for my transaction.',
-                  "The office followed the transaction's requirements and steps based on the information provided",
-                  'The steps (including payment) I need to do for my transaction were easy and simple.',
-                  'I easily found information about my transaction from the office or its website.',
-                  "I paid a reasonable amount of fees for my transaction. (If services was free, mark the 'N/A' column) (You may skip this).",
-                  'I feel the office was fair to everyone, or "walang palakasan", during my transaction.',
-                  'I was treated courteously by the staff, and (if asked for help) the staff was helpful.',
-                  'I got what I needed from the government office, or (if denied) denial of request was sufficiently explained to me.',
-                ] as string[]
-              ).map((item, idx) => {
-                const isNA = [3, 5, 8].includes(idx);
-                const val = csatForm.likert[idx];
-                return (
-                  <Box
-                    key={idx}
-                    sx={{
-                      display: 'flex',
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      alignItems: { xs: 'flex-start', sm: 'center' },
-                      gap: 1,
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0, mb: { xs: 1, sm: 0 } }}>
-                      {idx}. {item}
-                    </Typography>
-                    {isNA ? (
-                      <Chip
-                        size="small"
-                        label="N/A"
-                        color="default"
-                        sx={{ minWidth: 64, alignSelf: { xs: 'flex-start', sm: 'auto' } }}
-                      />
-                    ) : (
-                      <ToggleButtonGroup
-                        exclusive
-                        size="small"
-                        value={val === 0 ? null : val}
-                        sx={{ alignSelf: { xs: 'center', sm: 'auto' } }}
-                        onChange={(_, v) => {
-                          if (v !== null) {
-                            const updated = [...csatForm.likert] as Array<number | 'NA'>;
-                            updated[idx] = v as number;
-                            setCsatForm((f) => ({ ...f, likert: updated }));
-                          }
-                        }}
-                      >
-                        <ToggleButton
-                          value={1}
-                          aria-label="Very dissatisfied (1)"
-                          sx={{
-                            px: 0.5,
-                            border: 'none',
-                            '&.Mui-selected': { bgcolor: 'transparent' },
-                          }}
-                        >
-                          <SentimentVeryDissatisfied
-                            sx={{ color: val === 1 ? 'error.main' : 'action.disabled', fontSize: 28 }}
-                          />
-                        </ToggleButton>
-                        <ToggleButton
-                          value={2}
-                          aria-label="Dissatisfied (2)"
-                          sx={{
-                            px: 0.5,
-                            border: 'none',
-                            '&.Mui-selected': { bgcolor: 'transparent' },
-                          }}
-                        >
-                          <SentimentDissatisfied
-                            sx={{ color: val === 2 ? 'warning.main' : 'action.disabled', fontSize: 28 }}
-                          />
-                        </ToggleButton>
-                        <ToggleButton
-                          value={3}
-                          aria-label="Neutral (3)"
-                          sx={{
-                            px: 0.5,
-                            border: 'none',
-                            '&.Mui-selected': { bgcolor: 'transparent' },
-                          }}
-                        >
-                          <SentimentNeutral
-                            sx={{ color: val === 3 ? 'warning.dark' : 'action.disabled', fontSize: 28 }}
-                          />
-                        </ToggleButton>
-                        <ToggleButton
-                          value={4}
-                          aria-label="Satisfied (4)"
-                          sx={{
-                            px: 0.5,
-                            border: 'none',
-                            '&.Mui-selected': { bgcolor: 'transparent' },
-                          }}
-                        >
-                          <SentimentSatisfied
-                            sx={{ color: val === 4 ? 'success.main' : 'action.disabled', fontSize: 28 }}
-                          />
-                        </ToggleButton>
-                        <ToggleButton
-                          value={5}
-                          aria-label="Very satisfied (5)"
-                          sx={{
-                            px: 0.5,
-                            border: 'none',
-                            '&.Mui-selected': { bgcolor: 'transparent' },
-                          }}
-                        >
-                          <SentimentVerySatisfied
-                            sx={{ color: val === 5 ? 'primary.main' : 'action.disabled', fontSize: 28 }}
-                          />
-                        </ToggleButton>
-                      </ToggleButtonGroup>
-                    )}
-                  </Box>
-                );
-              })}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSatDialogOpen(false)}>Close</Button>
-          {!ticket.satisfactionSubmittedAt && (
-            <Button
-              onClick={handleSubmitSatisfaction}
-              variant="contained"
-              color="warning"
-              disabled={csatSubmitting || !csatForm.consentGiven}
-            >
-              {csatSubmitting ? 'Submitting…' : 'Submit Feedback'}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+<ClientSatisfactionDialog
+        open={satDialogOpen}
+        onClose={() => setSatDialogOpen(false)}
+        onSubmit={handleSubmitSatisfaction}
+        ticketNumber={ticket.ticketNumber}
+        submitted={Boolean(ticket.satisfactionSubmittedAt)}
+        form={csatForm}
+        setForm={setCsatForm}
+        unitSuggestions={unitSuggestions}
+        profile={user}
+        submitting={csatSubmitting}
+      />
 <Dialog
         open={resolutionOverrideDialogOpen}
         onClose={closeResolutionOverrideDialog}

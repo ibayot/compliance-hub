@@ -62,6 +62,8 @@ import { TicketingConfig } from '../entities/ticketing-config.entity';
 import { TicketStatusJustification } from '../entities/ticket-status-justification.entity';
 import { UserRole } from '../../shared/entities';
 import { UsersHttpClient } from '../../../common/http-clients/users.http-client';
+import { deriveSatisfactionRating, roundRating } from './ticket-satisfaction-rating';
+export { deriveSatisfactionRating, roundRating } from './ticket-satisfaction-rating';
 import { TicketSettingsService } from './ticket-settings.service';
 import { AttendanceService } from './attendance.service';
 import { isOvertimeStaff, overtimeReadScope } from './overtime-ticket-policy';
@@ -436,9 +438,6 @@ export class ReturnEscalationDto {
   returnReason: string;
 }
 
-export const roundRating = (value: number): number =>
-  Math.floor((value + Number.EPSILON) * 100) / 100;
-
 export const isTicketReopening = (
   currentStatus: TicketStatus,
   requestedStatus?: TicketStatus,
@@ -492,15 +491,6 @@ export const hasMetResolvedTicketSla = (
   }
   // Preserve historical reporting for legacy tickets without a usable deadline.
   return activeHours <= slaHours;
-};
-
-export const deriveSatisfactionRating = (likert: Array<number | string | 'NA'>): number | null => {
-  const numericLikert = likert.filter(
-    (value): value is number => typeof value === 'number' && value >= 1 && value <= 5,
-  );
-  return numericLikert.length > 0
-    ? roundRating(numericLikert.reduce((sum, value) => sum + value, 0) / numericLikert.length)
-    : null;
 };
 
 export const resolveTicketReportTechnicianId = (

@@ -50,6 +50,7 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import type { RoleCapabilityRecord } from '@/lib/api/users';
 import { usersApi } from '@/lib/api/users';
 import { formatPersonName } from '@/lib/utils/person-name';
+import { demoUserPaths } from '@/lib/api/demo';
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -74,15 +75,17 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
   const location = useLocation();
   const navigate = useNavigate();
   const { user, myCap } = useAuth();
+  const demo = user?.demoRole === 'user';
   const { isCollapsed, drawerWidth } = useSidebar();
   const isNavigationCollapsed = !isMobile && isCollapsed;
   const [appMode, setAppMode] = useState<string>('loading');
 
   useEffect(() => {
+    if (demo) return;
     usersApi.getAppMode().then((res: any) => {
       setAppMode(res.appMode || 'full');
     }).catch(() => setAppMode('full'));
-  }, []);
+  }, [demo]);
 
   const mainNavItems: NavItem[] = [
     {
@@ -288,7 +291,9 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
     capabilityKeys?: (keyof RoleCapabilityRecord)[],
     service?: NavItem['service'],
     staffOnly?: boolean,
+    path?: string,
   ) => {
+    if (demo) return Object.values(demoUserPaths).some(demoPath => demoPath === path);
     // Application Mode filter: hide strictly unrelated services
     // Shared services (users, core) are always visible
     if (appMode === 'loading' && service !== 'core' && service !== 'users' && service !== undefined) return false;
@@ -315,7 +320,8 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
     const isActive =
       item.path === '/dashboard'
         ? location.pathname === '/dashboard'
-        : location.pathname === item.path || location.pathname?.startsWith(`${item.path}/`);
+        : location.pathname === item.path || location.pathname?.startsWith(`${item.path}/`) ||
+          (demo && item.path === demoUserPaths.tickets && location.pathname.startsWith('/operations/tickets/'));
 
     const content = (
       <ListItemButton
@@ -361,14 +367,14 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
   };
 
   const sidebarTitle = 'FO2 iCare';
-  const sidebarLogo = user?.role === 'user' || appMode === 'ticketing_only'
+  const sidebarLogo = demo || user?.role === 'user' || appMode === 'ticketing_only'
     ? '/images/logos/ticketing-logo.png'
     : appMode === 'compliance_only' ? '/images/logos/compliance-logo.png' : '/images/logos/app-logo.png';
 
   const visibleNavigationSections = navigationSections
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly)),
+      items: section.items.filter((item) => hasAccess(item.capabilityKeys, item.service, item.staffOnly, item.path)),
     }))
     .filter((section) => section.items.length > 0);
 
@@ -394,7 +400,7 @@ export default function Sidebar({ mobileOpen, onMobileClose, onMobileMenuOpen }:
       : location.pathname === item.path ||
         location.pathname.startsWith(`${item.path}/`) ||
         (item.label === 'My Tickets' &&
-          user?.role === 'user' &&
+          (demo || user?.role === 'user') &&
           location.pathname.startsWith('/operations/tickets/')),
   );
 

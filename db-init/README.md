@@ -255,7 +255,10 @@ intended environment database.
    Apply this before starting the updated Users service because sign-in and
    session validation use the new tables.
 2. Select the environment's Ticketing database and run
-   `20261126-demo-tickets-ticketing.sql`. Both migrations can be applied again.
+   `20261126-demo-tickets-ticketing.sql`, then run
+   `20261126-demo-rating-decimal-ticketing.sql`. For an environment that already
+   has Demo Mode, only the decimal migration is needed. It widens the demo
+   rating score column and preserves existing scores.
 3. Demo Mode uses the existing Ticketing connection and credentials in staging
    and production. Use the configured Ticketing schema in step 2. Keep the
    existing persistent Ticketing upload mount so Demo Mode can write under its

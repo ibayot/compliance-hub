@@ -48,6 +48,8 @@ The application owner approved reusing the existing Ticketing database identity 
 
 The normal requester picker and proxy creation must use the live Users directory and exclude demo accounts. A stale selection or an unavailable directory must not fall back to an unrestricted lookup for another requester. Security Settings administrators can file for the active Demo User via the separate Demo Mode form. The demo API assigns the active Demo Technician using the current run and rejects a stale run ID. Validate account unit approval at activation and show denied accounts in Security Settings even when both identities have already been selected (CH-ADMIN-014).
 
+The Demo User workspace uses the regular navigation, dashboard, Knowledge Base and help presentation. Load ticket lists and dashboard totals only from the active demo run. Use sample Knowledge Base and profile data without calling live write APIs. Share the Client Satisfaction Measurement Form with regular ticket details. Submit only consent and service quality answers to the demo endpoint, calculate the average using the regular rating helper, exclude N/A responses, and persist only the decimal score and submission metadata in `demo_ticket_ratings`.
+
 ### Knowledge Base access matrix
 
 | Viewer | Published, enabled articles | Draft review actions | Generation status on Ticket Details |

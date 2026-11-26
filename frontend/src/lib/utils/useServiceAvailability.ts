@@ -15,11 +15,12 @@ const DEFAULT_AVAILABILITY: ServiceAvailability = {
   compliance: true,
 };
 
-export function useServiceAvailability() {
+export function useServiceAvailability(enabled = true) {
   const [services, setServices] = useState<ServiceAvailability>(DEFAULT_AVAILABILITY);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
     let mounted = true;
 
     const load = async () => {
@@ -44,7 +45,7 @@ export function useServiceAvailability() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [enabled]);
 
   return { services, loaded };
 }

@@ -41,6 +41,7 @@ const DutiesPage = lazy(() => import('@/app/(app)/operations/duties/page'));
 const ChangelogManagementPage = lazy(() => import('@/app/(app)/admin/changelog/page'));
 const PublicRatingPage = lazy(() => import('@/app/rate/page'));
 const DemoWorkspace = lazy(() => import('@/components/demo/DemoWorkspace'));
+const DemoUserWorkspace = lazy(() => import('@/components/demo/DemoUserWorkspace'));
 
 function ProtectedDashboard({
   children,
@@ -71,7 +72,8 @@ function ProtectedDashboard({
     return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search + location.hash }} />;
   }
 
-  if (user?.demoRole) return <Navigate to="/operations/demo" replace />;
+  if (user?.demoRole === 'user') return <DemoUserWorkspace />;
+  if (user?.demoRole === 'technician') return <Navigate to="/operations/demo" replace />;
 
   // Deep linking allowed
 
@@ -234,10 +236,11 @@ export default function App() {
       <Route path="/mfa-verify" element={<MfaVerifyPage />} />
       <Route path="/operations/demo/:ticketId?" element={
         loading ? <PageLoadingFallback /> : !isAuthenticated ? <Navigate to="/login" replace /> :
-          user?.demoRole ? <DemoWorkspace /> : <Navigate to="/dashboard" replace />
+          user?.demoRole === 'technician' ? <DemoWorkspace /> :
+          user?.demoRole === 'user' ? <DemoUserWorkspace /> : <Navigate to="/dashboard" replace />
       } />
-      <Route path="/rate" element={<PublicRatingPage />} />
-      <Route path="/rate/:token" element={<PublicRatingPage />} />
+      <Route path="/rate" element={user?.demoRole ? <Navigate to="/dashboard" replace /> : <PublicRatingPage />} />
+      <Route path="/rate/:token" element={user?.demoRole ? <Navigate to="/dashboard" replace /> : <PublicRatingPage />} />
 
       <Route
         path="/admin/changelog"

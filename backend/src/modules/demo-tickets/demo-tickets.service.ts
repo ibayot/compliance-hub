@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Interval } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import { UsersHttpClient } from '../../common/http-clients/users.http-client';
+import { deriveSatisfactionRating } from '../tickets/services/ticket-satisfaction-rating';
 import { DemoFileKey, DemoTicketFiles } from './demo-ticket-files';
 import { DemoQueryTarget, DemoTicketStore } from './demo-ticket-store';
 import { DemoActor, DemoRun, demoSupportTypes } from './demo.types';
@@ -28,13 +29,36 @@ export class DemoTicketsService {
 
   constructor(private readonly store: DemoTicketStore, private readonly files: DemoTicketFiles, private readonly users: UsersHttpClient) {}
 
-  async list(page: number, actor?: DemoActor) {
+  async list(page: number, actor?: DemoActor, filters: { status?: string; search?: string } = {}) {
     const offset = (page - 1) * PAGE_SIZE;
+    const conditions: string[] = [];
+    const params: Array<string | number> = [];
+    if (actor) { conditions.push('run_id = ?'); params.push(actor.id); }
+    if (filters.status) { conditions.push('status = ?'); params.push(filters.status); }
+    if (filters.search) {
+      conditions.push('(LOCATE(?, ticket_number) > 0 OR LOCATE(?, subject) > 0)');
+      params.push(filters.search, filters.search);
+    }
     const items = await this.store.rows<Ticket>(this.store.db, `
-      SELECT ${summaryColumns} FROM demo_tickets ${actor ? 'WHERE run_id = ?' : ''}
+      SELECT ${summaryColumns} FROM demo_tickets ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''}
       ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
-    `, [...(actor ? [actor.id] : []), PAGE_SIZE + 1, offset]);
+    `, [...params, PAGE_SIZE + 1, offset]);
     return { items: items.slice(0, PAGE_SIZE), hasMore: items.length > PAGE_SIZE };
+  }
+
+  async requesterDashboard(actor: DemoActor) {
+    if (actor.role !== 'user') throw new ForbiddenException();
+    const counts = await this.store.rows<{ status: Ticket['status']; total: number | string }>(this.store.db, `
+      SELECT status, COUNT(*) AS total FROM demo_tickets WHERE run_id = ? AND requester_id = ?
+      GROUP BY status
+    `, [actor.id, actor.userId]);
+    const totals = Object.fromEntries(counts.map(row => [row.status, Number(row.total)]));
+    const resolved = totals.resolved ?? 0;
+    const closed = totals.closed ?? 0;
+    return {
+      open: totals.assigned ?? 0, inProgress: totals.in_progress ?? 0, resolved, closed,
+      pendingCount: resolved, satisfactionFillRate: resolved + closed ? 100 * closed / (resolved + closed) : 0,
+    };
   }
 
   private async ticket(db: DemoQueryTarget, id: string, actor?: DemoActor, lock = false) {
@@ -53,10 +77,14 @@ export class DemoTicketsService {
     const [comments, events, ratings, attachments] = await Promise.all([
       this.store.rows(db, `SELECT id, author_id AS authorId, body, ${createdAtColumn} FROM demo_ticket_comments WHERE ticket_id = ? ORDER BY id`, [id]),
       this.store.rows(db, `SELECT id, actor_id AS actorId, action, ${createdAtColumn} FROM demo_ticket_events WHERE ticket_id = ? ORDER BY id`, [id]),
-      this.store.rows(db, `SELECT rating, feedback, ${createdAtColumn} FROM demo_ticket_ratings WHERE ticket_id = ?`, [id]),
+      this.store.rows<{ rating: string | number; createdAt: string }>(db, `SELECT rating, ${createdAtColumn} FROM demo_ticket_ratings WHERE ticket_id = ?`, [id]),
       this.store.rows(db, 'SELECT id, file_name AS fileName, mime_type AS mimeType FROM demo_ticket_attachments WHERE ticket_id = ? AND ready = TRUE ORDER BY created_at, id', [id]),
     ]);
-    return { ...ticket, comments, events, rating: ratings[0] ?? null, attachments };
+    const submitted = ratings[0];
+    return {
+      ...ticket, comments, events, attachments,
+      rating: submitted ? { rating: Number(submitted.rating), createdAt: submitted.createdAt } : null,
+    };
   }
 
   async create(actor: DemoRun & { userId: number }, data: { subject: string; description: string; supportType: typeof demoSupportTypes[number] }) {
@@ -109,12 +137,19 @@ export class DemoTicketsService {
     return this.detail(id, actor);
   }
 
-  async rate(actor: DemoActor, id: string, rating: number, feedback?: string) {
+  async rate(actor: DemoActor, id: string, likert: Array<number | 'NA'>) {
     if (actor.role !== 'user') throw new ForbiddenException();
+    if (likert.length !== 9 || likert.some((answer, index) => [3, 5, 8].includes(index)
+      ? answer !== 'NA'
+      : typeof answer !== 'number' || !Number.isInteger(answer) || answer < 1 || answer > 5)) {
+      throw new BadRequestException('Rate all six applicable service quality questions from 1 to 5.');
+    }
+    const rating = deriveSatisfactionRating(likert);
+    if (rating === null) throw new BadRequestException('At least one service quality score is required.');
     await this.store.transaction(async db => {
       const ticket = await this.ticket(db, id, actor, true);
       if (ticket.status !== 'resolved') throw new ConflictException('Only a resolved demo ticket can be rated.');
-      await this.store.write(db, 'INSERT INTO demo_ticket_ratings (ticket_id, rating, feedback, created_at) VALUES (?, ?, ?, UTC_TIMESTAMP(3))', [id, rating, feedback?.trim() || null]);
+      await this.store.write(db, 'INSERT INTO demo_ticket_ratings (ticket_id, rating, created_at) VALUES (?, ?, UTC_TIMESTAMP(3))', [id, rating]);
       await this.store.write(db, "UPDATE demo_tickets SET status = 'closed' WHERE id = ?", [id]);
       await this.event(db, id, actor.userId, 'closed');
     });

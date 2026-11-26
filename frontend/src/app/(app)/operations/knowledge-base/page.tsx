@@ -50,6 +50,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { knowledgeBaseApi } from '@/app/api/references';
 import { SafeMarkdown } from '@/components/SafeRichText';
 import { useMobilePageAction } from '@/contexts/MobileNavigationContext';
+import { demoArticles } from '@/components/demo/demoKnowledge';
 
 interface KBArticle {
   id: number;
@@ -64,9 +65,9 @@ interface KBArticle {
   draftVersion?: string;
 }
 
-export default function KnowledgeBasePage() {
+export default function KnowledgeBasePage({ demo = false }: { demo?: boolean }) {
   const { myCap } = useAuth();
-  const canManage = !!myCap?.isKnowledgeBaseManage;
+  const canManage = !demo && !!myCap?.isKnowledgeBaseManage;
   const { enqueueSnackbar } = useSnackbar();
   const theme = useTheme();
   const isNarrowEditor = useMediaQuery(theme.breakpoints.down('sm'));
@@ -87,6 +88,7 @@ export default function KnowledgeBasePage() {
   const [publishCandidate, setPublishCandidate] = useState<KBArticle | null>(null);
   const [ratingArticleId, setRatingArticleId] = useState<number | null>(null);
   const [ratedArticleIds, setRatedArticleIds] = useState<ReadonlySet<number>>(() => new Set());
+  const demoVotes = useRef(new Map<number, boolean>());
   
   // Shared Add/Edit Dialog State
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -107,7 +109,14 @@ export default function KnowledgeBasePage() {
       setLoadError('');
       const search = showDrafts ? knowledgeBaseApi.searchDrafts
         : showDisabled ? knowledgeBaseApi.searchDisabled : knowledgeBaseApi.search;
-      const data = await search(query);
+      const term = query.trim().toLowerCase();
+      const data = demo ? demoArticles
+        .filter(article => `${article.title} ${article.tags} ${article.content}`.toLowerCase().includes(term))
+        .map(article => ({
+          ...article,
+          helpfulCount: article.helpfulCount + Number(demoVotes.current.get(article.id) === true),
+          unhelpfulCount: article.unhelpfulCount + Number(demoVotes.current.get(article.id) === false),
+        })) : await search(query);
       if (generation !== requestGeneration.current) return;
       setArticles(data);
     } catch {
@@ -115,7 +124,7 @@ export default function KnowledgeBasePage() {
     } finally {
       if (generation === requestGeneration.current) setLoading(false);
     }
-  }, [showDisabled, showDrafts]);
+  }, [demo, showDisabled, showDrafts]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -171,6 +180,17 @@ export default function KnowledgeBasePage() {
   };
 
   const handleRating = async (id: number, isHelpful: boolean) => {
+    if (demo) {
+      if (demoVotes.current.has(id)) return;
+      demoVotes.current.set(id, isHelpful);
+      setArticles(current => current.map(article => article.id === id ? {
+        ...article, helpfulCount: article.helpfulCount + Number(isHelpful),
+        unhelpfulCount: article.unhelpfulCount + Number(!isHelpful),
+      } : article));
+      setRatedArticleIds(current => new Set([...current, id]));
+      enqueueSnackbar('Thanks for your feedback.', { variant: 'success' });
+      return;
+    }
     setRatingArticleId(id);
     try {
       const rating = await knowledgeBaseApi.rateArticle(id, isHelpful);

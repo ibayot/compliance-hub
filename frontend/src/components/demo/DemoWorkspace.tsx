@@ -1,17 +1,35 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-  Rating, Stack, TextField, Typography,
+  Dialog, DialogContent, DialogTitle, Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ThumbUpIcon from '@mui/icons-material/ThumbUp';
 import { useAuth } from '@/contexts/AuthContext';
-import { demoApi, demoDate, demoStatuses, DemoTicket, DemoTicketSummary } from '@/lib/api/demo';
+import { usePageTitle } from '@/contexts/PageTitleContext';
+import type { CsatFormData } from '@/app/api/references';
+import ClientSatisfactionDialog, { satisfactionFormError } from '@/components/ClientSatisfactionDialog';
+import { demoApi, demoDate, demoStatuses, demoUserPaths, DemoTicket, DemoTicketSummary } from '@/lib/api/demo';
 import DemoTicketForm from './DemoTicketForm';
+import { demoDashboardKey } from './useDemoDashboard';
 
 const home = '/operations/demo';
+const demoUnit = 'Demo Unit';
+const demoProfile = { firstName: 'Demo', lastName: 'User', sex: 'Prefer Not to Say', phoneNumber: '9000000000' };
+
+function demoSatisfactionForm(ticket: DemoTicket): CsatFormData {
+  const transaction = ticket.events.find(event => event.action === 'resolved')?.createdAt ?? ticket.createdAt;
+  return {
+    consentGiven: false, unitSection: demoUnit, dateOfTransaction: transaction.slice(0, 10),
+    clientFirstName: demoProfile.firstName, clientMiddleInitial: '', clientLastName: demoProfile.lastName,
+    suffix: '', religion: '', sex: demoProfile.sex, contactNumber: demoProfile.phoneNumber,
+    technicianName: 'Demo Technician', likert: [0, 0, 0, 'NA', 0, 'NA', 0, 0, 'NA'],
+  };
+}
 
 export default function DemoWorkspace() {
   const { ticketId } = useParams();
@@ -31,54 +49,91 @@ export default function DemoWorkspace() {
         <Alert severity="info">Use sample information only. Demo tickets stay out of live reports and notifications.</Alert>
         {!isSessionLocked && !requiresPasswordChange && (ticketId
           ? <DemoTicketDetail key={ticketId} id={ticketId} viewer={user?.demoRole ?? 'user'} />
-          : <TicketList technician={user?.demoRole === 'technician'} />)}
+          : <DemoTicketList technician={user?.demoRole === 'technician'} />)}
       </Stack>
     </Container>
   );
 }
 
-function TicketList({ technician }: { technician: boolean }) {
+export function DemoTicketList({ technician, requesterWorkspace = false }: { technician: boolean; requesterWorkspace?: boolean }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const status = params.get('filter') === 'pending_satisfaction' ? 'resolved' : params.get('status') ?? '';
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<DemoTicketSummary[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
+  const detailUrl = (id: string) => requesterWorkspace ? `/operations/tickets/${id}?source=my-tickets` : `${home}/${id}`;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setPage(1); setQuery(search.trim()); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let current = true;
     setItems(null);
     setError('');
-    void demoApi.list(page).then(({ items: next, hasMore: more }) => {
+    void demoApi.list(page, { status: status || undefined, search: query || undefined }).then(({ items: next, hasMore: more }) => {
       if (current) { setItems(next); setHasMore(more); }
     }).catch(() => { if (current) { setItems([]); setError('Could not load demo tickets. Try refreshing.'); } });
     return () => { current = false; };
-  }, [page, revision]);
+  }, [page, query, revision, status]);
+
+  const form = <DemoTicketForm proxy={technician} submit={demoApi.create} onCancel={() => setCreating(false)}
+    onSuccess={ticket => {
+      void queryClient.invalidateQueries({ queryKey: demoDashboardKey });
+      navigate(detailUrl(ticket.id));
+    }} />;
 
   return (
     <Stack spacing={1.5}>
       <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={1}>
-        <Typography component="h2" variant="h6">Demo Tickets</Typography>
+        <Box>
+          <Typography component={requesterWorkspace ? 'h1' : 'h2'} variant={requesterWorkspace ? 'h4' : 'h6'}>
+            {requesterWorkspace ? 'My Tickets' : 'Demo Tickets'}
+          </Typography>
+          {requesterWorkspace && <Typography variant="body2" color="text.secondary">Submit and track your ICT support requests.</Typography>}
+        </Box>
         <Stack direction="row" gap={1}>
           <Button startIcon={<RefreshIcon />} onClick={() => setRevision(value => value + 1)}>Refresh</Button>
           {!creating && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>New Ticket</Button>}
         </Stack>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
-      {creating && (
+      {requesterWorkspace && <>
+        <TextField label="Search tickets" placeholder="Search by ticket number or subject" size="small" fullWidth
+          value={search} onChange={event => setSearch(event.target.value)} inputProps={{ maxLength: 255 }} />
+        <Tabs aria-label="Ticket status" variant="scrollable" scrollButtons="auto" value={status}
+          onChange={(_, value: string) => {
+            setPage(1);
+            setParams(value ? { status: value } : {});
+          }}>
+          <Tab value="" label="All" />
+          {Object.entries(demoStatuses).map(([value, label]) => <Tab key={value} value={value} label={label} />)}
+        </Tabs>
+        <Dialog open={creating} onClose={() => setCreating(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>New Ticket</DialogTitle>
+          <DialogContent dividers>{creating && form}</DialogContent>
+        </Dialog>
+      </>}
+      {creating && !requesterWorkspace && (
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={2}>
               <Typography component="h3" variant="h6">New Demo Ticket</Typography>
-              <DemoTicketForm proxy={technician} submit={demoApi.create} onCancel={() => setCreating(false)}
-                onSuccess={ticket => navigate(`${home}/${ticket.id}`)} />
+              {form}
             </Stack>
           </CardContent>
         </Card>
       )}
       {items === null ? <CircularProgress aria-label="Loading demo tickets" size={24} /> : items.map(ticket => (
-        <Card variant="outlined" key={ticket.id} component={Link} to={`${home}/${ticket.id}`} sx={{
+        <Card variant="outlined" key={ticket.id} component={Link} to={detailUrl(ticket.id)} sx={{
           display: 'block', color: 'inherit', textDecoration: 'none', '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' },
         }}>
           <CardContent>
@@ -104,7 +159,7 @@ function TicketList({ technician }: { technician: boolean }) {
   );
 }
 
-export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 'technician' | 'administrator' }) {
+export function DemoTicketDetail({ id, viewer, requesterWorkspace = false }: { id: string; viewer: 'user' | 'technician' | 'administrator'; requesterWorkspace?: boolean }) {
   const technician = viewer === 'technician';
   const canParticipate = viewer !== 'administrator';
   const [ticket, setTicket] = useState<DemoTicket | null>(null);
@@ -112,9 +167,12 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState('');
   const [notes, setNotes] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState('');
+  const [ratingForm, setRatingForm] = useState<CsatFormData | null>(null);
+  const [ratingError, setRatingError] = useState('');
+  const [ratingBusy, setRatingBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const queryClient = useQueryClient();
+  const { setPageTitle } = usePageTitle();
 
   const refresh = useCallback(async () => {
     setError('');
@@ -122,6 +180,11 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
     catch { setError(canParticipate ? 'Could not open this demo ticket. Check that Demo Mode is still on.' : 'This demo ticket could not be opened. It may have been deleted.'); }
   }, [canParticipate, id]);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!requesterWorkspace) return;
+    setPageTitle(ticket?.ticketNumber ?? null);
+    return () => setPageTitle(null);
+  }, [requesterWorkspace, setPageTitle, ticket?.ticketNumber]);
 
   async function update(action: () => Promise<DemoTicket>, done?: () => void) {
     if (busy) return;
@@ -138,6 +201,23 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
       window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch { setError('Could not download this attachment.'); }
   }
+
+  async function submitRating() {
+    if (!ratingForm || ratingBusy) return;
+    const validationError = satisfactionFormError(ratingForm);
+    if (validationError) { setRatingError(validationError); return; }
+    setRatingBusy(true);
+    setRatingError('');
+    try {
+      setTicket(await demoApi.rate(id, ratingForm.likert));
+      setRatingForm(null);
+      void queryClient.invalidateQueries({ queryKey: demoDashboardKey });
+    } catch {
+      setRatingError('Could not submit the rating. Try again or refresh the ticket.');
+    } finally {
+      setRatingBusy(false);
+    }
+  }
   const actorName = (id: number) => {
     if (id === ticket?.technicianId) return 'Demo Technician';
     if (id === ticket?.requesterId) return 'Demo User';
@@ -147,7 +227,9 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
   return (
     <Stack spacing={1.5}>
       <Stack direction="row" justifyContent="space-between">
-        {canParticipate && <Button component={Link} to={home} startIcon={<ArrowBackIcon />}>Demo Tickets</Button>}
+        {canParticipate && <Button component={Link} to={requesterWorkspace ? demoUserPaths.tickets : home} startIcon={<ArrowBackIcon />}>
+          {requesterWorkspace ? 'Back to My Tickets' : 'Demo Tickets'}
+        </Button>}
         <Button startIcon={<RefreshIcon />} disabled={busy} onClick={() => void refresh()}>Refresh</Button>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
@@ -177,14 +259,13 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
                   <TextField label="Resolution Notes" value={notes} onChange={event => setNotes(event.target.value)} multiline minRows={2} required inputProps={{ maxLength: 5000 }} />
                   <Button variant="contained" disabled={busy || !notes.trim()} onClick={() => void update(() => demoApi.status(id, 'resolved', notes), () => setResolving(false))}>Save Resolution</Button>
                 </>)}
-              {viewer === 'user' && ticket.status === 'resolved' && <>
-                <Box><Typography component="h3" variant="subtitle2">Rate Resolution</Typography>
-                  <Rating name="demo-resolution" value={rating} onChange={(_, value) => setRating(value)} size="large" />
-                </Box>
-                <TextField label="Feedback (optional)" value={feedback} onChange={event => setFeedback(event.target.value)} multiline inputProps={{ maxLength: 4000 }} />
-                <Button variant="contained" disabled={busy || !rating} onClick={() => { if (rating) void update(() => demoApi.rate(id, rating, feedback)); }}>Submit Rating</Button>
-              </>}
-              {ticket.rating && <Typography variant="body2">Resolution rated {ticket.rating.rating}/5{ticket.rating.feedback ? ` — ${ticket.rating.feedback}` : ''}</Typography>}
+              {viewer === 'user' && ticket.status === 'resolved' && (
+                <Button variant="contained" startIcon={<ThumbUpIcon />} disabled={busy} onClick={() => {
+                  setRatingError('');
+                  setRatingForm(demoSatisfactionForm(ticket));
+                }}>Rate Resolution</Button>
+              )}
+              {ticket.rating && <Typography variant="body2">Resolution rated {ticket.rating.rating.toFixed(2)}/5</Typography>}
             </Stack>
           </CardContent>
         </Card>
@@ -239,6 +320,10 @@ export function DemoTicketDetail({ id, viewer }: { id: string; viewer: 'user' | 
             </CardContent>
           </Card>
         </Box>
+        {ratingForm && <ClientSatisfactionDialog demo open onClose={() => { if (!ratingBusy) setRatingForm(null); }}
+          onSubmit={() => void submitRating()} ticketNumber={ticket.ticketNumber} submitted={Boolean(ticket.rating)}
+          form={ratingForm} setForm={update => setRatingForm(current => current && (typeof update === 'function' ? update(current) : update))}
+          unitSuggestions={[demoUnit]} profile={demoProfile} submitting={ratingBusy} error={ratingError} />}
       </>}
     </Stack>
   );

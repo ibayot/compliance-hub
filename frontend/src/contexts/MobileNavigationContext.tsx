@@ -52,7 +52,7 @@ export function MobileNavigationProvider({ children }: { children: React.ReactNo
   const location = useLocation();
   const navigate = useNavigate();
   const navigationType = useNavigationType();
-  const { myCap } = useAuth();
+  const { myCap, user } = useAuth();
   const entriesRef = useRef<NavigationEntry[]>([
     { key: location.key, pathname: location.pathname, search: location.search },
   ]);
@@ -78,7 +78,7 @@ export function MobileNavigationProvider({ children }: { children: React.ReactNo
     setHistoryDepth(Math.max(0, entriesRef.current.length - 1));
   }, [location.key, location.pathname, location.search, navigationType]);
 
-  const parentPath = getParentPath(location.pathname, location.search, Boolean(myCap?.isTicketModuleAccess));
+  const parentPath = getParentPath(location.pathname, location.search, user?.demoRole !== 'user' && Boolean(myCap?.isTicketModuleAccess));
   const canGoBack = historyDepth > 0 || parentPath !== null;
 
   const goBack = useCallback(() => {

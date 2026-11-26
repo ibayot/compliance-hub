@@ -34,6 +34,7 @@ import { AppRelease, changelogApi } from '@/lib/api/changelog';
 import { useSse } from '@/lib/utils/useSse';
 import { AttendanceAssignmentAlert, ticketsApi } from '@/app/api/references';
 import { MobileNavigationProvider, useMobileNavigation } from '@/contexts/MobileNavigationContext';
+import DemoUserAppBar from '@/components/demo/DemoUserAppBar';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -58,9 +59,10 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { user, myCap, isSessionLocked, requiresPasswordChange } = useAuth();
+  const demo = user?.demoRole === 'user';
   const { layoutPreset, colorTheme, layoutMode, mode } = useThemeMode();
   const { pageAction } = useMobileNavigation();
-  const { services, loaded } = useServiceAvailability();
+  const { services, loaded } = useServiceAvailability(!demo);
   const pageFamily = location.pathname === '/dashboard'
     ? 'dashboard'
     : /^\/operations\/tickets\/[^/]+/.test(location.pathname)
@@ -83,13 +85,14 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
   const attendanceReminderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attendanceSseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attendanceRequestId = useRef(0);
-  const canManageTicketAssignments = Boolean(myCap?.isTicketFocal || myCap?.isTicketSettingsFocal);
+  const canManageTicketAssignments = !demo && Boolean(myCap?.isTicketFocal || myCap?.isTicketSettingsFocal);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [changelogManual, setChangelogManual] = useState(false);
   const [changelogReleases, setChangelogReleases] = useState<AppRelease[]>([]);
   useEffect(() => {
     if (
       !user ||
+      demo ||
       isSessionLocked ||
       requiresPasswordChange ||
       sessionStorage.getItem('changelog-prompt-checked')
@@ -107,7 +110,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         }
       })
       .catch(() => {});
-  }, [user, isSessionLocked, requiresPasswordChange]);
+  }, [user, demo, isSessionLocked, requiresPasswordChange]);
   const openChangelogHistory = () => {
     changelogApi
       .history()
@@ -163,7 +166,7 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
     };
   }, [refreshAttendanceAlerts]);
 
-  useSse(['ATTENDANCE_UPDATED', 'TICKET_UPDATED'], () => {
+  useSse(demo ? [] : ['ATTENDANCE_UPDATED', 'TICKET_UPDATED'], () => {
     if (attendanceSseTimer.current) clearTimeout(attendanceSseTimer.current);
     attendanceSseTimer.current = setTimeout(() => {
       attendanceSseTimer.current = null;
@@ -351,7 +354,8 @@ function DashboardLayoutContent({ children }: DashboardLayoutProps) {
         </DialogActions>
       </Dialog>
       {/* App Bar */}
-      <AppBar onMenuClick={handleDrawerToggle} onOpenChangelog={openChangelogHistory} />
+      {demo ? <DemoUserAppBar onMenuClick={handleDrawerToggle} />
+        : <AppBar onMenuClick={handleDrawerToggle} onOpenChangelog={openChangelogHistory} />}
       <ChangelogDialog
         open={changelogOpen}
         releases={changelogReleases}
